@@ -6,9 +6,7 @@
   const INTERVALS = [1, 2, 4, 7, 15, 30]; // days
   // Cloudflare Worker API（部署后填入；空字符串则仅本地）
   const API_BASE = "https://chenchen-learning-api.pljhonglu.workers.dev";
-  const SYNC_CODE_KEY = "chenchen-sync-code";
   const SYNC_META_KEY = "chenchen-sync-meta";
-  const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no I/L/O/0/1
 
   // ---------- Storage / SM-2 simplified ----------
   function loadState() {
@@ -24,23 +22,11 @@
     scheduleCloudPush();
   }
 
-  // ---------- Cloud sync (D1 via Worker) ----------
-  let syncStatus = { text: "未开启云同步", kind: "muted" };
+  // ---------- Cloud sync (D1 via Worker, public shared row) ----------
+  let syncStatus = { text: "正在连接云端…", kind: "busy" };
   let pushTimer = null;
   let syncBusy = false;
 
-  function getSyncCode() {
-    return (localStorage.getItem(SYNC_CODE_KEY) || "").trim().toUpperCase();
-  }
-  function setSyncCode(code) {
-    const c = String(code || "")
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-HJ-NP-Z2-9]/g, "");
-    if (c) localStorage.setItem(SYNC_CODE_KEY, c);
-    else localStorage.removeItem(SYNC_CODE_KEY);
-    return c;
-  }
   function getSyncMeta() {
     try {
       return JSON.parse(localStorage.getItem(SYNC_META_KEY) || "{}");
@@ -52,14 +38,6 @@
     const m = { ...getSyncMeta(), ...patch };
     localStorage.setItem(SYNC_META_KEY, JSON.stringify(m));
     return m;
-  }
-  function generateSyncCode(len) {
-    const n = len || 8;
-    const buf = new Uint8Array(n);
-    crypto.getRandomValues(buf);
-    let out = "";
-    for (let i = 0; i < n; i++) out += CODE_ALPHABET[buf[i] % CODE_ALPHABET.length];
-    return out;
   }
   function setSyncStatus(text, kind) {
     syncStatus = { text, kind: kind || "muted" };
@@ -109,21 +87,16 @@
     return data;
   }
   async function pullAndMerge() {
-    const code = getSyncCode();
-    if (!code || !API_BASE) return null;
+    if (!API_BASE) return null;
     setSyncStatus("正在从云端拉取…", "busy");
-    const data = await cloudFetch(
-      "/api/progress?code=" + encodeURIComponent(code),
-      { method: "GET" }
-    );
+    const data = await cloudFetch("/api/progress", { method: "GET" });
     if (!data.found || !data.payload) {
-      setSyncStatus("云端暂无数据，下次上传会创建", "ok");
+      setSyncStatus("云端暂无数据，打卡后会自动上传", "ok");
       setSyncMeta({ lastPullAt: Date.now(), serverUpdatedAt: null });
       return null;
     }
     const local = loadState();
     const merged = mergeProgressPayloads(local, data.payload);
-    // Avoid recursive push during pull apply
     const prevTimer = pushTimer;
     pushTimer = null;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
@@ -132,28 +105,28 @@
       lastPullAt: Date.now(),
       serverUpdatedAt: data.updatedAt,
     });
-    setSyncStatus("已与云端合并 · " + new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }), "ok");
+    setSyncStatus(
+      "已与云端合并 · " +
+        new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      "ok"
+    );
     return merged;
   }
   async function pushToCloud() {
-    const code = getSyncCode();
-    if (!code || !API_BASE) return null;
+    if (!API_BASE) return null;
     const state = loadState();
     const clientUpdatedAt = Number(state.updatedAt) || Date.now();
     setSyncStatus("正在上传到云端…", "busy");
     const data = await cloudFetch("/api/progress", {
       method: "PUT",
       body: JSON.stringify({
-        code,
         payload: state,
         clientUpdatedAt,
       }),
     });
     if (data.payload && data.kept === "server") {
-      // Server won LWW — adopt server
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data.payload));
     } else if (data.payload) {
-      // Keep local but bump meta
       const s = loadState();
       s.updatedAt = data.updatedAt || s.updatedAt;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
@@ -170,7 +143,7 @@
     return data;
   }
   function scheduleCloudPush() {
-    if (!getSyncCode() || !API_BASE) return;
+    if (!API_BASE) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
       syncNow("push").catch(() => {});
@@ -178,11 +151,6 @@
   }
   async function syncNow(mode) {
     if (syncBusy) return;
-    const code = getSyncCode();
-    if (!code) {
-      setSyncStatus("请先生成或输入同步码", "warn");
-      return;
-    }
     if (!API_BASE) {
       setSyncStatus("未配置云端 API", "warn");
       return;
@@ -195,7 +163,6 @@
         await pullAndMerge();
         await pushToCloud();
       }
-      // Refresh home if visible so counts update
       if (currentView === "home") renderHome();
     } catch (e) {
       console.warn("sync failed", e);
@@ -205,7 +172,6 @@
     }
   }
   function syncPanelHtml() {
-    const code = getSyncCode();
     const meta = getSyncMeta();
     const last =
       meta.lastPushAt || meta.lastPullAt
@@ -219,15 +185,8 @@
     return `
       <div class="card sync-card" id="sync-card">
         <h2>☁️ 云同步</h2>
-        <p class="sync-desc">同一同步码可在手机/平板/电脑间共享复习进度（离线仍用本机缓存）。</p>
-        <div class="sync-code-row">
-          <label for="sync-code-input">同步码</label>
-          <input id="sync-code-input" class="sync-input" type="text" maxlength="8"
-            placeholder="6–8 位" value="${escapeHtml(code)}" autocomplete="off" spellcheck="false" />
-        </div>
+        <p class="sync-desc">所有设备自动共用同一份公开进度；打卡后会上传，打开页面会拉取（离线仍用本机缓存）。</p>
         <div class="btn-row sync-actions">
-          <button type="button" class="btn btn-ghost" id="sync-gen">生成新码</button>
-          <button type="button" class="btn btn-primary" id="sync-save">保存并同步</button>
           <button type="button" class="btn btn-learn" id="sync-now">立即同步</button>
         </div>
         <div class="sync-status" id="sync-status" data-kind="${escapeHtml(syncStatus.kind)}">${escapeHtml(syncStatus.text)}</div>
@@ -237,25 +196,8 @@
   function bindSyncPanel(root) {
     const card = (root || document).querySelector("#sync-card");
     if (!card) return;
-    const input = card.querySelector("#sync-code-input");
-    card.querySelector("#sync-gen").onclick = () => {
-      const code = generateSyncCode(8);
-      input.value = code;
-      setSyncCode(code);
-      setSyncStatus("已生成新同步码，请点「保存并同步」并抄到其他设备", "ok");
-      toast("新同步码：" + code);
-    };
-    card.querySelector("#sync-save").onclick = async () => {
-      const code = setSyncCode(input.value);
-      if (!code || code.length < 6) {
-        setSyncStatus("同步码需 6–8 位易读字符", "warn");
-        return;
-      }
-      input.value = code;
-      toast("同步码已保存");
-      await syncNow("full");
-    };
-    card.querySelector("#sync-now").onclick = () => syncNow("full");
+    const btn = card.querySelector("#sync-now");
+    if (btn) btn.onclick = () => syncNow("full");
   }
 
   function todayStr() {
@@ -1380,11 +1322,11 @@
     bindNav();
     showView("home");
     renderHome();
-    if (getSyncCode() && API_BASE) {
+    if (API_BASE) {
       setSyncStatus("启动中，正在同步…", "busy");
       syncNow("full").catch(() => {});
-    } else if (!getSyncCode()) {
-      setSyncStatus("未开启云同步", "muted");
+    } else {
+      setSyncStatus("未配置云端 API", "warn");
     }
   });
 })();
