@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply number-bonds patches
+      - name: Apply number-bonds site parts
         run: python3 scripts/apply_number_bonds.py
 
       - name: Commit site files
@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.js styles.css scripts/apply_number_bonds.py scripts/nb_payload/
+          git add app.js styles.css scripts/apply_number_bonds.py scripts/site_parts/
           if git diff --cached --quiet; then
             echo "No changes"
           else
