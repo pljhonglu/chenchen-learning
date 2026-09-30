@@ -561,64 +561,201 @@
     return { text: `${a} ${op} ${b} = ?`, answer: ans, meta: { a, b, op } };
   }
 
+
+  const NB_CIRCLES = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫"];
+  let bondSheet = null;
+
   function genDecomp() {
-    const n = randInt(2, 10);
-    const left = randInt(0, n);
-    const right = n - left;
-    // ask: n 可以分成 ? 和 right  (or show both blanks via choices)
-    const askLeft = Math.random() < 0.5;
-    const known = askLeft ? right : left;
-    const ans = askLeft ? left : right;
-    const text = askLeft
-      ? `${n} 可以分成 ？ 和 ${known}`
-      : `${n} 可以分成 ${known} 和 ？`;
-    return { text, answer: ans, meta: { n, left, right, askLeft }, kind: "decomp" };
+    const n = randInt(2, 10), left = randInt(0, n), right = n - left;
+    return { text: `${n} 可以分成 ？ 和 ${right}`, answer: left, meta: { n, left, right }, kind: "decomp" };
+  }
+
+  function genBondItem() {
+    const n = randInt(2, 10), left = randInt(0, n), right = n - left;
+    const mode = Math.random() < 0.5 ? "decomp" : "compose";
+    const r = Math.random();
+    let blanks;
+    if (mode === "decomp") {
+      blanks = r < 0.4 ? { whole:false, left:false, right:true }
+        : r < 0.75 ? { whole:false, left:true, right:false }
+        : { whole:false, left:true, right:true };
+    } else {
+      blanks = r < 0.5 ? { whole:true, left:false, right:false }
+        : r < 0.75 ? { whole:false, left:true, right:false }
+        : { whole:false, left:false, right:true };
+    }
+    return { n, left, right, mode, blanks, answers:{ whole:null, left:null, right:null }, status:"open" };
+  }
+
+  function genBondSheet() {
+    return { items: Array.from({ length: 12 }, () => genBondItem()), active: null, checked: false };
+  }
+
+  function nbCellHtml(item, slot, qi) {
+    if (!item.blanks[slot]) {
+      const v = slot === "whole" ? item.n : item[slot];
+      return `<span class="nb-num">${v}</span>`;
+    }
+    const filled = item.answers[slot];
+    const active = bondSheet?.active?.qi === qi && bondSheet?.active?.slot === slot;
+    let cls = "nb-box" + (active ? " is-active" : "") + (item.status === "ok" ? " is-ok" : "") + (item.status === "bad" ? " is-bad" : "");
+    const val = filled == null ? "" : String(filled);
+    return `<button type="button" class="${cls}" data-qi="${qi}" data-slot="${slot}">${val || "&nbsp;"}</button>`;
+  }
+
+  function nbCardHtml(item, qi) {
+    const fork = item.mode === "decomp"
+      ? `<svg class="nb-fork" viewBox="0 0 120 36" aria-hidden="true"><line x1="60" y1="2" x2="28" y2="34"/><line x1="60" y1="2" x2="92" y2="34"/></svg>`
+      : `<svg class="nb-fork" viewBox="0 0 120 36" aria-hidden="true"><line x1="28" y1="2" x2="60" y2="34"/><line x1="92" y1="2" x2="60" y2="34"/></svg>`;
+    const body = item.mode === "decomp"
+      ? `<div class="nb-top">${nbCellHtml(item,"whole",qi)}</div>${fork}<div class="nb-bot">${nbCellHtml(item,"left",qi)}${nbCellHtml(item,"right",qi)}</div>`
+      : `<div class="nb-bot nb-parts">${nbCellHtml(item,"left",qi)}${nbCellHtml(item,"right",qi)}</div>${fork}<div class="nb-top">${nbCellHtml(item,"whole",qi)}</div>`;
+    return `<div class="nb-card status-${item.status}" data-qi="${qi}"><span class="nb-no">${NB_CIRCLES[qi]}</span><div class="nb-bond nb-${item.mode}">${body}</div></div>`;
+  }
+
+  function bindBondSheet(panel) {
+    panel.querySelectorAll(".nb-box").forEach((btn) => {
+      btn.onclick = () => {
+        if (bondSheet.checked) return;
+        bondSheet.active = { qi: Number(btn.dataset.qi), slot: btn.dataset.slot };
+        renderBondPanel();
+      };
+    });
+    panel.querySelectorAll(".nb-pad button[data-n]").forEach((btn) => {
+      btn.onclick = () => {
+        if (!bondSheet?.active || bondSheet.checked) return;
+        const { qi, slot } = bondSheet.active;
+        const item = bondSheet.items[qi];
+        if (!item?.blanks[slot]) return;
+        item.answers[slot] = Number(btn.dataset.n);
+        item.status = "open";
+        const order = item.mode === "decomp" ? ["whole","left","right"] : ["left","right","whole"];
+        let next = null;
+        const start = order.indexOf(slot);
+        for (let k = 1; k < order.length; k++) {
+          const s = order[(start + k) % order.length];
+          if (item.blanks[s] && item.answers[s] == null) { next = { qi, slot: s }; break; }
+        }
+        if (!next) {
+          outer: for (let i = 0; i < bondSheet.items.length; i++) {
+            const it = bondSheet.items[i];
+            for (const s of ["whole","left","right"]) {
+              if (it.blanks[s] && it.answers[s] == null) { next = { qi: i, slot: s }; break outer; }
+            }
+          }
+        }
+        bondSheet.active = next;
+        renderBondPanel();
+      };
+    });
+    const clearBtn = panel.querySelector("#nb-clear");
+    if (clearBtn) clearBtn.onclick = () => {
+      if (!bondSheet?.active || bondSheet.checked) return;
+      const { qi, slot } = bondSheet.active;
+      bondSheet.items[qi].answers[slot] = null;
+      bondSheet.items[qi].status = "open";
+      renderBondPanel();
+    };
+    const checkBtn = panel.querySelector("#nb-check");
+    if (checkBtn) checkBtn.onclick = () => checkBondSheet();
+  }
+
+  function checkBondSheet() {
+    if (!bondSheet) return;
+    let ok = 0, total = 0, incomplete = 0;
+    bondSheet.items.forEach((item) => {
+      const need = ["whole","left","right"].filter((s) => item.blanks[s]);
+      if (!need.every((s) => item.answers[s] != null)) { incomplete++; item.status = "open"; return; }
+      total++;
+      const L = item.blanks.left ? Number(item.answers.left) : item.left;
+      const R = item.blanks.right ? Number(item.answers.right) : item.right;
+      const W = item.blanks.whole ? Number(item.answers.whole) : item.n;
+      const good = [L,R,W].every(Number.isFinite) && L >= 0 && R >= 0 && W >= 0 && W <= 10 && L + R === W;
+      if (good) { item.status = "ok"; ok++; } else item.status = "bad";
+    });
+    if (incomplete && !total) { toast("先点空框，再用下方数字填写哦"); return; }
+    bondSheet.active = null;
+    mathScore.ok += ok;
+    mathScore.total += total;
+    const miss = bondSheet.items.filter((i) => i.status === "bad").length;
+    const skipped = incomplete;
+    if (miss === 0 && skipped === 0) {
+      bondSheet.checked = true;
+      renderBondPanel();
+      const fb = document.getElementById("math-fb");
+      if (fb) { fb.textContent = `全部答对啦！真棒 ⭐（${ok}/${total}）`; fb.className = "feedback ok"; }
+    } else if (miss === 0) {
+      bondSheet.checked = false;
+      renderBondPanel();
+      const fb = document.getElementById("math-fb");
+      if (fb) { fb.textContent = `已填的都对了！还有 ${skipped} 题没填完，继续加油`; fb.className = "feedback ok"; }
+    } else {
+      bondSheet.checked = false;
+      renderBondPanel();
+      const fb = document.getElementById("math-fb");
+      if (fb) { fb.textContent = `对了 ${ok} 题，错了 ${miss} 题${skipped ? `，未填 ${skipped}` : ""}～空框已清空，再试试`; fb.className = "feedback no"; }
+      bondSheet.items.forEach((it) => {
+        if (it.status === "bad") {
+          ["whole","left","right"].forEach((s) => { if (it.blanks[s]) it.answers[s] = null; });
+          it.status = "open";
+        }
+      });
+      setTimeout(() => {
+        renderBondPanel();
+        const fb2 = document.getElementById("math-fb");
+        if (fb2) { fb2.textContent = "错题空框已清空，再试试吧"; fb2.className = "feedback no"; }
+      }, 700);
+    }
+    const okEl = document.getElementById("math-ok");
+    const totEl = document.getElementById("math-total");
+    if (okEl) okEl.textContent = mathScore.ok;
+    if (totEl) totEl.textContent = mathScore.total;
+  }
+
+  function renderBondPanel() {
+    const panel = document.getElementById("math-panel");
+    if (!panel || !bondSheet) return;
+    const pad = [0,1,2,3,4,5,6,7,8,9,10].map((n) => `<button type="button" data-n="${n}">${n}</button>`).join("");
+    panel.innerHTML = `
+      <div class="nb-sheet-head"><div class="nb-sheet-title">10以内数的分解与组成</div>
+      <div class="nb-sheet-hint">点粉色空框，再点下方数字填写 · 倒V是分解，V是组成</div></div>
+      <div class="nb-grid">${bondSheet.items.map((it,i) => nbCardHtml(it,i)).join("")}</div>
+      <div class="nb-pad" id="nb-pad">${pad}<button type="button" class="nb-pad-clear" id="nb-clear">清除</button></div>
+      <div class="nb-actions"><button type="button" class="btn btn-learn" id="nb-check">检查答案</button></div>
+      <div class="feedback" id="math-fb"></div>`;
+    bindBondSheet(panel);
   }
 
   function choicesFor(ans) {
     const set = new Set([ans]);
-    while (set.size < 4) {
-      const c = randInt(0, 10);
-      set.add(c);
-    }
+    while (set.size < 4) set.add(randInt(0, 10));
     return [...set].sort(() => Math.random() - 0.5);
   }
 
   function renderMath(forceMode) {
     if (forceMode) mathMode = forceMode;
     const el = document.getElementById("math-content");
+    const nextLabel = mathMode === "decomp" ? "再来一组" : "下一题";
     el.innerHTML = `
-      <div class="card">
-        <h2>🔢 数学乐园</h2>
-        <div class="tabs-mini">
-          <button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button>
-          <button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button>
-        </div>
-        <div class="math-panel" id="math-panel"></div>
-        <div class="score-bar">
-          <span>答对 <b id="math-ok">${mathScore.ok}</b></span>
-          <span>共做 <b id="math-total">${mathScore.total}</b></span>
-        </div>
-        <div class="btn-row" style="justify-content:center;margin-top:16px">
-          <button class="btn btn-ghost" id="math-next">下一题</button>
-          <button class="btn btn-learn" id="math-enroll">加入复习队列</button>
-        </div>
-        <div id="math-review-bar"></div>
-      </div>`;
-
-    el.querySelectorAll("[data-m]").forEach((b) =>
-      b.addEventListener("click", () => {
-        mathMode = b.dataset.m;
-        mathScore = { ok: 0, total: 0 };
-        renderMath();
-      })
-    );
+      <div class="card"><h2>🔢 数学乐园</h2>
+      <div class="tabs-mini">
+        <button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button>
+        <button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button>
+      </div>
+      <div class="math-panel" id="math-panel"></div>
+      <div class="score-bar"><span>答对 <b id="math-ok">${mathScore.ok}</b></span><span>共做 <b id="math-total">${mathScore.total}</b></span></div>
+      <div class="btn-row" style="justify-content:center;margin-top:16px">
+        <button class="btn btn-ghost" id="math-next">${nextLabel}</button>
+        <button class="btn btn-learn" id="math-enroll">加入复习队列</button>
+      </div>
+      <div id="math-review-bar"></div></div>`;
+    el.querySelectorAll("[data-m]").forEach((b) => b.addEventListener("click", () => {
+      mathMode = b.dataset.m; mathScore = { ok: 0, total: 0 }; bondSheet = null; renderMath();
+    }));
     document.getElementById("math-next").onclick = () => nextMathQ();
     document.getElementById("math-enroll").onclick = () => {
-      const id =
-        mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
-      const title =
-        mathMode === "decomp" ? "10以内分解组合" : "10以内加减法";
+      const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
+      const title = mathMode === "decomp" ? "10以内分解组合" : "10以内加减法";
       markLearned(id, { type: mathMode === "decomp" ? "decomp" : "math", title });
       toast("已加入今日复习队列");
       renderMathReviewBar();
@@ -634,55 +771,30 @@
     const title = mathMode === "decomp" ? "10以内分解组合" : "10以内加减法";
     const type = mathMode === "decomp" ? "decomp" : "math";
     const it = getItem(id);
-    if (!it?.learned) {
-      bar.innerHTML = "";
-      return;
-    }
+    if (!it?.learned) { bar.innerHTML = ""; return; }
     const due = it.nextReview <= todayStr();
     bar.innerHTML = `
       <div class="actions-bar" style="position:static;margin-top:14px">
-        <div class="hint">复习进度：下次 ${formatDateCN(it.nextReview)}${
-          due ? "（今天该复习）" : ""
-        } · 间隔 ${INTERVALS[it.stage || 0]} 天</div>
+        <div class="hint">复习进度：下次 ${formatDateCN(it.nextReview)}${due ? "（今天该复习）" : ""} · 间隔 ${INTERVALS[it.stage || 0]} 天</div>
         <div class="btn-row" style="justify-content:center">
           <button class="btn btn-ok" data-r="remember">记得 😊</button>
           <button class="btn btn-fuzzy" data-r="fuzzy">模糊 🤔</button>
           <button class="btn btn-forget" data-r="forgot">忘了 😅</button>
-        </div>
-      </div>`;
+        </div></div>`;
     bar.querySelectorAll("[data-r]").forEach((b) => {
-      b.onclick = () => {
-        reviewResult(id, b.dataset.r, { type, title });
-        toast("已更新下次复习时间");
-        renderMathReviewBar();
-      };
+      b.onclick = () => { reviewResult(id, b.dataset.r, { type, title }); toast("已更新下次复习时间"); renderMathReviewBar(); };
     });
   }
 
   function nextMathQ() {
-    currentQ = mathMode === "decomp" ? genDecomp() : genAddSub();
+    if (mathMode === "decomp") { bondSheet = genBondSheet(); renderBondPanel(); return; }
+    currentQ = genAddSub();
     const panel = document.getElementById("math-panel");
     if (!panel) return;
     const opts = choicesFor(currentQ.answer);
-    let viz = "";
-    if (currentQ.kind === "decomp") {
-      const n = currentQ.meta.n;
-      viz = `<div class="dots">${Array.from({ length: n }, (_, i) =>
-        `<span class="dot${i >= (currentQ.meta.askLeft ? currentQ.meta.right : currentQ.meta.left) && false ? " alt" : ""}"></span>`
-      ).join("")}</div>`;
-      // color split hint after answer — for now plain dots
-      viz = `<div class="dots">${Array.from({ length: n }, () => `<span class="dot"></span>`).join("")}</div>`;
-    }
-    panel.innerHTML = `
-      ${viz}
-      <div class="math-q">${escapeHtml(currentQ.text)}</div>
-      <div class="math-opts">
-        ${opts
-          .map((o) => `<button data-v="${o}">${o}</button>`)
-          .join("")}
-      </div>
+    panel.innerHTML = `<div class="math-q">${escapeHtml(currentQ.text)}</div>
+      <div class="math-opts">${opts.map((o) => `<button data-v="${o}">${o}</button>`).join("")}</div>
       <div class="feedback" id="math-fb"></div>`;
-
     panel.querySelectorAll(".math-opts button").forEach((btn) => {
       btn.onclick = () => {
         if (btn.disabled) return;
@@ -694,14 +806,11 @@
           if (Number(b.dataset.v) === currentQ.answer) b.classList.add("correct");
         });
         if (v === currentQ.answer) {
-          mathScore.ok++;
-          btn.classList.add("correct");
-          fb.textContent = "答对啦！真棒 ⭐";
-          fb.className = "feedback ok";
+          mathScore.ok++; btn.classList.add("correct");
+          fb.textContent = "答对啦！真棒 ⭐"; fb.className = "feedback ok";
         } else {
           btn.classList.add("wrong");
-          fb.textContent = `再想想～ 正确答案是 ${currentQ.answer}`;
-          fb.className = "feedback no";
+          fb.textContent = `再想想～ 正确答案是 ${currentQ.answer}`; fb.className = "feedback no";
         }
         document.getElementById("math-ok").textContent = mathScore.ok;
         document.getElementById("math-total").textContent = mathScore.total;
