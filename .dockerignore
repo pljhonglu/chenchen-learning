@@ -1,9 +1,8 @@
 .venv
 .git
 .github
-scripts
-screenshots
-ref
-data
 *.log
 **/node_modules
+data/
+*.db
+*.db-journal
