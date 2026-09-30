@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import base64, re
+import base64, gzip, re
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = Path(__file__).resolve().parent / "site_parts"
 
-def load(prefix, count=None):
-    if count is None:
-        raw = re.sub(r"\s+", "", (PARTS / f"{prefix}.b64").read_text(encoding="ascii"))
-    else:
-        raw = "".join(re.sub(r"\s+", "", (PARTS / f"{prefix}.{i}.b64").read_text(encoding="ascii")) for i in range(count))
-    pad = (-len(raw)) % 4
-    return base64.b64decode(raw + ("=" * pad)).decode("utf-8")
+def read_joined(name):
+    p = PARTS / name
+    if p.exists():
+        return p.read_text(encoding="ascii")
+    chunks = sorted(PARTS.glob(f"{name}.c*"), key=lambda x: int(x.name.rsplit(".c", 1)[-1]))
+    if not chunks:
+        raise SystemExit(f"missing {name}")
+    return "".join(c.read_text(encoding="ascii") for c in chunks)
 
-def apply_app(path):
+def load_bundle():
+    raw = re.sub(r"\s+", "", read_joined("bundle.gz.b64"))
+    pad = (-len(raw)) % 4
+    data = gzip.decompress(base64.b64decode(raw + ("=" * pad)))
+    js_b, css_b = data.split(b"\n=====CSS=====\n", 1)
+    return js_b.decode("utf-8"), css_b.decode("utf-8")
+
+def apply_app(path, snippet):
     app = path.read_text(encoding="utf-8")
-    snippet = load("js", 3)
     if not snippet.endswith("\n"): snippet += "\n"
     start = app.find("  const NB_CIRCLES")
     if start < 0: start = app.find("  function genDecomp()")
@@ -25,9 +32,8 @@ def apply_app(path):
         print("app.js unchanged"); return False
     path.write_text(new, encoding="utf-8"); print("app.js updated", path.stat().st_size); return True
 
-def apply_css(path):
+def apply_css(path, block):
     css = path.read_text(encoding="utf-8")
-    block = load("css")
     if not block.endswith("\n"): block += "\n"
     start = css.find("/* Number bonds workbook")
     legacy = css.find("/* Decompose */")
@@ -43,7 +49,9 @@ def apply_css(path):
     path.write_text(new, encoding="utf-8"); print("styles.css updated", path.stat().st_size); return True
 
 def main():
-    apply_app(ROOT / "app.js"); apply_css(ROOT / "styles.css")
+    js, css = load_bundle()
+    apply_app(ROOT / "app.js", js)
+    apply_css(ROOT / "styles.css", css)
     assert "renderBondPanel" in (ROOT/"app.js").read_text(encoding="utf-8")
     assert "nb-fork" in (ROOT/"styles.css").read_text(encoding="utf-8")
     print("OK")
