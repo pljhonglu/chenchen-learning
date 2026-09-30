@@ -49,7 +49,20 @@ def apply_css(css_path: Path) -> bool:
     print("styles.css updated", css_path.stat().st_size)
     return True
 
+def ensure_snippet():
+    import base64, re
+    parts_files = [SNIPPET.parent / f"snippet.part{i}.b64" for i in range(2)]
+    if all(fp.is_file() for fp in parts_files):
+        parts = [re.sub(r"\s+", "", fp.read_text(encoding="ascii")) for fp in parts_files]
+        SNIPPET.write_bytes(base64.b64decode("".join(parts)))
+        print("assembled snippet.js", SNIPPET.stat().st_size)
+        return
+    if SNIPPET.is_file() and SNIPPET.stat().st_size > 100:
+        return
+    raise SystemExit(f"missing snippet assets under {SNIPPET.parent}")
+
 def main():
+    ensure_snippet()
     if not SNIPPET.is_file() or not CSS_FILE.is_file():
         raise SystemExit(f"missing assets {SNIPPET} {CSS_FILE}")
     changed = False
