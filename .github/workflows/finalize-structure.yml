@@ -18,7 +18,6 @@ jobs:
           git config user.name "chenchen-bot"
           git config user.email "bot@users.noreply.github.com"
 
-          # 1) poems.js -> public/data/poems.json
           node <<'NODE'
           const fs = require("fs");
           const vm = require("vm");
@@ -31,7 +30,6 @@ jobs:
           console.log("poems", ctx.POEMS.length);
           NODE
 
-          # 2) patch public/app.js (cloud residue + load poems.json)
           python3 <<'PY'
           from pathlib import Path
           app = Path("public/app.js")
@@ -53,31 +51,33 @@ jobs:
               "    const res = await fetch(base + path, {",
           )
           if "function ensurePoems" not in t:
-              loader = """
-  // ---------- Poems data (loaded from public/data/poems.json) ----------
-  let POEMS = [];
-  let poemsLoadPromise = null;
-
-  function ensurePoems() {
-    if (!poemsLoadPromise) {
-      poemsLoadPromise = fetch("data/poems.json", { cache: "force-cache" })
-        .then((r) => {
-          if (!r.ok) throw new Error("poems_load_failed");
-          return r.json();
-        })
-        .then((data) => {
-          POEMS = Array.isArray(data) ? data : [];
-          return POEMS;
-        })
-        .catch((e) => {
-          console.warn("poems load failed", e);
-          POEMS = [];
-          throw e;
-        });
-    }
-    return poemsLoadPromise;
-  }
-"""
+              loader = "\n".join([
+                  "",
+                  "  // ---------- Poems data (loaded from public/data/poems.json) ----------",
+                  "  let POEMS = [];",
+                  "  let poemsLoadPromise = null;",
+                  "",
+                  "  function ensurePoems() {",
+                  "    if (!poemsLoadPromise) {",
+                  '      poemsLoadPromise = fetch("data/poems.json", { cache: "force-cache" })',
+                  "        .then((r) => {",
+                  '          if (!r.ok) throw new Error("poems_load_failed");',
+                  "          return r.json();",
+                  "        })",
+                  "        .then((data) => {",
+                  "          POEMS = Array.isArray(data) ? data : [];",
+                  "          return POEMS;",
+                  "        })",
+                  "        .catch((e) => {",
+                  '          console.warn("poems load failed", e);',
+                  "          POEMS = [];",
+                  "          throw e;",
+                  "        });",
+                  "    }",
+                  "    return poemsLoadPromise;",
+                  "  }",
+                  "",
+              ])
               anchor = '  const SYNC_META_KEY = "chenchen-sync-meta";\n'
               if anchor not in t:
                   raise SystemExit("SYNC_META_KEY missing")
@@ -94,9 +94,9 @@ jobs:
                   "  async function renderPoems() {\n"
                   '    const el = document.getElementById("poems-content");\n'
                   "    if (!POEMS.length) {\n"
-                  '      el.innerHTML = `<div class="card"><div class="empty">📜 正在加载古诗库…</div></div>`;\n'
+                  "      el.innerHTML = '<div class=\"card\"><div class=\"empty\">loading poems...</div></div>';\n"
                   "      try { await ensurePoems(); } catch (_) {\n"
-                  '        el.innerHTML = `<div class="card"><div class="empty">古诗库加载失败，请刷新重试</div></div>`;\n'
+                  "        el.innerHTML = '<div class=\"card\"><div class=\"empty\">poems load failed</div></div>';\n"
                   "        return;\n"
                   "      }\n"
                   "    }\n"
@@ -149,17 +149,15 @@ jobs:
           print("patched app.js", app.stat().st_size)
           PY
 
-          # 3) index: drop poems.js script if still present
           python3 - <<'PY'
           from pathlib import Path
           p = Path("public/index.html")
           html = p.read_text(encoding="utf-8")
           html2 = html.replace('  <script src="poems.js"></script>\n', "")
           p.write_text(html2, encoding="utf-8")
-          print("index poems.js removed", "poems.js" in html2)
+          print("index ok", "poems.js" not in html2)
           PY
 
-          # 4) delete cloud / duplicate residue
           for p in app.js index.html poems.js speech.js styles.css public/poems.js .nojekyll; do
             if [ -e "$p" ]; then git rm -rf "$p" 2>/dev/null || rm -rf "$p"; fi
           done
