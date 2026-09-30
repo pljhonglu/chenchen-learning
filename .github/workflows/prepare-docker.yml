@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'scripts/prepare_docker_frontend.py.b64'
+      - 'scripts/decode_prepare.py'
       - 'scripts/prepare_docker_frontend.py'
       - '.github/workflows/prepare-docker.yml'
   workflow_dispatch:
@@ -13,13 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Decode prepare script if needed
+        run: |
+          if [ -f scripts/prepare_docker_frontend.py.b64 ]; then
+            python3 scripts/decode_prepare.py
+          fi
       - name: Patch frontend and fill public/
         run: python3 scripts/prepare_docker_frontend.py
       - name: Commit
         run: |
           git config user.name "chenchen-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add app.js public
+          git add app.js public scripts/prepare_docker_frontend.py
           if git diff --staged --quiet; then
             echo "no changes"
           else
