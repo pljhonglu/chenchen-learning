@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import tarfile, io, sys, base64, re
+import tarfile, io, sys, base64, re, urllib.request, json
+
 root = Path(__file__).resolve().parents[1]
 parts_dir = root / "scripts/site_parts"
+BUNDLE_URL = "https://chenchen-learning-api.pljhonglu.workers.dev/api/site-bundle"
+
 
 def load_raw():
+    try:
+        req = urllib.request.Request(
+            BUNDLE_URL,
+            headers={"User-Agent": "chenchen-apply/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if payload.get("ok") and payload.get("data"):
+            print("using worker site-bundle")
+            return base64.b64decode(re.sub(r"\s+", "", payload["data"]))
+    except Exception as e:
+        print("worker bundle fetch failed:", e, file=sys.stderr)
+
     meta = parts_dir / "sync.h.meta"
     hex_parts = sorted(
         [p for p in parts_dir.glob("sync.h*") if re.fullmatch(r"sync\.h\d+", p.name)],
@@ -13,8 +29,12 @@ def load_raw():
     if meta.is_file() and hex_parts:
         expect = int(meta.read_text().strip().split()[0])
         if len(hex_parts) >= expect:
-            return bytes.fromhex("".join(p.read_text(encoding="ascii").strip() for p in hex_parts[:expect]))
-        print("hex incomplete", len(hex_parts), "expect", expect, "; falling back", file=sys.stderr)
+            print("using hex parts", expect)
+            return bytes.fromhex(
+                "".join(p.read_text(encoding="ascii").strip() for p in hex_parts[:expect])
+            )
+        print("hex incomplete", len(hex_parts), "expect", expect, file=sys.stderr)
+
     chunks = sorted(
         [p for p in parts_dir.glob("sync_bundle.b64.c*") if re.fullmatch(r"sync_bundle\.b64\.c\d+", p.name)],
         key=lambda p: int(re.search(r"c(\d+)$", p.name).group(1)),
@@ -34,15 +54,18 @@ def load_raw():
             print("using b64 chunks", [p.name for p in ordered])
             b64 = "".join(p.read_text(encoding="ascii") for p in ordered)
             return base64.b64decode(re.sub(r"\s+", "", b64))
+
     bundle = parts_dir / "sync_bundle.b64"
     if bundle.is_file():
+        print("using sync_bundle.b64")
         return base64.b64decode(re.sub(r"\s+", "", bundle.read_text(encoding="ascii")))
     sys.exit("no sync bundle")
+
 
 raw = load_raw()
 with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tf:
     tf.extractall(root, filter="data")
-for f in ["app.js", "styles.css", "README.md", "cloudflare/src/index.js"]:
+for f in ["app.js", "styles.css", "README.md"]:
     p = root / f
     assert p.is_file() and p.stat().st_size > 0, f
     print("ok", f, p.stat().st_size)
