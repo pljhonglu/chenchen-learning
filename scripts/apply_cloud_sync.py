@@ -26,6 +26,10 @@ def load_raw():
         while i in by_i:
             ordered.append(by_i[i])
             i += 1
+        count_file = parts_dir / "sync_bundle.count"
+        if count_file.is_file():
+            n = int(count_file.read_text().strip().split()[0])
+            ordered = ordered[:n]
         if ordered:
             print("using b64 chunks", [p.name for p in ordered])
             b64 = "".join(p.read_text(encoding="ascii") for p in ordered)
@@ -46,4 +50,6 @@ js = (root / "app.js").read_text(encoding="utf-8")
 assert "API_BASE" in js
 assert "chenchen-learning-api.pljhonglu.workers.dev" in js
 assert "sync-card" in (root / "styles.css").read_text(encoding="utf-8")
-print("cloud sync frontend applied")
+assert "生成新码" not in js
+assert "getSyncCode" not in js
+print("cloud sync frontend applied (public shared)")

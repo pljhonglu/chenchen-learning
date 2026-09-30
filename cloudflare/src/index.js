@@ -1,9 +1,13 @@
 /**
- * Chenchen learning progress sync API
- * GET  /api/progress?code=XXXX
- * PUT  /api/progress  { code, payload, clientUpdatedAt }
+ * Chenchen learning progress sync API (public shared row)
+ * GET  /api/progress
+ * PUT  /api/progress  { payload, clientUpdatedAt }
  * GET  /api/health
+ *
+ * All clients share one D1 row (FIXED_SYNC_CODE). CORS + LWW kept.
  */
+
+const FIXED_SYNC_CODE = "chenchen";
 
 const ALLOWED_ORIGINS = [
   "https://pljhonglu.github.io",
@@ -17,7 +21,6 @@ const ALLOWED_ORIGINS = [
   "http://127.0.0.1:3000",
 ];
 
-/** Best-effort in-memory rate limit (per isolate). */
 const rateBuckets = new Map();
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 60;
@@ -60,14 +63,6 @@ function rateLimit(ip) {
   return b.count <= RATE_MAX;
 }
 
-/** 6–8 chars: Crockford-ish alphabet (no I/L/O/U/0/1). */
-const CODE_RE = /^[A-HJ-NP-Z2-9]{6,8}$/i;
-
-function normalizeCode(code) {
-  if (typeof code !== "string") return "";
-  return code.trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/gi, "");
-}
-
 function validatePayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return "payload must be a JSON object";
@@ -98,12 +93,16 @@ export default {
     }
 
     if (url.pathname === "/api/health" && request.method === "GET") {
-      return json({ ok: true, service: "chenchen-learning-api" }, 200, origin);
+      return json(
+        { ok: true, service: "chenchen-learning-api", sync: FIXED_SYNC_CODE },
+        200,
+        origin
+      );
     }
 
     if (url.pathname === "/api/progress") {
       if (request.method === "GET") {
-        return handleGet(url, env, origin);
+        return handleGet(env, origin);
       }
       if (request.method === "PUT") {
         return handlePut(request, env, origin);
@@ -122,18 +121,15 @@ export default {
   },
 };
 
-async function handleGet(url, env, origin) {
-  const code = normalizeCode(url.searchParams.get("code") || "");
-  if (!CODE_RE.test(code)) {
-    return json({ error: "invalid_code" }, 400, origin);
-  }
+async function handleGet(env, origin) {
+  const code = FIXED_SYNC_CODE;
   const row = await env.DB.prepare(
     "SELECT sync_code, payload, updated_at FROM progress WHERE sync_code = ?"
   )
     .bind(code)
     .first();
   if (!row) {
-    return json({ found: false, code, payload: null, updatedAt: null }, 200, origin);
+    return json({ found: false, payload: null, updatedAt: null }, 200, origin);
   }
   let payload;
   try {
@@ -144,7 +140,6 @@ async function handleGet(url, env, origin) {
   return json(
     {
       found: true,
-      code: row.sync_code,
       payload,
       updatedAt: row.updated_at,
     },
@@ -160,16 +155,12 @@ async function handlePut(request, env, origin) {
   } catch {
     return json({ error: "invalid_json" }, 400, origin);
   }
-  const code = normalizeCode(body.code || "");
-  if (!CODE_RE.test(code)) {
-    return json({ error: "invalid_code" }, 400, origin);
-  }
+  const code = FIXED_SYNC_CODE;
   const err = validatePayload(body.payload);
   if (err) return json({ error: err }, 400, origin);
 
   const clientUpdatedAt = Number(body.clientUpdatedAt) || Date.now();
   const now = Date.now();
-  // Cap clock skew: accept client time if within 7 days of server
   let writeAt = clientUpdatedAt;
   if (Math.abs(clientUpdatedAt - now) > 7 * 24 * 3600 * 1000) {
     writeAt = now;
@@ -182,7 +173,6 @@ async function handlePut(request, env, origin) {
     .first();
 
   if (existing && existing.updated_at > writeAt) {
-    // Server newer: return current, do not overwrite
     let payload;
     try {
       payload = JSON.parse(existing.payload);
@@ -194,7 +184,6 @@ async function handlePut(request, env, origin) {
         ok: true,
         merged: false,
         kept: "server",
-        code,
         payload,
         updatedAt: existing.updated_at,
       },
@@ -226,7 +215,6 @@ async function handlePut(request, env, origin) {
       ok: true,
       merged: true,
       kept: "client",
-      code,
       payload: JSON.parse(row.payload),
       updatedAt: row.updated_at,
     },
