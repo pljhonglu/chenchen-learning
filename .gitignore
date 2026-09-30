@@ -1,5 +1,12 @@
 .venv/
 __pycache__/
-cloudflare/node_modules/
+*.pyc
 *.log
 .DS_Store
+data/
+*.db
+*.db-journal
+cloudflare/node_modules/
+node_modules/
+screenshots/
+ref/

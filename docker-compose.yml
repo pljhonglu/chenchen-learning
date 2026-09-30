@@ -1,0 +1,21 @@
+services:
+  chenchen:
+    build: .
+    image: chenchen-learning:local
+    container_name: chenchen-learning
+    ports:
+      # 宿主机端口:容器端口 — NAS 上可改左边，例如 "18080:8080"
+      - "8080:8080"
+    volumes:
+      # SQLite 进度持久化（备份此目录即可）
+      - chenchen-data:/data
+    restart: unless-stopped
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8080"
+      DATA_DIR: "/data"
+      PUBLIC_DIR: "/app/public"
+
+volumes:
+  chenchen-data:
+    name: chenchen-learning-data

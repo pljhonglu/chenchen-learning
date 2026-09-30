@@ -1,0 +1,12 @@
+.venv
+.git
+.github
+cloudflare
+scripts
+screenshots
+ref
+data
+*.log
+**/node_modules
+.github-apply-number-bonds.yml
+deploy-src
