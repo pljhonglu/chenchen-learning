@@ -1,6 +1,10 @@
 name: Apply number-bonds workbook UI
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/apply_number_bonds.py'
+      - 'scripts/site_parts/**'
 
 permissions:
   contents: write
