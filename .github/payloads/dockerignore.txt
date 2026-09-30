@@ -1,0 +1,8 @@
+.venv
+.git
+.github
+*.log
+**/node_modules
+data/
+*.db
+*.db-journal
