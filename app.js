@@ -126,9 +126,33 @@
   let poemQuery = "";
   let selectedPoemId = null;
 
+
+  function stopSpeechSafe() {
+    try {
+      if (window.ChenchenSpeech) ChenchenSpeech.stop();
+    } catch (_) {}
+  }
+
+  function updateSpeakButtons(state) {
+    const play = document.getElementById("btn-speak");
+    const pause = document.getElementById("btn-speak-pause");
+    const stop = document.getElementById("btn-speak-stop");
+    if (!play) return;
+    const speaking = state === "speaking";
+    const paused = state === "paused";
+    play.classList.toggle("is-active", speaking || paused);
+    play.textContent = speaking || paused ? "🔊 朗读中" : "🔊 朗读";
+    if (pause) {
+      pause.disabled = !(speaking || paused);
+      pause.textContent = paused ? "▶️ 继续" : "⏸️ 暂停";
+    }
+    if (stop) stop.disabled = !(speaking || paused);
+  }
+
   const views = ["home", "poems", "poem-detail", "math", "pinyin", "write"];
 
   function showView(name) {
+    if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
     document.querySelectorAll(".view").forEach((el) => {
       el.classList.toggle("active", el.dataset.view === name);
@@ -353,6 +377,8 @@
   }
 
   function renderPoemDetail(id) {
+    stopSpeechSafe();
+    selectedPoemId = id;
     const poem = POEMS.find((p) => p.id === id);
     const el = document.getElementById("poem-detail-content");
     if (!poem) {
@@ -401,6 +427,11 @@
             : ""
         }
         <div class="poem-body">${body}</div>
+        <div class="speak-bar" role="group" aria-label="朗读控制">
+          <button type="button" class="btn btn-speak" id="btn-speak">🔊 朗读</button>
+          <button type="button" class="btn btn-speak-secondary" id="btn-speak-pause" disabled>⏸️ 暂停</button>
+          <button type="button" class="btn btn-speak-secondary" id="btn-speak-stop" disabled>⏹️ 停止</button>
+        </div>
         <div class="actions-bar">
           ${
             !enrolled
@@ -454,6 +485,56 @@
         renderPoemDetail(id);
       };
     });
+
+    const btnSpeak = document.getElementById("btn-speak");
+    const btnPause = document.getElementById("btn-speak-pause");
+    const btnStop = document.getElementById("btn-speak-stop");
+    updateSpeakButtons("idle");
+    if (btnSpeak) {
+      btnSpeak.onclick = () => {
+        if (!window.ChenchenSpeech || !ChenchenSpeech.supported()) {
+          toast("当前浏览器没有可用的语音引擎，请换 Chrome / Edge / Safari 试试");
+          return;
+        }
+        const st = ChenchenSpeech.getStatus();
+        if (st === "speaking" || st === "paused") {
+          ChenchenSpeech.stop();
+        }
+        const ok = ChenchenSpeech.speakPoem(
+          {
+            title: displayTitle,
+            dynasty: poem.dynasty,
+            author: poem.author,
+            lines: poem.lines.map((ln) => ln.text),
+          },
+          {
+            onState: updateSpeakButtons,
+            onUnsupported: () =>
+              toast("当前浏览器没有可用的语音引擎，请换 Chrome / Edge / Safari 试试"),
+          }
+        );
+        if (ok) updateSpeakButtons("speaking");
+      };
+    }
+    if (btnPause) {
+      btnPause.onclick = () => {
+        if (!window.ChenchenSpeech) return;
+        if (ChenchenSpeech.getStatus() === "paused") {
+          ChenchenSpeech.resume();
+          updateSpeakButtons("speaking");
+        } else {
+          ChenchenSpeech.pause();
+          updateSpeakButtons("paused");
+        }
+      };
+    }
+    if (btnStop) {
+      btnStop.onclick = () => {
+        stopSpeechSafe();
+        updateSpeakButtons("idle");
+      };
+    }
+
   }
 
   // ---------- Math ----------
