@@ -1,0 +1,54 @@
+name: Add poems.json
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/add-poems-json.yml'
+permissions:
+  contents: write
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract poems and fix gitignore
+        run: |
+          set -euo pipefail
+          git config user.name "chenchen-bot"
+          git config user.email "bot@users.noreply.github.com"
+          printf '%s\n' \
+            '.venv/' \
+            '__pycache__/' \
+            '*.pyc' \
+            '*.log' \
+            '.DS_Store' \
+            '/data/' \
+            '*.db' \
+            '*.db-journal' \
+            'node_modules/' > .gitignore
+          SHA=$(git log --all --pretty=format:%H -- public/poems.js | head -1)
+          if [ -z "$SHA" ]; then SHA=$(git log --all --pretty=format:%H -- poems.js | head -1); fi
+          echo "poems source sha=$SHA"
+          if git cat-file -e "$SHA:public/poems.js" 2>/dev/null; then
+            git show "$SHA:public/poems.js" > /tmp/poems.js
+          else
+            git show "$SHA:poems.js" > /tmp/poems.js
+          fi
+          node <<'NODE'
+          const fs = require("fs");
+          const vm = require("vm");
+          const code = fs.readFileSync("/tmp/poems.js", "utf8");
+          const ctx = {};
+          vm.runInNewContext(code + "\nthis.POEMS = POEMS;", ctx);
+          fs.mkdirSync("public/data", { recursive: true });
+          fs.writeFileSync("public/data/poems.json", JSON.stringify(ctx.POEMS) + "\n");
+          console.log("poems", ctx.POEMS.length, fs.statSync("public/data/poems.json").size);
+          NODE
+          git add -f .gitignore public/data/poems.json
+          git rm -f .github/workflows/add-poems-json.yml || rm -f .github/workflows/add-poems-json.yml
+          git add -A
+          git commit -m "fix: track public/data/poems.json; scope gitignore /data/"
+          git push
