@@ -1,0 +1,28 @@
+name: Prepare Docker frontend public/
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/prepare_docker_frontend.py'
+      - '.github/workflows/prepare-docker.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch frontend and fill public/
+        run: python3 scripts/prepare_docker_frontend.py
+      - name: Commit
+        run: |
+          git config user.name "chenchen-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add app.js public
+          if git diff --staged --quiet; then
+            echo "no changes"
+          else
+            git commit -m "Prepare self-hosted frontend (SQLite API, public/)"
+            git push
+          fi
