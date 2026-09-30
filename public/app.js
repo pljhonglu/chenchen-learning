@@ -4,9 +4,34 @@
 
   const STORAGE_KEY = "chenchen-learning-v1";
   const INTERVALS = [1, 2, 4, 7, 15, 30]; // days
-  // Cloudflare Worker API（部署后填入；空字符串则仅本地）
+  // Same-origin /api/* (Docker SQLite). Override only if API is on another host.
   const API_BASE = "";
   const SYNC_META_KEY = "chenchen-sync-meta";
+
+
+  // ---------- Poems data (loaded from public/data/poems.json) ----------
+  let POEMS = [];
+  let poemsLoadPromise = null;
+
+  function ensurePoems() {
+    if (!poemsLoadPromise) {
+      poemsLoadPromise = fetch("data/poems.json", { cache: "force-cache" })
+        .then((r) => {
+          if (!r.ok) throw new Error("poems_load_failed");
+          return r.json();
+        })
+        .then((data) => {
+          POEMS = Array.isArray(data) ? data : [];
+          return POEMS;
+        })
+        .catch((e) => {
+          console.warn("poems load failed", e);
+          POEMS = [];
+          throw e;
+        });
+    }
+    return poemsLoadPromise;
+  }
 
   // ---------- Storage / SM-2 simplified ----------
   function loadState() {
@@ -19,10 +44,10 @@
   function saveState(state) {
     if (!state.updatedAt) state.updatedAt = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    scheduleCloudPush();
+    scheduleProgressPush();
   }
 
-  // ---------- Cloud sync (D1 via Worker, public shared row) ----------
+  // ---------- Server sync (SQLite via same-origin /api/progress) ----------
   let syncStatus = { text: "正在连接服务器…", kind: "busy" };
   let pushTimer = null;
   let syncBusy = false;
@@ -68,8 +93,9 @@
       updatedAt: Math.max(localAt, remoteAt, Date.now()),
     };
   }
-  async function cloudFetch(path, opts) {
-    const res = await fetch(API_BASE + path, {
+  async function apiFetch(path, opts) {
+    const base = API_BASE === undefined || API_BASE === null ? "" : API_BASE;
+    const res = await fetch(base + path, {
       ...opts,
       headers: {
         "Content-Type": "application/json",
@@ -87,7 +113,7 @@
   }
   async function pullAndMerge() {
     setSyncStatus("正在从服务器拉取…", "busy");
-    const data = await cloudFetch("/api/progress", { method: "GET" });
+    const data = await apiFetch("/api/progress", { method: "GET" });
     if (!data.found || !data.payload) {
       setSyncStatus("服务器暂无数据，打卡后会自动保存", "ok");
       setSyncMeta({ lastPullAt: Date.now(), serverUpdatedAt: null });
@@ -110,11 +136,11 @@
     );
     return merged;
   }
-  async function pushToCloud() {
+  async function pushProgress() {
     const state = loadState();
     const clientUpdatedAt = Number(state.updatedAt) || Date.now();
     setSyncStatus("正在保存到服务器…", "busy");
-    const data = await cloudFetch("/api/progress", {
+    const data = await apiFetch("/api/progress", {
       method: "PUT",
       body: JSON.stringify({
         payload: state,
@@ -139,7 +165,7 @@
     );
     return data;
   }
-  function scheduleCloudPush() {
+  function scheduleProgressPush() {
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
       syncNow("push").catch(() => {});
@@ -150,10 +176,10 @@
     syncBusy = true;
     try {
       if (mode === "push") {
-        await pushToCloud();
+        await pushProgress();
       } else {
         await pullAndMerge();
-        await pushToCloud();
+        await pushProgress();
       }
       if (currentView === "home") renderHome();
     } catch (e) {
@@ -365,7 +391,8 @@
     );
   }
 
-  function renderHome() {
+  async function renderHome() {
+    try { await ensurePoems(); } catch (_) {}
     const due = dueItems();
     const learned = allLearned();
     const el = document.getElementById("home-content");
@@ -467,8 +494,15 @@
     return { label: "已学会", cls: "learned" };
   }
 
-  function renderPoems() {
+  async function renderPoems() {
     const el = document.getElementById("poems-content");
+    if (!POEMS.length) {
+      el.innerHTML = '<div class="card"><div class="empty">loading poems...</div></div>';
+      try { await ensurePoems(); } catch (_) {
+        el.innerHTML = '<div class="card"><div class="empty">poems load failed</div></div>';
+        return;
+      }
+    }
     let list = POEMS.slice();
     if (poemQuery) {
       const q = poemQuery.trim().toLowerCase();
@@ -555,9 +589,10 @@
     );
   }
 
-  function renderPoemDetail(id) {
+  async function renderPoemDetail(id) {
     stopSpeechSafe();
     selectedPoemId = id;
+    try { await ensurePoems(); } catch (_) {}
     const poem = POEMS.find((p) => p.id === id);
     const el = document.getElementById("poem-detail-content");
     if (!poem) {
@@ -1313,7 +1348,11 @@
   document.addEventListener("DOMContentLoaded", () => {
     bindNav();
     showView("home");
-    renderHome();
+    ensurePoems()
+      .catch(() => {})
+      .finally(() => {
+        renderHome();
+      });
     setSyncStatus("启动中，正在同步…", "busy");
     syncNow("full").catch(() => {});
   });
