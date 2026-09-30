@@ -3,36 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
   <title>辰辰的幼小衔接乐园</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="boot" style="font-family:system-ui;padding:2rem;text-align:center">辰辰的学习乐园加载中…</div>
-  <script>
-  async function inflate(b64) {
-    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const ds = new DecompressionStream("gzip");
-    const stream = new Blob([bin]).stream().pipeThrough(ds);
-    return await new Response(stream).text();
-  }
-  (async () => {
-    const fetchText = (u) => fetch(u).then(r => { if (!r.ok) throw new Error(u+" "+r.status); return r.text(); });
-    const [cssB64, poemsB64, appB64] = await Promise.all([
-      fetchText("assets/styles.css.gz.b64"),
-      Promise.all([fetchText("assets/poems.part1.b64"), fetchText("assets/poems.part2.b64")]).then(a => a.join("")),
-      Promise.all([fetchText("assets/app.part1.b64"), fetchText("assets/app.part2.b64")]).then(a => a.join("")),
-    ]);
-    const style = document.createElement("style");
-    style.textContent = await inflate(cssB64.trim());
-    document.head.appendChild(style);
-    (0, eval)(await inflate(poemsB64.trim()));
-    document.getElementById("boot").remove();
-    document.body.insertAdjacentHTML("afterbegin", `
   <div class="bg-deco" aria-hidden="true"></div>
   <div class="app">
     <header class="header">
       <h1>🌟 辰辰的学习乐园</h1>
       <p class="sub">幼小衔接 · 古诗 · 数学 · 拼音 · 写字</p>
     </header>
+
     <main>
       <section class="view active" data-view="home" id="home-content"></section>
       <section class="view" data-view="poems" id="poems-content"></section>
@@ -42,19 +24,16 @@
       <section class="view" data-view="write" id="write-content"></section>
     </main>
   </div>
+
   <nav class="nav" aria-label="主导航">
     <button type="button" data-nav="home" class="active"><span class="ico">🏠</span>今日复习</button>
     <button type="button" data-nav="poems"><span class="ico">📜</span>古诗馆</button>
     <button type="button" data-nav="math"><span class="ico">🔢</span>数学</button>
     <button type="button" data-nav="pinyin"><span class="ico">🔤</span>拼音</button>
     <button type="button" data-nav="write"><span class="ico">✍️</span>写字</button>
-  </nav>`);
-    (0, eval)(await inflate(appB64.trim()));
-  })().catch(e => {
-    const el = document.getElementById("boot");
-    if (el) el.textContent = "加载失败：" + e;
-    console.error(e);
-  });
-  </script>
+  </nav>
+
+  <script src="poems.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
