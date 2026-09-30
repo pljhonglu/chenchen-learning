@@ -3,22 +3,39 @@
 from pathlib import Path
 import base64
 import re
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from number_bonds_data_a import SNIPPET_B64_0
-from number_bonds_data_b import SNIPPET_B64_1, CSS_B64
-SNIPPET_B64 = SNIPPET_B64_0 + SNIPPET_B64_1
+PAYLOAD = Path(__file__).resolve().parent / "nb_payload"
 
-def _decode(b64: str) -> str:
-    raw = re.sub(r"\s+", "", b64)
+def _load_b64(prefix: str) -> str:
+    chunks = []
+    i = 0
+    while True:
+        fp = PAYLOAD / f"{prefix}.{i}.txt"
+        if not fp.is_file():
+            break
+        chunks.append(re.sub(r"\s+", "", fp.read_text(encoding="ascii")))
+        i += 1
+    if not chunks:
+        raise SystemExit(f"missing payload {prefix}")
+    raw = "".join(chunks)
     pad = (-len(raw)) % 4
     return base64.b64decode(raw + ("=" * pad)).decode("utf-8")
 
 def apply_app(app_path: Path) -> bool:
     app = app_path.read_text(encoding="utf-8")
-    snippet = _decode(SNIPPET_B64)
+    raw_parts = []
+    for prefix in ("s0", "s1"):
+        i = 0
+        while True:
+            fp = PAYLOAD / f"{prefix}.{i}.txt"
+            if not fp.is_file():
+                break
+            raw_parts.append(re.sub(r"\s+", "", fp.read_text(encoding="ascii")))
+            i += 1
+    raw = "".join(raw_parts)
+    pad = (-len(raw)) % 4
+    snippet = base64.b64decode(raw + ("=" * pad)).decode("utf-8")
     if not snippet.endswith("\n"):
         snippet += "\n"
     start = app.find("  const NB_CIRCLES")
@@ -37,7 +54,7 @@ def apply_app(app_path: Path) -> bool:
 
 def apply_css(css_path: Path) -> bool:
     css = css_path.read_text(encoding="utf-8")
-    block = _decode(CSS_B64)
+    block = _load_b64("css")
     if not block.endswith("\n"):
         block += "\n"
     start = css.find("/* Number bonds workbook")
