@@ -3,36 +3,37 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f6ee" />
   <meta name="color-scheme" content="light" />
-  <title>辰辰的幼小衔接乐园</title>
+  <meta name="description" content="辰辰的复习小花园：把课上学过的古诗、数学、拼音和汉字，再轻轻复习一遍。" />
+  <title>辰辰的复习小花园</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="bg-deco" aria-hidden="true"></div>
   <div class="app">
     <header class="header">
-      <h1>🌟 辰辰的学习乐园</h1>
-      <p class="sub">幼小衔接 · 古诗 · 数学 · 拼音 · 写字</p>
+      <a class="brand" href="#" id="brand-home" aria-label="回到复习首页"><span class="brand-icon" aria-hidden="true">✿</span><span>辰辰的<span class="brand-second">复习小花园</span></span></a>
+      <div class="header-actions"><span class="age-label">幼小衔接 · 每天一点点</span><button type="button" class="parent-entry" id="open-parent"><span aria-hidden="true">⚙</span> 家长入口</button></div>
     </header>
-
-    <main>
-      <section class="view active" data-view="home" id="home-content"></section>
-      <section class="view" data-view="poems" id="poems-content"></section>
-      <section class="view" data-view="poem-detail" id="poem-detail-content"></section>
-      <section class="view" data-view="math" id="math-content"></section>
-      <section class="view" data-view="pinyin" id="pinyin-content"></section>
-      <section class="view" data-view="write" id="write-content"></section>
+    <nav class="nav" aria-label="学习导航">
+      <button type="button" data-nav="home" class="active"><span class="ico" aria-hidden="true">⌂</span><span>复习小花园</span></button>
+      <button type="button" data-nav="poems"><span class="ico" aria-hidden="true">☷</span><span>读古诗</span></button>
+      <button type="button" data-nav="math"><span class="ico" aria-hidden="true">＋</span><span>玩数学</span></button>
+      <button type="button" data-nav="pinyin"><span class="ico letter-ico" aria-hidden="true">a</span><span>读拼音</span></button>
+      <button type="button" data-nav="write"><span class="ico" aria-hidden="true">✎</span><span>写汉字</span></button>
+    </nav>
+    <main id="main-content">
+      <section class="view active" data-view="home" id="home-content" aria-label="今日复习"></section>
+      <section class="view" data-view="poems" id="poems-content" aria-label="古诗"></section>
+      <section class="view" data-view="poem-detail" id="poem-detail-content" aria-label="古诗练习"></section>
+      <section class="view" data-view="math" id="math-content" aria-label="数学练习"></section>
+      <section class="view" data-view="pinyin" id="pinyin-content" aria-label="拼音练习"></section>
+      <section class="view" data-view="write" id="write-content" aria-label="写字练习"></section>
     </main>
+    <footer class="footer"><span aria-hidden="true">❀</span> 慢慢来，每一次想起来，都是小小的成长。</footer>
   </div>
-
-  <nav class="nav" aria-label="主导航">
-    <button type="button" data-nav="home" class="active"><span class="ico">🏠</span>今日复习</button>
-    <button type="button" data-nav="poems"><span class="ico">📜</span>古诗馆</button>
-    <button type="button" data-nav="math"><span class="ico">🔢</span>数学</button>
-    <button type="button" data-nav="pinyin"><span class="ico">🔤</span>拼音</button>
-    <button type="button" data-nav="write"><span class="ico">✍️</span>写字</button>
-  </nav>
-
+  <dialog id="parent-dialog" class="parent-dialog" aria-labelledby="parent-title"></dialog>
+  <div id="live-status" class="sr-only" aria-live="polite"></div>
   <script src="speech.js"></script>
   <script src="app.js"></script>
 </body>

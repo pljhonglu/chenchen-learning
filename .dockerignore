@@ -6,3 +6,9 @@
 data/
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
+bin/
+tmp/
+coverage.out
+server/*_test.go
