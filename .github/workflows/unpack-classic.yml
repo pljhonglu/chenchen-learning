@@ -16,20 +16,39 @@ jobs:
       - name: Unpack classic multi-file site into repo root
         run: |
           set -euo pipefail
-          cat deploy-src/classic.part*.b64 | tr -d '\n\r ' | base64 -d > /tmp/classic.tar.gz
-          tar tzf /tmp/classic.tar.gz
-          tar xzf /tmp/classic.tar.gz
-          test -f index.html && test -f styles.css && test -f app.js && test -f poems.js
-          grep -q 'src="poems.js"' index.html
-          grep -q 'const POEMS' poems.js
           python3 - <<'PY'
-          import re, pathlib
-          t = pathlib.Path('poems.js').read_text(encoding='utf-8')
-          n = len(re.findall(r'"id"\s*:\s*"poem-', t))
+          import base64, pathlib, gzip, io, tarfile, re
+          parts = sorted(pathlib.Path('deploy-src').glob('classic.part*.b64'))
+          raw = ''.join(p.read_text(encoding='utf-8') for p in parts)
+          raw = re.sub(r'\s+', '', raw)
+          # Known transport bit-flips from prior MCP upload of this payload
+          fixes = [
+            ('ML+g9neScwH4o', 'ML+i9neScwH4o'),
+            ('MxUS8yU8va7rh', 'MxUs8yU8va7rh'),
+          ]
+          for a,b in fixes:
+            if a in raw:
+              raw = raw.replace(a, b)
+              print('applied fix', a, '->', b)
+          data = base64.b64decode(raw)
+          # Validate gzip/tar
+          with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tf:
+            names = tf.getnames()
+            print('tar members', names)
+            tf.extractall('.')
+          for f in ['index.html','styles.css','app.js','poems.js']:
+            assert pathlib.Path(f).is_file(), f
+          html = pathlib.Path('index.html').read_text(encoding='utf-8')
+          assert 'src="poems.js"' in html
+          poems = pathlib.Path('poems.js').read_text(encoding='utf-8')
+          assert 'const POEMS' in poems
+          n = len(re.findall(r'"id"\s*:\s*"poem-', poems))
           print('poem ids', n)
           assert n >= 30, n
+          styles = pathlib.Path('styles.css').read_text(encoding='utf-8')
+          assert '@file' not in styles and '@font-face' in styles
+          print('unpack ok')
           PY
-          # remove obsolete gzip loader assets if present
           rm -rf assets || true
 
       - name: Commit unpacked site files
