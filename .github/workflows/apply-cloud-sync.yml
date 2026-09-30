@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/site_parts/sync.h*'
+      - 'scripts/site_parts/sync.h.meta'
       - 'scripts/site_parts/sync_bundle.b64.c*'
       - 'scripts/apply_cloud_sync.py'
       - '.github/workflows/apply-cloud-sync.yml'
