@@ -4,26 +4,31 @@ import base64, gzip, re
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = Path(__file__).resolve().parent / "site_parts"
 
-# Known MCP transport corruptions on prior site_parts uploads
-TRANSPORT_FIXES = {
-    "bundle.gz.b64.c1": [("4LSRP", "4fixRP")],
-    "bundle.gz.b64.c3": [("gsASuH", "gsAQuH")],
-    "bundle.gz.b64.c4": [("9BX8v", "9RX8v")],
-}
-
-def apply_transport_fixes():
-    for name, pairs in TRANSPORT_FIXES.items():
-        p = PARTS / name
-        if not p.exists():
+def restore_hex_chunks():
+    i = 0
+    while True:
+        micros = []
+        k = 0
+        while True:
+            p = PARTS / f"bundle.gz.b64.c{i}.h{k}"
+            if not p.exists():
+                break
+            micros.append("".join(p.read_text().split()))
+            k += 1
+        if micros:
+            target = PARTS / f"bundle.gz.b64.c{i}"
+            target.write_bytes(bytes.fromhex("".join(micros)))
+            print("restored", target.name, target.stat().st_size, "from", k, "micro")
+            i += 1
             continue
-        text = p.read_text(encoding="ascii")
-        orig = text
-        for a, b in pairs:
-            if a in text:
-                text = text.replace(a, b, 1)
-                print("transport fix", name, a, "->", b)
-        if text != orig:
-            p.write_text(text, encoding="ascii")
+        p = PARTS / f"bundle.gz.b64.c{i}.hex"
+        if p.exists():
+            target = PARTS / f"bundle.gz.b64.c{i}"
+            target.write_bytes(bytes.fromhex("".join(p.read_text().split())))
+            print("restored", target.name, target.stat().st_size, "from hex")
+            i += 1
+            continue
+        break
 
 def read_joined(name):
     p = PARTS / name
@@ -77,14 +82,16 @@ def apply_css(path, block):
     path.write_text(new, encoding="utf-8"); print("styles.css updated", path.stat().st_size); return True
 
 def main():
-    apply_transport_fixes()
+    restore_hex_chunks()
     js, css = load_bundle()
     apply_app(ROOT / "app.js", js)
     apply_css(ROOT / "styles.css", css)
-    assert "renderBondPanel" in (ROOT/"app.js").read_text(encoding="utf-8")
-    assert "nb-fork" in (ROOT/"styles.css").read_text(encoding="utf-8")
-    print("OK")
+    app = (ROOT/"app.js").read_text(encoding="utf-8")
+    styles = (ROOT/"styles.css").read_text(encoding="utf-8")
+    assert "nb-single-wrap" in app and "renderBondPanel" in app
+    assert "nb-single-wrap" in styles and "nb-fork" in styles
+    assert ".nb-grid" not in styles
+    print("OK single-question bonds")
 
 if __name__ == "__main__":
     main()
-# trigger: 1
