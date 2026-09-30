@@ -1,9 +1,0 @@
-name = "chenchen-learning-api"
-main = "src/index.js"
-compatibility_date = "2026-09-30"
-
-# Replace database_id after: npx wrangler d1 create chenchen-learning-progress
-[[d1_databases]]
-binding = "DB"
-database_name = "chenchen-learning-progress"
-database_id = "e52398f1-45e0-4355-9cd7-25d20463f462"

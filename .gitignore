@@ -6,7 +6,6 @@ __pycache__/
 data/
 *.db
 *.db-journal
-cloudflare/node_modules/
 node_modules/
 screenshots/
 ref/
