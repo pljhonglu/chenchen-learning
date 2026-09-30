@@ -1,94 +1,85 @@
-## 在线访问
+# 辰辰幼小衔接乐园（自托管 Docker）
 
-https://pljhonglu.github.io/chenchen-learning/
+古诗 / 数学 / 拼音 / 写字 / 间隔复习。进度写入容器内 **SQLite**（卷持久化），**不再依赖** Cloudflare Workers、D1、云同步码或 GitHub Pages。
 
-# 辰辰的幼小衔接学习乐园
+仓库：https://github.com/pljhonglu/chenchen-learning
 
-给 5 岁大班孩子「辰辰」用的本地网页：古诗（带拼音）、10 以内加减与分解组合、拼音认读骨架、汉字描红骨架，以及按间隔重复的「今日复习」。
-
-## 如何打开
-
-**方式一（推荐）**：用浏览器直接打开
-
-1. 进入本目录 `chenchen-learning`
-2. 双击 `index.html`，或用 Chrome / Edge / Safari 打开该文件
-
-**方式二**：本地静态服务器（部分浏览器对 `file://` 限制较少时更稳）
+## 快速启动
 
 ```bash
+git clone https://github.com/pljhonglu/chenchen-learning.git
 cd chenchen-learning
-python3 -m http.server 8080
+docker compose up -d --build
 ```
 
-然后访问 <http://localhost:8080>
+浏览器打开：http://\<NAS或本机IP\>:8080/
 
-手机/平板：把整个文件夹拷到设备，用浏览器打开 `index.html`；或同一局域网用电脑起服务后访问。
+健康检查：http://\<IP\>:8080/api/health
 
-## 文件说明
+## 端口
 
-| 文件 | 作用 |
-|------|------|
-| `index.html` | 页面入口 |
-| `styles.css` | 样式（白底、楷体、水彩点缀） |
-| `poems.js` | 35 首古诗全文 + 逐字拼音 |
-| `app.js` | 导航、复习队列、数学/拼音/写字逻辑 |
-| `fonts/LXGWWenKai-Subset.woff2` | 楷体风格网页字体（子集） |
-| `README.md` | 本说明 |
+| 用途 | 默认 | 修改方式 |
+|------|------|----------|
+| Web + API | `8080` | `docker-compose.yml` 中 `ports: ["18080:8080"]` |
 
-进度保存在浏览器 `localStorage`（键名 `chenchen-learning-v1`），换浏览器或清缓存会丢失。
+## 数据卷（进度备份）
 
-## 功能怎么用
+Compose 命名卷：`chenchen-learning-data` → 容器内 `/data/progress.db`
 
-### 今日复习
-
-- 首页列出**今天该回顾**的内容（古诗、数学等）。
-- 进入项目后点 **记得 / 模糊 / 忘了**，按简化间隔更新下次时间：
-  - 记得 → 间隔加长：1 → 2 → 4 → 7 → 15 → 30 天
-  - 模糊 → 间隔退一档
-  - 忘了 → 回到 1 天
-- 新学内容需先点 **已学会，进入复习**，才会进入队列（加入当天即可能出现在今日列表，或从次日开始，取决于你何时点「记得」等）。
-
-### 古诗馆
-
-- 35 首幼小衔接常见古诗，每字上方拼音（ruby 布局），贴近打印字帖风格。
-- 可搜索题目/作者/诗句；按「全部 / 未学 / 已学 / 待复习」筛选。
-- 详情页底部可加入复习并打卡。
-
-### 数学
-
-- **10 以内加减法**：随机出题，四选一。
-- **分解组合**：如「5 可以分成 ？ 和 2」。
-- 可点「加入复习队列」，之后会出现在今日复习。
-
-### 拼音 / 写字
-
-- 拼音：声母、韵母点选认读（骨架）。
-- 写字：田字格 + 常用字笔顺说明（骨架，便于对照纸上描红）。
-
-## 说明与约定
-
-- 《绝句》采用幼小衔接/小学常见的**杜甫**「两个黄鹂鸣翠柳」（非杜牧「银烛秋光」）。
-- 《饮湖上初晴后雨》题目已规范；作者「袁枚」「登鹳雀楼」已按通用写法。
-- 《古朗月行》为节选「小时不识月」四句；《悯农》分其一、其二。
-- 拼音按诗意/教材常见读音校对（如 朝 zhāo、还 huán、见 xiàn、为 wèi、一行 yì háng 等）。`山行`「斜」、`风`「斜」取现代读音 xié；若教材注古音 xiá，可自行改 `poems.js`。
-
-## 清除进度
-
-浏览器开发者工具 → Application / 存储 → Local Storage → 删除 `chenchen-learning-v1`，或控制台执行：
-
-```js
-localStorage.removeItem('chenchen-learning-v1')
-```
-
-
-## 云同步（Cloudflare D1）
-
-跨设备复习进度：首页「☁️ 云同步」自动共用公开进度（无需同步码）。打开页面自动拉取，打卡后自动上传
-
-部署 Worker：
+查看卷实际路径（Docker）：
 
 ```bash
-cd cloudflare && npm i && npx wrangler login
-npx wrangler d1 execute chenchen-learning-progress --remote --file=./schema.sql
-npx wrangler deploy
+docker volume inspect chenchen-learning-data
+# 看 Mountpoint，例如 /var/lib/docker/volumes/chenchen-learning-data/_data
 ```
+
+### NAS 建议：绑定主机目录（更好备份）
+
+编辑 `docker-compose.yml`，把 volumes 改成：
+
+```yaml
+    volumes:
+      - /volume1/docker/chenchen-learning/data:/data
+```
+
+然后：
+
+```bash
+mkdir -p /volume1/docker/chenchen-learning/data
+docker compose up -d --build
+```
+
+备份：直接拷贝 `progress.db`（服务可不停，或先 `docker compose stop` 再拷）。
+
+恢复：停容器 → 覆盖 `progress.db` → 再 `docker compose up -d`。
+
+## API
+
+- `GET /api/health`
+- `GET /api/progress` → `{ found, payload, updatedAt }`
+- `PUT /api/progress` body `{ payload, clientUpdatedAt }`（LWW）
+
+前端同源调用，无需同步码。
+
+## 常用命令
+
+```bash
+docker compose logs -f
+docker compose restart
+docker compose down          # 不删数据卷
+docker compose down -v       # ⚠ 删除进度卷
+```
+
+## 本地无 Docker 调试
+
+```bash
+mkdir -p data
+DATA_DIR=./data PUBLIC_DIR=./public PORT=8080 python3 server/main.py
+```
+
+## 已下线（云端）
+
+- Worker `chenchen-learning-api`（已删除）
+- D1 `chenchen-learning-progress`（已删除）
+- GitHub Pages `/chenchen-learning/` 应用镜像（改为说明页）
+- 相关 Actions：`deploy-chenchen`、`deploy-worker`、云同步 apply 等
