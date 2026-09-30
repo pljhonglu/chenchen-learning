@@ -34,7 +34,7 @@ func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		origin = "*"
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, PATCH, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Add("Vary", "Origin")
 	if r.Method == http.MethodOptions {
@@ -64,8 +64,10 @@ func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			app.getProgress(w, ctx)
 		case http.MethodPut:
 			app.putProgress(w, r.WithContext(ctx))
+		case http.MethodPatch:
+			app.patchProgress(w, r.WithContext(ctx))
 		default:
-			methodNotAllowed(w, "GET, PUT, OPTIONS")
+			methodNotAllowed(w, "GET, PUT, PATCH, OPTIONS")
 		}
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not_found"})
@@ -87,12 +89,12 @@ func (app *application) getProgress(w http.ResponseWriter, ctx context.Context) 
 	})
 }
 
-func (app *application) putProgress(w http.ResponseWriter, r *http.Request) {
+func readProgressBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	if contentType := r.Header.Get("Content-Type"); contentType != "" {
 		mediaType, _, err := mime.ParseMediaType(contentType)
 		if err != nil || mediaType != "application/json" {
 			writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{"error": "application/json required"})
-			return
+			return nil, false
 		}
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxProgressBytes)
@@ -105,6 +107,14 @@ func (app *application) putProgress(w http.ResponseWriter, r *http.Request) {
 		} else {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
 		}
+		return nil, false
+	}
+	return body, true
+}
+
+func (app *application) putProgress(w http.ResponseWriter, r *http.Request) {
+	body, ok := readProgressBody(w, r)
+	if !ok {
 		return
 	}
 	var envelope map[string]json.RawMessage

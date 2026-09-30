@@ -44,6 +44,9 @@ func openStore(dataDir string) (*progressStore, error) {
 	dsn := &url.URL{Scheme: "file", Path: filepath.ToSlash(dbPath)}
 	query := dsn.Query()
 	query.Add("_pragma", "busy_timeout(5000)")
+	// PATCH reads and edits JSON in one transaction. Acquire the write lock
+	// before that read, including when two server processes share the volume.
+	query.Set("_txlock", "immediate")
 	dsn.RawQuery = query.Encode()
 	db, err := sql.Open("sqlite", dsn.String())
 	if err != nil {

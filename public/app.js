@@ -2,15 +2,14 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "chenchen-learning-v1";
   const INTERVALS = [1, 2, 4, 7, 15, 30]; // days
   // Same-origin /api/* (Docker SQLite). Override only if API is on another host.
   const API_BASE = "";
-  const SYNC_META_KEY = "chenchen-sync-meta";
 
 
   // ---------- Poems data (loaded from public/data/poems.json) ----------
   let POEMS = [];
+  let BUILTIN_POEMS = [];
   let poemsLoadPromise = null;
 
   function ensurePoems() {
@@ -21,7 +20,8 @@
           return r.json();
         })
         .then((data) => {
-          POEMS = Array.isArray(data) ? data : [];
+          BUILTIN_POEMS = Array.isArray(data) ? data : [];
+          POEMS = BUILTIN_POEMS;
           return POEMS;
         })
         .catch((e) => {
@@ -30,205 +30,125 @@
           throw e;
         });
     }
-    return poemsLoadPromise;
+    return poemsLoadPromise.then(() => {
+      POEMS = [...BUILTIN_POEMS, ...Object.values(loadState().customPoems || {})];
+      return POEMS;
+    });
   }
 
-  // ---------- Storage / SM-2 simplified ----------
-  function loadState() {
-    try {
-      const state = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      return state && typeof state === "object" && !Array.isArray(state)
-        ? { ...state, items: state.items && typeof state.items === "object" ? state.items : {} }
-        : { items: {} };
-    } catch {
-      return { items: {} };
-    }
-  }
-  function saveState(state) {
-    state.updatedAt = Math.max(Date.now(), (Number(state.updatedAt) || 0) + 1);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    scheduleProgressPush();
-  }
-
-  // ---------- Server sync (SQLite via same-origin /api/progress) ----------
+  // SQLite is the sole persistent source. This object is only the current page's
+  // response snapshot; closing/reloading the page always reads the server again.
+  let serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {} };
+  let stateReady = false;
+  let serverQueue = Promise.resolve();
+  let lastServerContact = null;
   let syncStatus = { text: "正在连接服务器…", kind: "busy" };
-  let pushTimer = null;
-  let syncBusy = false;
-  let syncPending = false;
 
-  function getSyncMeta() {
-    try {
-      return JSON.parse(localStorage.getItem(SYNC_META_KEY) || "{}");
-    } catch {
-      return {};
-    }
-  }
-  function setSyncMeta(patch) {
-    const m = { ...getSyncMeta(), ...patch };
-    localStorage.setItem(SYNC_META_KEY, JSON.stringify(m));
-    return m;
-  }
+  function loadState() { return serverState; }
+
   function setSyncStatus(text, kind) {
     syncStatus = { text, kind: kind || "muted" };
     const el = document.getElementById("sync-status");
-    if (el) {
-      el.textContent = text;
-      el.dataset.kind = syncStatus.kind;
-    }
+    if (el) { el.textContent = text; el.dataset.kind = syncStatus.kind; }
   }
-  function mergeProgressPayloads(local, remote) {
-    const a = local && typeof local === "object" ? local : { items: {} };
-    const b = remote && typeof remote === "object" ? remote : { items: {} };
-    const items = { ...(a.items || {}) };
-    for (const [id, rit] of Object.entries(b.items || {})) {
-      const lit = items[id];
-      if (!lit) {
-        items[id] = rit;
-        continue;
-      }
-      const lt = Date.parse(lit.updatedAt || lit.createdAt || 0) || 0;
-      const rt = Date.parse(rit.updatedAt || rit.createdAt || 0) || 0;
-      items[id] = rt >= lt ? { ...lit, ...rit } : { ...rit, ...lit };
-    }
-    const localAt = Number(a.updatedAt) || 0;
-    const remoteAt = Number(b.updatedAt) || 0;
-    return {
-      ...(localAt > remoteAt ? a : b),
-      items,
-      activity: { ...(a.activity || {}), ...(b.activity || {}) },
-      updatedAt: Math.max(localAt, remoteAt, Date.now()),
-    };
-  }
+
   async function apiFetch(path, opts) {
-    const base = API_BASE === undefined || API_BASE === null ? "" : API_BASE;
-    const res = await fetch(base + path, {
+    const res = await fetch(API_BASE + path, {
       ...opts,
-      headers: {
-        "Content-Type": "application/json",
-        ...(opts && opts.headers),
-      },
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
     });
-    const data = await res.json().catch(() => ({}));
+    let data;
+    try { data = await res.json(); }
+    catch (_) { throw new Error("服务器响应不是有效的 JSON，请稍后重试"); }
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("服务器返回了无效的进度数据");
     if (!res.ok) {
-      const err = new Error(data.error || "sync_failed");
-      err.status = res.status;
-      err.data = data;
-      throw err;
+      const error = new Error(data.error || "server_unavailable");
+      error.status = res.status;
+      error.data = data;
+      throw error;
     }
+    const method = (opts?.method || "GET").toUpperCase();
+    const hasPayload = validPayload(data.payload);
+    if (method === "GET" && !(data.found === true && hasPayload || data.found === false && (data.payload === null || data.payload === undefined))) {
+      throw new Error("服务器进度格式不正确，请稍后重试");
+    }
+    if (method === "PATCH" && !(data.ok === true && hasPayload)) throw new Error("服务器尚未确认保存，请重试");
     return data;
   }
-  async function pullAndMerge() {
-    setSyncStatus("正在从服务器拉取…", "busy");
-    const data = await apiFetch("/api/progress", { method: "GET" });
-    if (!data.found || !data.payload) {
-      setSyncStatus("服务器暂无数据，打卡后会自动保存", "ok");
-      setSyncMeta({ lastPullAt: Date.now(), serverUpdatedAt: null });
-      return null;
-    }
-    const local = loadState();
-    const merged = mergeProgressPayloads(local, data.payload);
-    merged.updatedAt = Math.max(merged.updatedAt, Number(data.updatedAt) || 0);
-    const prevTimer = pushTimer;
-    pushTimer = null;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-    pushTimer = prevTimer;
-    setSyncMeta({
-      lastPullAt: Date.now(),
-      serverUpdatedAt: data.updatedAt,
-    });
-    setSyncStatus(
-      "已与服务器合并 · " +
-        new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      "ok"
-    );
-    return merged;
+
+  function isRecord(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
+  function validPayload(value) {
+    return isRecord(value) && isRecord(value.items) && ["activity", "customPoems", "customCharacters"].every(key=>value[key] === undefined || isRecord(value[key]));
   }
-  async function pushProgress() {
-    const state = loadState();
-    const clientUpdatedAt = Number(state.updatedAt) || Date.now();
-    setSyncStatus("正在保存到服务器…", "busy");
-    const data = await apiFetch("/api/progress", {
-      method: "PUT",
-      body: JSON.stringify({
-        payload: state,
-        clientUpdatedAt,
-      }),
-    });
-    if (data.payload) {
-      const latest = loadState();
-      const changedDuringSave = (Number(latest.updatedAt) || 0) > clientUpdatedAt;
-      const merged = mergeProgressPayloads(latest, data.payload);
-      merged.updatedAt = Math.max(merged.updatedAt, Number(data.updatedAt) || 0);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-      if (changedDuringSave || data.kept === "server") syncPending = true;
-    }
-    setSyncMeta({
-      lastPushAt: Date.now(),
-      serverUpdatedAt: data.updatedAt,
-    });
-    setSyncStatus(
-      (data.kept === "server" ? "服务器较新，已采用服务器 · " : "已保存到服务器 · ") +
-        new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      "ok"
-    );
-    return data;
+
+  function acceptServerState(data) {
+    const empty = data.found === false && (data.payload === null || data.payload === undefined);
+    if (!empty && !validPayload(data.payload)) throw new Error("服务器进度格式不正确");
+    const payload = empty ? {} : data.payload;
+    serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, ...payload };
+    stateReady = true;
+    lastServerContact = Date.now();
+    POEMS = [...BUILTIN_POEMS, ...Object.values(serverState.customPoems)];
+    setSyncStatus("已保存到服务器 · " + new Date().toLocaleTimeString("zh-CN", {hour:"2-digit",minute:"2-digit"}), "ok");
+    return serverState;
   }
-  function scheduleProgressPush() {
-    clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => {
-      syncNow("push").catch(() => {});
-    }, 900);
+
+  function queueServerTask(task) {
+    const next = serverQueue.catch(() => {}).then(task);
+    serverQueue = next;
+    return next;
   }
-  async function syncNow(mode) {
-    if (syncBusy) { syncPending = true; return; }
-    syncBusy = true;
+
+  function commitOperations(operations) {
+    return queueServerTask(async () => {
+      if (!stateReady) throw new Error("尚未连接学习服务器");
+      setSyncStatus("正在保存到服务器…", "busy");
+      try {
+        const response = await apiFetch("/api/progress", {method:"PATCH", body:JSON.stringify({operations})});
+        return acceptServerState(response);
+      } catch (error) {
+        setSyncStatus("保存未完成，请保持页面打开并重试", "err");
+        if (error.status === 409) {
+          if (validPayload(error.data?.payload)) acceptServerState(error.data);
+          else {
+            const response = await apiFetch("/api/progress", {method:"GET"}).catch(() => null);
+            if (response) acceptServerState(response);
+          }
+          toast("这项内容已在另一台设备删除，请回首页刷新。");
+        } else toast("还没保存成功，请检查网络后再点一次。");
+        throw error;
+      }
+    });
+  }
+
+  async function syncNow() {
     try {
-      if (mode === "push") {
-        await pushProgress();
-      } else {
-        await pullAndMerge();
-        await pushProgress();
-      }
+      await queueServerTask(async () => {
+        setSyncStatus("正在读取服务器进度…", "busy");
+        acceptServerState(await apiFetch("/api/progress", {method:"GET"}));
+      });
       if (currentView === "home" && !showingCelebration) renderHome();
-    } catch (e) {
-      console.warn("sync failed", e);
-      setSyncStatus("同步失败：" + (e.message || "网络错误"), "err");
-    } finally {
-      syncBusy = false;
-      if (syncPending) {
-        syncPending = false;
-        clearTimeout(pushTimer);
-        pushTimer = setTimeout(() => syncNow("push"), 50);
-      }
+      return true;
+    } catch (error) {
+      setSyncStatus("暂时无法连接服务器，请检查网络后重试", "err");
+      return false;
     }
   }
+
   function syncPanelHtml() {
-    const meta = getSyncMeta();
-    const last =
-      meta.lastPushAt || meta.lastPullAt
-        ? new Date(meta.lastPushAt || meta.lastPullAt).toLocaleString("zh-CN", {
-            month: "numeric",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "尚未同步";
-    return `
-      <div class="card sync-card" id="sync-card">
-        <h2>💾 进度同步</h2>
-        <p class="sync-desc">练习进度自动保存在这台设备，并同步到服务端。家里不同设备访问同一地址即可共用进度。网络暂时断开时仍可练习。</p>
-        <div class="btn-row sync-actions">
-          <button type="button" class="btn btn-learn" id="sync-now">立即同步</button>
-        </div>
-        <div class="sync-status" id="sync-status" data-kind="${escapeHtml(syncStatus.kind)}">${escapeHtml(syncStatus.text)}</div>
-        <div class="sync-meta">上次：${escapeHtml(last)}</div>
-      </div>`;
+    const last = lastServerContact ? new Date(lastServerContact).toLocaleString("zh-CN", {month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "尚未连接";
+    return `<div class="card sync-card" id="sync-card"><h2>💾 服务器进度</h2><p class="sync-desc">课堂内容与复习进度仅保存在服务器 SQLite 中。手机、平板访问同一地址，就能接着复习。需要连接服务器才能保存练习。</p><div class="btn-row sync-actions"><button type="button" class="btn btn-learn" id="sync-now">刷新服务器进度</button></div><div class="sync-status" id="sync-status" data-kind="${escapeHtml(syncStatus.kind)}">${escapeHtml(syncStatus.text)}</div><div class="sync-meta">上次连接：${escapeHtml(last)}</div></div>`;
   }
+
   function bindSyncPanel(root) {
-    const card = (root || document).querySelector("#sync-card");
-    if (!card) return;
-    const btn = card.querySelector("#sync-now");
-    if (btn) btn.onclick = () => syncNow("full");
+    const btn = (root || document).querySelector("#sync-now");
+    if(btn) btn.onclick = async () => {
+      btn.disabled = true;
+      const ok = await syncNow();
+      btn.disabled = false;
+      if (ok && document.getElementById("parent-dialog").open) openParent();
+    };
   }
 
   function todayStr() {
@@ -248,56 +168,37 @@
     return s.items[id] || null;
   }
 
-  function upsertItem(id, patch) {
-    const s = loadState();
-    const prev = s.items[id] || {
-      id,
-      type: patch.type || "poem",
-      title: patch.title || id,
-      stage: 0,
-      nextReview: todayStr(),
-      lastResult: null,
-      learned: false,
-      createdAt: new Date().toISOString(),
-    };
-    s.items[id] = { ...prev, ...patch, updatedAt: new Date().toISOString() };
-    saveState(s);
-    return s.items[id];
+  function newClassroomItem(id, meta) {
+    return { id, ...meta, learned: true, stage: 0, nextReview: todayStr(), lastResult:"enrolled", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
   }
 
-  /** result: 'remember' | 'fuzzy' | 'forgot' */
-  function reviewResult(id, result, meta) {
-    const cur = getItem(id) || upsertItem(id, meta || {});
+  function reviewPatch(cur, result) {
     const startingStage = cur.reviewDay === todayStr() ? (cur.reviewStartStage || 0) : (cur.stage || 0);
-    let stage = startingStage;
-    if (result === "remember") {
-      stage = Math.min(stage + 1, INTERVALS.length - 1);
-    } else if (result === "fuzzy") {
-      stage = Math.max(0, stage - 1);
-    } else {
-      stage = 0;
-    }
-    const days = INTERVALS[stage];
-    return upsertItem(id, {
-      ...meta,
-      stage,
-      lastResult: result,
-      reviewDay: todayStr(),
-      reviewStartStage: startingStage,
-      nextReview: addDays(todayStr(), days),
-      learned: true,
-    });
+    const days = result === "remember" ? INTERVALS[Math.min(startingStage, INTERVALS.length - 1)] : 1;
+    const stage = result === "remember" ? Math.min(startingStage + 1, INTERVALS.length - 1) : 0;
+    return { stage, lastResult:result, reviewDay:todayStr(), reviewStartStage:startingStage, nextReview:addDays(todayStr(),days), updatedAt:new Date().toISOString() };
   }
 
-  function markLearned(id, meta) {
-    if (getItem(id)?.learned) return getItem(id);
-    return upsertItem(id, {
-      ...meta,
-      learned: true,
-      stage: 0,
-      nextReview: todayStr(),
-      lastResult: "enrolled",
-    });
+  async function markLearned(id, meta, extraOperations = []) {
+    const existing = getItem(id);
+    const operations = extraOperations.slice();
+    if (existing && !existing.learned) {
+      const value = {learned:true,updatedAt:new Date().toISOString()};
+      if (!existing.nextReview) value.nextReview = todayStr();
+      operations.push({op:"merge",collection:"items",key:id,value});
+    } else if (!existing) {
+      operations.push({op:"create",collection:"items",key:id,value:newClassroomItem(id,meta)});
+    }
+    if (operations.length) await commitOperations(operations);
+    return getItem(id);
+  }
+
+  async function removeClassroomItem(id) {
+    const state = loadState();
+    const operations = [{op:"delete",collection:"items",key:id}];
+    if(state.customPoems[id]) operations.push({op:"delete",collection:"customPoems",key:id});
+    if(state.customCharacters[id]) operations.push({op:"delete",collection:"customCharacters",key:id});
+    await commitOperations(operations);
   }
 
   function dueItems() {
@@ -305,7 +206,7 @@
     const today = todayStr();
     return Object.values(s.items).filter(
       (it) => it.learned && it.nextReview && it.nextReview <= today
-    );
+    ).sort((a, b) => a.nextReview.localeCompare(b.nextReview) || (a.createdAt || "").localeCompare(b.createdAt || ""));
   }
 
   function allLearned() {
@@ -457,14 +358,22 @@
     });
   }
 
-  function recordPractice(id, type) {
-    const s = loadState();
-    s.activity = s.activity || {};
-    s.activity[`${Date.now()}-${Math.random().toString(36).slice(2, 8)}`] = { day: todayStr(), id, type };
-    // Keep about three months of the small completion log; course progress is never removed.
-    const cutoff = addDays(todayStr(), -90);
-    Object.keys(s.activity).forEach(key => { if (s.activity[key].day < cutoff) delete s.activity[key]; });
-    saveState(s);
+  async function recordPractice(id, type, result, attempt) {
+    const activityId = attempt?.activityId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const operations = [{op:"set",collection:"activity",key:activityId,value:{day:todayStr(),id,type}}];
+    const item = getItem(id);
+    if ((reviewSession || attempt?.requireClassroom) && !item?.learned) {
+      const error = new Error("这项课堂内容已经删除");
+      error.status = 409;
+      toast("这项课堂内容已经删除，请回到小花园。");
+      throw error;
+    }
+    // Free browsing before a scheduled day never advances the memory interval.
+    if (item?.learned) {
+      const value = item.nextReview <= todayStr() ? reviewPatch(item,result) : {};
+      operations.unshift({op:"merge",collection:"items",key:id,value});
+    }
+    await commitOperations(operations);
   }
 
   function sessionBanner() {
@@ -477,10 +386,28 @@
     if (btn) btn.onclick = () => { reviewSession = null; showView("home"); renderHome(); };
   }
 
-  function completePractice(id, result, meta) {
+  let completingPractice = false;
+  let pendingPracticeAttempt = null;
+  async function completePractice(id, result, meta) {
     if (reviewSession && reviewSession.items[reviewSession.index]?.id !== id) return true;
-    if (getItem(id)?.learned) reviewResult(id, result, meta);
-    recordPractice(id, meta.type);
+    if (completingPractice) return true;
+    completingPractice = true;
+    const sessionAtStart = reviewSession;
+    const viewAtStart = currentView;
+    if (!pendingPracticeAttempt || pendingPracticeAttempt.id !== id || pendingPracticeAttempt.result !== result) {
+      pendingPracticeAttempt = {id,result,activityId:`${Date.now()}-${Math.random().toString(36).slice(2,10)}`,requireClassroom:!!getItem(id)?.learned || !!meta.requireClassroom};
+    }
+    const attemptAtStart = pendingPracticeAttempt;
+    try {
+      await recordPractice(id, meta.type, result, attemptAtStart);
+    } catch (error) {
+      completingPractice = false;
+      if (error.status === 409 && reviewSession === sessionAtStart && currentView === viewAtStart) navigate("home");
+      return true;
+    }
+    completingPractice = false;
+    if (pendingPracticeAttempt === attemptAtStart) pendingPracticeAttempt = null;
+    if (reviewSession !== sessionAtStart || currentView !== viewAtStart) return true;
     if (!reviewSession || reviewSession.items[reviewSession.index]?.id !== id) { toast("一朵小花送给认真练习的你！"); return false; }
     reviewSession.index++;
     if (reviewSession.index < reviewSession.items.length) {
@@ -501,11 +428,13 @@
   }
 
   async function startReview() {
+    if (!await syncNow()) { toast("暂时连不上服务器，请重试。"); return; }
     await ensurePoems().catch(() => {});
     const learned = allLearned();
     const due = dueItems();
     if (!learned.length) { openParent(); return; }
-    const items = (due.length ? due : learned).slice(0, 3);
+    if (!due.length) { toast("今天的复习都完成啦，明天再来和小兔见面。"); return; }
+    const items = due.slice(0, 3);
     reviewSession = { items, index: 0 };
     openReviewItem(items[0].id, items[0].type);
   }
@@ -516,61 +445,144 @@
     const learned = allLearned();
     const state = loadState();
     const practiced = Object.values(state.activity || {}).filter(it => it.day === todayStr()).length;
-    const todayList = (due.length ? due : learned).slice(0, 3);
+    const todayList = due.slice(0, 3);
+    const nextDate = learned.map(it=>it.nextReview).filter(Boolean).sort()[0];
     const el = document.getElementById("home-content");
     el.innerHTML = `
       <div class="welcome-line"><span>你好，辰辰 <span aria-hidden="true">☀</span></span><span>${formatDateCN(todayStr())} · 美好的一天</span></div>
       <div class="home-top">
         <section class="hero">
-          <div class="hero-copy"><p class="eyebrow"><span></span> 把学过的，再想起来</p><h1>每天一点点，<br>记忆开出小花。</h1><p class="hero-description">${practiced >= 3 ? "今天已经认真练习啦，先休息一会儿吧。" : "和小兔一起，复习课上的小本领。"}</p><button class="btn btn-primary start-btn" id="start-review"><span aria-hidden="true">▶</span> ${practiced >= 3 ? "再复习一会儿" : "开始复习"} <span aria-hidden="true">→</span></button><p class="hero-note">${learned.length ? `一次 ${todayList.length} 个小练习 · 不着急，慢慢来` : "第一次来？请家长先选好课上学过的内容"}</p></div>
+          <div class="hero-copy"><p class="eyebrow"><span></span> 把学过的，再想起来</p><h1>每天一点点，<br>记忆开出小花。</h1><p class="hero-description">${learned.length && !due.length ? "今天没有到期复习，安心休息一下吧。" : "和小兔一起，复习课上的小本领。"}</p><button class="btn btn-primary start-btn" id="start-review" ${learned.length && !due.length ? "disabled" : ""}><span aria-hidden="true">▶</span> ${learned.length && !due.length ? "今天复习好啦" : "开始复习"} <span aria-hidden="true">→</span></button><p class="hero-note">${due.length ? `今天有 ${due.length} 项到期 · 一次最多 3 个小练习` : learned.length ? `下次复习：${formatDateCN(nextDate || todayStr())}` : "请家长记录课上学过的内容，复习会自动安排"}</p></div>
           <div class="hero-illustration">${rabbitArt()}<span class="art-caption">小兔陪你，一起长大</span></div>
         </section>
         <aside class="growth-card"><div class="growth-heading"><span class="tiny-sprout" aria-hidden="true">♧</span><span>我的小小收获</span></div><h2>${practiced ? "小花正在长大" : "今天也来浇浇水"}</h2><p>${practiced ? `今天完成了 ${practiced} 次练习` : "每认真练习一次，就收获一朵小花"}</p><div class="flower-row" aria-label="今天完成 ${practiced} 次练习">${[0,1,2].map(i => `<span class="flower ${i < practiced ? "bloomed" : ""}" aria-hidden="true">✿<i></i></span>`).join("")}</div><div class="growth-bottom"><span>${Math.min(practiced,3)} / 3 朵小花</span><span>一点点，就是进步</span></div><div class="growth-track"><span style="width:${Math.min(practiced/3,1)*100}%"></span></div></aside>
       </div>
-      <div class="section-heading"><div><h2>选一个小本领</h2><p>读一读，想一想，动动小手</p></div><button class="listen-guide" id="home-guide" aria-label="听听怎么玩">◖)) <span>听听怎么玩</span></button></div>
+      <div class="section-heading"><div><h2>我的小本领</h2><p>也可以自由看一看，课后复习由小兔安排</p></div><button class="listen-guide" id="home-guide" aria-label="听听怎么玩">◖)) <span>听听怎么玩</span></button></div>
       <div class="subject-grid">
         <button class="subject-card subject-poems" data-go="poems"><span class="subject-drawing poem-drawing" aria-hidden="true"><i>诗</i><span>⌁</span></span><span class="subject-text"><strong>读古诗</strong><small>听一听 · 背一背</small></span><span class="subject-arrow">↗</span></button>
         <button class="subject-card subject-math" data-go="math"><span class="subject-drawing math-drawing" aria-hidden="true"><i>2</i><i>＋</i><i>3</i></span><span class="subject-text"><strong>玩数学</strong><small>数一数 · 想一想</small></span><span class="subject-arrow">↗</span></button>
         <button class="subject-card subject-pinyin" data-go="pinyin"><span class="subject-drawing pinyin-drawing" aria-hidden="true"><i>a</i><i>o</i><i>e</i></span><span class="subject-text"><strong>读拼音</strong><small>张开嘴 · 读一读</small></span><span class="subject-arrow">↗</span></button>
         <button class="subject-card subject-write" data-go="write"><span class="subject-drawing write-drawing" aria-hidden="true"><i>大</i><span>✎</span></span><span class="subject-text"><strong>写汉字</strong><small>看一看 · 描一描</small></span><span class="subject-arrow">↗</span></button>
       </div>
-      <section class="today-card"><div class="today-intro"><span class="today-tag">TODAY'S LITTLE STEPS</span><h2>今天，和它们见个面</h2><p>${learned.length ? "都是课上学过的内容哦" : "让爸爸妈妈选好内容，我们就可以出发啦"}</p></div><div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · ${due.length ? "再想一想" : "熟悉的老朋友"}</small></span><span class="step-go">→</span></button>`).join("") : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>选好课上学过的内容</strong><small>请爸爸妈妈帮忙，第一次设置就好</small></button>`}</div></section>`;
+      <section class="today-card"><div class="today-intro"><span class="today-tag">TODAY'S LITTLE STEPS</span><h2>今天，和它们见个面</h2><p>${due.length ? "小兔按记忆间隔，找到了今天的复习内容" : learned.length ? "今天没有到期内容，休息也是成长" : "请爸爸妈妈把课上学过的内容记下来"}</p></div><div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>今天不用再复习啦</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}</div></section>`;
     document.getElementById("start-review").onclick = startReview;
-    document.getElementById("home-guide").onclick = () => speakGuide("点开始复习，和小兔一起，把课上学过的再想一想。一次一点点，慢慢来。");
+    document.getElementById("home-guide").onclick = () => speakGuide("小兔会帮你安排今天到期的复习。点开始复习，把课上学过的再想一想。复习完就休息，慢慢来。");
     document.getElementById("home-setup")?.addEventListener("click", openParent);
     el.querySelectorAll("[data-go]").forEach(btn => btn.onclick = () => navigate(btn.dataset.go));
     el.querySelectorAll("[data-review]").forEach(btn => btn.onclick = () => { reviewSession = {items:[getItem(btn.dataset.review)],index:0}; openReviewItem(btn.dataset.review,btn.dataset.type); });
   }
 
+  function customPoemFromForm(form) {
+    const body = form.elements.body.value.trim();
+    const texts = body.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    if (!texts.length) throw new Error("请写下古诗正文，每句一行。");
+    if (texts.length > 32 || texts.some(line=>[...line].length>50)) throw new Error("每句请控制在 50 个字以内，最多 32 句。");
+    const rawPinyin = form.elements.pinyin.value;
+    const pinyinLines = rawPinyin.trim() ? rawPinyin.split(/\r?\n/).map(line=>line.trim()) : [];
+    while (pinyinLines.length > texts.length && !pinyinLines[pinyinLines.length-1]) pinyinLines.pop();
+    if (pinyinLines.length && pinyinLines.length !== texts.length) throw new Error("拼音行数需要和正文相同；不填写也可以。");
+    const lines = texts.map((text, index)=>{
+      const syllables = pinyinLines[index] ? pinyinLines[index].split(/\s+/).filter(Boolean) : [];
+      const characters = [...text];
+      const spokenCount = characters.filter(c=>/[^\s，。！？、；：,.!?;:“”‘’「」『』（）()—…《》]/u.test(c)).length;
+      if (syllables.length && syllables.length !== spokenCount) throw new Error(`第 ${index+1} 句拼音有 ${syllables.length} 个音节，正文有 ${spokenCount} 个字，请用空格隔开每个音节。`);
+      let at = 0;
+      return {text,chars:characters.map(c=>({c,p:/[^\s，。！？、；：,.!?;:“”‘’「」『』（）()—…《》]/u.test(c) ? (syllables[at++] || "") : ""}))};
+    });
+    return {id:`custom-poem-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, title:form.elements.title.value.trim() || texts[0].slice(0,18), author:form.elements.author.value.trim(), dynasty:"",titlePy:[],authorPy:[],dynastyPy:[],lines};
+  }
+
   async function openParent() {
+    if (!stateReady) { toast("先连接服务器，才能管理课堂内容。"); return; }
     await ensurePoems().catch(() => {});
     const dialog = document.getElementById("parent-dialog");
+    const scroll = dialog.open ? dialog.scrollTop : 0;
     const courses = [
       {id:"math-addsub-10", type:"math", title:"10以内加减法"},
       {id:"math-decomp-10", type:"decomp", title:"10以内分解组合"},
       {id:"pinyin-basic", type:"pinyin", title:"声母韵母认读"},
-      {id:"write-basic", type:"write", title:"常用汉字描红"},
     ];
     const learned = allLearned();
-    dialog.innerHTML = `<div class="dialog-heading"><div><p class="eyebrow">陪伴孩子，轻轻复习</p><h2 id="parent-title">家长的小帮手</h2></div><button class="close-btn" id="close-parent" aria-label="关闭家长入口">×</button></div><p class="parent-description">先选孩子课上已经学过的内容。首页会优先安排需要复习的内容，每次最多 3 个，不计时、不排名。</p><h3>1. 选择课上学过的古诗</h3><div class="parent-add"><select id="parent-poem" aria-label="选择学过的古诗"><option value="">请选择古诗…</option>${POEMS.map(p => `<option value="${p.id}">${escapeHtml(p.title)} · ${escapeHtml(p.author)}</option>`).join("")}</select><button class="btn btn-primary" id="add-class-poem">加入</button></div><h3>2. 选择已经学过的小本领</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" aria-pressed="${!!getItem(c.id)?.learned}"><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已选" : "+ 添加"}</span></button>`).join("")}</div><h3>正在复习的内容 <span class="muted">${learned.length}</span></h3><div class="parent-enrolled">${learned.length ? learned.map(it => `<div><span>${escapeHtml(it.title)}<small>下次 ${escapeHtml(it.nextReview || todayStr())}</small></span><button class="text-btn" data-remove="${escapeHtml(it.id)}" aria-label="暂停复习 ${escapeHtml(it.title)}">暂停</button></div>`).join("") : `<p class="muted">还没有添加。选一两项就可以开始，不用一次选很多。</p>`}</div><p class="parent-tip">陪练建议：古诗先回想再听示范；拼音请家长示范发音；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">选好啦，回小花园</button>`;
+    dialog.innerHTML = `
+      <div class="dialog-heading"><div><p class="eyebrow">记录课堂，复习交给小兔</p><h2 id="parent-title">课堂内容管理</h2></div><button class="close-btn" id="close-parent" aria-label="关闭课堂内容管理">×</button></div>
+      <p class="parent-description">把孩子今天在学校学过的内容记下来。小兔按记忆间隔自动安排当天到期内容，家长不用挑选每天复习什么。</p>
+      <div class="memory-schedule"><span>今天巩固</span><i>→</i><span>1 天</span><i>→</i><span>2 天</span><i>→</i><span>4 天</span><i>→</i><span>7 天</span><i>→</i><span>15 天</span><i>→</i><span>30 天</span></div>
+      <p class="form-help">记得时逐步拉开间隔；需要提示或再读时，明天再巩固。同一天多练不会连续跳级。</p>
+      <h3>古诗 · 今天在学校学过</h3>
+      <div class="parent-add"><select id="parent-poem" aria-label="选择学校学过的古诗"><option value="">从已有诗卡中查找…</option>${POEMS.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}${p.author ? " · "+escapeHtml(p.author) : ""}${getItem(p.id)?.learned ? "（已记录）" : ""}</option>`).join("")}</select><button class="btn btn-primary" id="add-class-poem">记录</button></div>
+      <details class="classroom-section"><summary>＋ 诗库里没有？新增一首古诗</summary><form id="custom-poem-form" class="classroom-form">
+        <div class="form-two"><label>标题 <small>可选</small><input name="title" maxlength="50" placeholder="留空时使用第一句" /></label><label>作者 <small>可选</small><input name="author" maxlength="30" placeholder="如：李白" /></label></div>
+        <label>古诗正文 <textarea name="body" rows="5" maxlength="4000" required placeholder="每句一行，例如：&#10;床前明月光，&#10;疑是地上霜。"></textarea></label>
+        <label>逐行拼音 <small>可选，不自动猜读音</small><textarea name="pinyin" rows="4" maxlength="4000" placeholder="每字一个音节，以空格隔开；标点不用填写。&#10;chuáng qián míng yuè guāng&#10;yí shì dì shàng shuāng"></textarea></label>
+        <p class="form-help">拼音逐行对应正文。不填的行保留空行，也可以全部留空，仅显示汉字。</p><p class="form-error" id="poem-form-error" role="alert"></p><button class="btn btn-primary" type="submit">新增古诗，记录今天学过</button>
+      </form></details>
+      <h3>汉字 · 一个字一张复习卡</h3>
+      <form id="custom-character-form" class="classroom-form"><div class="form-two"><label>今天学的汉字<input name="character" maxlength="2" required placeholder="如：春" /></label><label>笔画 / 笔顺 <small>可选</small><input name="strokes" maxlength="120" placeholder="如：9 画" /></label></div><label>记忆或书写提示 <small>可选</small><input name="tip" maxlength="160" placeholder="写下老师教过的小提示" /></label><p class="form-error" id="character-form-error" role="alert"></p><button class="btn btn-learn" type="submit">记录这个汉字</button></form>
+      <h3>数学与拼音 · 记录已学内容</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" ${getItem(c.id)?.learned ? "disabled" : ""}><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已记录" : "+ 记录"}</span></button>`).join("")}</div>
+      <h3>课堂记录 <span class="muted">${learned.length} 项</span></h3><div class="parent-enrolled">${learned.length ? learned.map(it=>`<div><span>${escapeHtml(it.title)}<small>${it.nextReview <= todayStr() ? "今天到期" : "下次 "+escapeHtml(it.nextReview)} · 自动安排</small></span><button class="text-btn delete-course" data-remove="${escapeHtml(it.id)}" aria-label="删除课堂内容 ${escapeHtml(it.title)}">删除</button></div>`).join("") : '<p class="muted">还没有课堂记录。先添加今天学过的一两项就好。</p>'}</div>
+      <p class="parent-tip">陪练建议：古诗先回想再听示范；拼音请家长示范发音；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">记录好啦，回小花园</button>`;
     if (!dialog.open) dialog.showModal();
+    dialog.scrollTop = scroll;
     const close = () => {dialog.close(); if(currentView === "home" && !showingCelebration) renderHome();};
     document.getElementById("close-parent").onclick = close;
-    document.getElementById("parent-done").onclick = () => { dialog.close(); navigate("home"); };
-    document.getElementById("add-class-poem").onclick = () => {
+    document.getElementById("parent-done").onclick = () => {dialog.close();navigate("home");};
+    document.getElementById("add-class-poem").onclick = async (event) => {
       const poem = POEMS.find(p=>p.id===document.getElementById("parent-poem").value);
-      if(!poem) {toast("先选择一首古诗"); return;}
-      if (!getItem(poem.id)?.learned) markLearned(poem.id,{type:"poem",title:poem.title});
-      openParent();
-      toast("已加入课后复习");
+      if (!poem) {toast("先选择一首课上学过的古诗。");return;}
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {await markLearned(poem.id,{type:"poem",title:poem.title});await openParent();toast("已记录课堂内容，复习会自动安排。");}
+      catch (_) {button.disabled = false;}
     };
-    dialog.querySelectorAll("[data-course]").forEach(btn=>btn.onclick=()=>{
-      const c=courses.find(it=>it.id===btn.dataset.course);
-      if(getItem(c.id)?.learned) upsertItem(c.id,{learned:false});
-      else markLearned(c.id,c);
-      openParent();
+    document.getElementById("custom-poem-form").onsubmit = async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const error = document.getElementById("poem-form-error");
+      const button = form.querySelector('[type="submit"]');
+      error.textContent = "";
+      try {
+        const poem = customPoemFromForm(form);
+        form.pendingPoemId = form.pendingPoemId || poem.id;
+        poem.id = form.pendingPoemId;
+        button.disabled = true;
+        await markLearned(poem.id,{type:"poem",title:poem.title},[{op:"set",collection:"customPoems",key:poem.id,value:poem}]);
+        await openParent(); toast("新诗卡保存好啦，今天先一起巩固。");
+      } catch (failure) {error.textContent = failure.status ? "没有保存成功，请检查连接后再试。" : failure.message;button.disabled = false;}
+    };
+    document.getElementById("custom-character-form").onsubmit = async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const error = document.getElementById("character-form-error");
+      const button = form.querySelector('[type="submit"]');
+      const c = form.elements.character.value.trim();
+      error.textContent = "";
+      if ([...c].length !== 1 || !/\p{Script=Han}/u.test(c)) {error.textContent = "请只填写一个汉字，例如「春」。";return;}
+      const id = `write-char-${c.codePointAt(0).toString(16)}`;
+      const builtin = WRITE_CHARS.find(ch=>ch.c===c);
+      const ch = {id,c,strokes:form.elements.strokes.value.trim() || builtin?.strokes || "",tip:form.elements.tip.value.trim() || builtin?.tip || ""};
+      button.disabled = true;
+      try {
+        // Store the parent's optional hints even for a character in the starter library.
+        await markLearned(id,{type:"write",title:`汉字·${c}`},[{op:"set",collection:"customCharacters",key:id,value:ch}]);
+        await openParent();toast(`「${c}」已经记下啦，会单独安排复习。`);
+      } catch (_) {error.textContent = "没有保存成功，请检查连接后再试。";button.disabled = false;}
+    };
+    dialog.querySelectorAll("[data-course]").forEach(button=>button.onclick=async()=>{
+      button.disabled = true;
+      const course = courses.find(it=>it.id===button.dataset.course);
+      try {await markLearned(course.id,course);await openParent();}
+      catch (_) {button.disabled = false;}
     });
-    dialog.querySelectorAll("[data-remove]").forEach(btn=>btn.onclick=()=>{upsertItem(btn.dataset.remove,{learned:false});openParent();});
+    dialog.querySelectorAll("[data-remove]").forEach(button=>button.onclick=async()=>{
+      button.disabled = true;
+      try {
+        const removedId = button.dataset.remove;
+        await removeClassroomItem(removedId);
+        if (currentView === "poem-detail" && selectedPoemId === removedId || currentView === "write" && selectedWriteId === removedId || reviewSession?.items.some(item=>item.id===removedId)) navigate("home");
+        await openParent();toast("课堂内容已删除，后续不再安排复习。");
+      }
+      catch (_) {button.disabled = false;}
+    });
     bindSyncPanel(dialog);
   }
 
@@ -587,6 +599,7 @@
       pyPracticed = new Set();
       renderPinyin();
     } else if (type === "write") {
+      selectedWriteId = id;
       showView("write");
       renderWrite();
     }
@@ -622,8 +635,8 @@
       list = list.filter(
         (p) =>
           p.title.includes(q) ||
-          p.author.includes(q) ||
-          p.dynasty.includes(q) ||
+          (p.author || "").includes(q) ||
+          (p.dynasty || "").includes(q) ||
           p.lines.some((l) => l.text.includes(q))
       );
     }
@@ -665,9 +678,7 @@
                       <div class="ptitle">${escapeHtml(display)}${
                       p.subtitle ? `<span style="font-size:0.7em;color:var(--muted)"> · ${p.subtitle}</span>` : ""
                     }</div>
-                      <div class="pmeta">${escapeHtml(p.dynasty)} · ${escapeHtml(
-                      p.author
-                    )}</div>
+                      <div class="pmeta">${escapeHtml([p.dynasty, p.author].filter(Boolean).join(" · "))}</div>
                       <div class="status"><span class="chip ${st.cls}">${st.label}</span></div>
                     </button>`;
                   })
@@ -713,12 +724,12 @@
       return;
     }
     const displayTitle = poem.titleDisplay || poem.title;
-    const titleChars = titleToChars(displayTitle, poem.titlePy);
-    const dynastyChars = poem.dynastyPy.map((p, i) => ({
+    const titleChars = titleToChars(displayTitle, poem.titlePy || []);
+    const dynastyChars = (poem.dynastyPy || []).map((p, i) => ({
       c: [...poem.dynasty][i],
       p,
     }));
-    const authorChars = poem.authorPy.map((p, i) => ({
+    const authorChars = (poem.authorPy || []).map((p, i) => ({
       c: [...poem.author][i],
       p,
     }));
@@ -745,8 +756,8 @@
         }</div>
         <div class="ruby-line author-line">
           ${rubyChars(dynastyChars)}
-          <span class="dot-sep">·</span>
-          ${rubyChars(authorChars)}
+          ${poem.dynasty && poem.author ? `<span class="dot-sep">·</span>` : ""}
+          ${authorChars.length ? rubyChars(authorChars) : `<span class="plain-author">${escapeHtml(poem.author || "")}</span>`}
         </div>
         ${
           poem.note
@@ -780,20 +791,22 @@
     document.getElementById("back-poems").onclick = () => navigate("poems");
     const enroll = document.getElementById("btn-enroll");
     if (enroll) {
-      enroll.onclick = () => {
-        markLearned(id, {
+      enroll.onclick = async () => {
+        enroll.disabled = true;
+        try { await markLearned(id, {
           type: "poem",
           title: displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""),
         });
         renderPoemDetail(id);
-        toast("已加入复习计划！可在下方打卡，或回首页「今日复习」");
+        toast("已记录今天课堂学过，后续复习自动安排。");
+        } catch (_) { enroll.disabled = false; }
       };
     }
     el.querySelectorAll("[data-r]").forEach((b) => {
-      b.onclick = () => {
+      b.onclick = async () => {
         const r = b.dataset.r;
-        if (completePractice(id, r, {
-          type: "poem", title: displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""),
+        if (await completePractice(id, r, {
+          type: "poem", title: displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""), requireClassroom: enrolled,
         })) return;
         const msg =
           r === "remember"
@@ -1154,8 +1167,8 @@
     const panel = document.getElementById("math-panel");
     panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 3 道题，真棒！</h3><p>今天的小数字，下次再来见面。</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "收下小花，继续 →" : "收下小花，休息一下"}</button></div>`;
     document.querySelector("#math-content .practice-controls").hidden = true;
-    document.getElementById("finish-math").onclick = () => {
-      const advanced = completePractice(id, mathScore.ok >= 3 ? "remember" : "fuzzy", meta);
+    document.getElementById("finish-math").onclick = async () => {
+      const advanced = await completePractice(id, mathScore.ok >= 3 ? "remember" : "fuzzy", meta);
       if (!advanced) navigate("home");
     };
   }
@@ -1248,9 +1261,9 @@
       renderPinyin();
       toast(pyPracticed.size >= 3 ? "读了 3 张卡片啦，收下小花休息吧！" : "读得很认真！试试下一张。");
     };
-    document.getElementById("py-finish").onclick = () => {
+    document.getElementById("py-finish").onclick = async () => {
       if(!pyPracticed.size) return;
-      if(!completePractice("pinyin-basic","remember",{type:"pinyin",title:"声母韵母认读"})) navigate("home");
+      if(!await completePractice("pinyin-basic","remember",{type:"pinyin",title:"声母韵母认读"})) navigate("home");
     };
     bindSessionExit();
   }
@@ -1270,13 +1283,21 @@
     { c: "田", strokes: "5画 · 竖、横折、横、竖、横", tip: "中间十字" },
     { c: "木", strokes: "4画 · 横、竖、撇、捺", tip: "竖在横中间" },
   ];
-  let writeIdx = 0;
+  let selectedWriteId = null;
+  function writingCharacters() {
+    const characters = new Map(WRITE_CHARS.map(ch => { const item = {...ch,id:`write-char-${ch.c.codePointAt(0).toString(16)}`}; return [item.id,item]; }));
+    Object.values(loadState().customCharacters || {}).forEach(ch=>characters.set(ch.id,ch));
+    return [...characters.values()];
+  }
 
   function renderWrite() {
     const el = document.getElementById("write-content");
-    const ch = WRITE_CHARS[writeIdx];
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">小手动一动</p><h2>汉字描一描 <span class="heading-flower">✎</span></h2></div><span class="practice-count">描 1 个字就好</span></div><p class="practice-instruction">沿着浅浅的字，用手指或鼠标描一描。</p><div class="tianzige"><div class="char">${ch.c}</div><canvas id="write-canvas" width="600" height="600" aria-label="${ch.c} 字描红画布"></canvas></div><div class="stroke-hint"><b>${ch.c}</b>　${escapeHtml(ch.strokes)}<br>${escapeHtml(ch.tip)}</div><div class="btn-row practice-controls"><button class="btn btn-ghost" id="write-clear">↶ 重新描</button><button class="btn btn-ghost" id="write-listen">◖)) 听一听</button><button class="btn btn-primary" id="write-finish" disabled>描好啦 ✿</button></div><div class="write-list">${WRITE_CHARS.map((w,i)=>`<button class="${i === writeIdx ? "active" : ""}" data-i="${i}" aria-pressed="${i === writeIdx}">${w.c}</button>`).join("")}</div><p class="paper-note">也可以拿出纸和笔，照着写一遍。<button class="text-btn" id="write-paper">我在纸上写好啦 ✓</button></p></div>`;
-    el.querySelectorAll("[data-i]").forEach(btn=>btn.onclick=()=>{writeIdx=Number(btn.dataset.i);renderWrite();});
+    const all = writingCharacters();
+    const ch = all.find(it=>it.id===selectedWriteId) || all[0];
+    selectedWriteId = ch.id;
+    const shown = reviewSession ? [ch] : all;
+    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">小手动一动</p><h2>汉字描一描 <span class="heading-flower">✎</span></h2></div><span class="practice-count">描 1 个字就好</span></div><p class="practice-instruction">沿着浅浅的字，用手指或鼠标描一描。</p><div class="tianzige"><div class="char">${escapeHtml(ch.c)}</div><canvas id="write-canvas" width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas></div><div class="stroke-hint"><b>${escapeHtml(ch.c)}</b>　${escapeHtml(ch.strokes || "")}<br>${escapeHtml(ch.tip || "请家长示范，再慢慢描一遍。")}</div><div class="btn-row practice-controls"><button class="btn btn-ghost" id="write-clear">↶ 重新描</button><button class="btn btn-ghost" id="write-listen">◖)) 听一听</button><button class="btn btn-primary" id="write-finish" disabled>描好啦 ✿</button></div><div class="write-list">${shown.map(w=>`<button class="${w.id === ch.id ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-pressed="${w.id === ch.id}">${escapeHtml(w.c)}</button>`).join("")}</div><p class="paper-note">也可以拿出纸和笔，照着写一遍。<button class="text-btn" id="write-paper">我在纸上写好啦 ✓</button></p></div>`;
+    el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>{selectedWriteId=btn.dataset.writeId;renderWrite();});
     const canvas = document.getElementById("write-canvas");
     const ctx = canvas.getContext("2d");
     ctx.strokeStyle = "#668753"; ctx.lineWidth = 14; ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -1287,8 +1308,12 @@
     canvas.onpointermove = event => { if(!drawing)return; event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;document.getElementById("write-finish").disabled=false; };
     canvas.onpointerup = canvas.onpointercancel = () => { drawing=false; };
     document.getElementById("write-clear").onclick = () => {ctx.clearRect(0,0,600,600);moved=false;document.getElementById("write-finish").disabled=true;};
-    document.getElementById("write-listen").onclick = () => speakGuide(`${ch.c}。${ch.strokes}。${ch.tip}。`);
-    const finish = () => {if(!completePractice("write-basic","remember",{type:"write",title:"常用汉字描红"})) navigate("home");};
+    document.getElementById("write-listen").onclick = () => speakGuide(`${ch.c}。${ch.strokes || ""}。${ch.tip || "请家长示范，再慢慢描一遍。"}。`);
+    const finish = async () => {
+      const id = reviewSession?.items[reviewSession.index]?.id || ch.id;
+      const title = id === "write-basic" ? "常用汉字描红" : `汉字·${ch.c}`;
+      if(!await completePractice(id,"remember",{type:"write",title})) navigate("home");
+    };
     document.getElementById("write-finish").onclick = () => {if(moved) finish();};
     document.getElementById("write-paper").onclick = finish;
     bindSessionExit();
@@ -1315,6 +1340,7 @@
 
   // ---------- Init ----------
   function navigate(v) {
+    if (!stateReady) { toast("先连接服务器，再开始复习。"); return; }
     showingCelebration = false;
     reviewSession = null;
     showView(v);
@@ -1331,15 +1357,18 @@
     document.getElementById("parent-dialog").addEventListener("click",event=>{if(event.target===event.currentTarget){event.currentTarget.close();if(currentView==="home" && !showingCelebration)renderHome();}});
   }
 
+  async function initializePage() {
+    const el = document.getElementById("home-content");
+    el.innerHTML = '<div class="card"><div class="empty">小兔正在打开学习花园…</div></div>';
+    await ensurePoems().catch(() => {});
+    if (!await syncNow()) {
+      el.innerHTML = '<div class="card"><div class="empty"><span class="big">☁</span>暂时连不上学习花园。<br>检查网络后，再试一次吧。</div><div class="btn-row" style="justify-content:center"><button class="btn btn-primary" id="retry-connection">重新连接</button></div></div>';
+      document.getElementById("retry-connection").onclick = initializePage;
+    }
+  }
   document.addEventListener("DOMContentLoaded", () => {
     bindNav();
     showView("home");
-    ensurePoems()
-      .catch(() => {})
-      .finally(() => {
-        renderHome();
-      });
-    setSyncStatus("启动中，正在同步…", "busy");
-    syncNow("full").catch(() => {});
+    initializePage();
   });
 })();
