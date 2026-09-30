@@ -15,10 +15,11 @@
     return await new Response(stream).text();
   }
   (async () => {
+    const fetchText = (u) => fetch(u).then(r => { if (!r.ok) throw new Error(u+" "+r.status); return r.text(); });
     const [cssB64, poemsB64, appB64] = await Promise.all([
-      fetch("assets/styles.css.gz.b64").then(r => r.text()),
-      fetch("assets/poems.js.gz.b64").then(r => r.text()),
-      fetch("assets/app.js.gz.b64").then(r => r.text()),
+      fetchText("assets/styles.css.gz.b64"),
+      Promise.all([fetchText("assets/poems.part1.b64"), fetchText("assets/poems.part2.b64")]).then(a => a.join("")),
+      Promise.all([fetchText("assets/app.part1.b64"), fetchText("assets/app.part2.b64")]).then(a => a.join("")),
     ]);
     const style = document.createElement("style");
     style.textContent = await inflate(cssB64.trim());
