@@ -4,11 +4,39 @@ import base64, gzip, re
 ROOT = Path(__file__).resolve().parents[1]
 PARTS = Path(__file__).resolve().parent / "site_parts"
 
+# Known MCP transport corruptions on prior site_parts uploads
+TRANSPORT_FIXES = {
+    "bundle.gz.b64.c1": [("4LSRP", "4fixRP")],
+    "bundle.gz.b64.c3": [("gsASuH", "gsAQuH")],
+    "bundle.gz.b64.c4": [("9BX8v", "9RX8v")],
+}
+
+def apply_transport_fixes():
+    for name, pairs in TRANSPORT_FIXES.items():
+        p = PARTS / name
+        if not p.exists():
+            continue
+        text = p.read_text(encoding="ascii")
+        orig = text
+        for a, b in pairs:
+            if a in text:
+                text = text.replace(a, b, 1)
+                print("transport fix", name, a, "->", b)
+        if text != orig:
+            p.write_text(text, encoding="ascii")
+
 def read_joined(name):
     p = PARTS / name
     if p.exists():
         return p.read_text(encoding="ascii")
-    chunks = sorted(PARTS.glob(f"{name}.c*"), key=lambda x: int(x.name.rsplit(".c", 1)[-1]))
+    chunks = []
+    i = 0
+    while True:
+        c = PARTS / f"{name}.c{i}"
+        if not c.exists():
+            break
+        chunks.append(c)
+        i += 1
     if not chunks:
         raise SystemExit(f"missing {name}")
     return "".join(c.read_text(encoding="ascii") for c in chunks)
@@ -49,6 +77,7 @@ def apply_css(path, block):
     path.write_text(new, encoding="utf-8"); print("styles.css updated", path.stat().st_size); return True
 
 def main():
+    apply_transport_fixes()
     js, css = load_bundle()
     apply_app(ROOT / "app.js", js)
     apply_css(ROOT / "styles.css", css)
