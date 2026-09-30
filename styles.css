@@ -1,1 +1,630 @@
-@file:///tmp/content_styles.css.txt
+@font-face {
+  font-family: "LXGW WenKai";
+  src: url("fonts/LXGWWenKai-Subset.woff2") format("woff2"),
+       url("https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/files/lxgw-wenkai-regular.woff2") format("woff2");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+/* 辰辰幼小衔接学习页 */
+:root {
+  --bg: #fffef9;
+  --ink: #2c2c2c;
+  --muted: #6b7280;
+  --accent: #5b8def;
+  --accent-soft: #e8f1ff;
+  --pink: #ff8fab;
+  --green: #4caf7a;
+  --orange: #f5a623;
+  --red-soft: #ff6b6b;
+  --card: #ffffff;
+  --shadow: 0 8px 24px rgba(91, 141, 239, 0.12);
+  --radius: 20px;
+  --font-kai: "LXGW WenKai", "KaiTi", "楷体", "STKaiti", "Kaiti SC", "Songti SC", "Noto Serif SC", serif;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* watercolor decoration */
+.bg-deco {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.bg-deco::before {
+  content: "";
+  position: absolute;
+  top: -80px; right: -60px;
+  width: 320px; height: 280px;
+  background: radial-gradient(ellipse at center, rgba(160, 200, 255, 0.45) 0%, rgba(160, 200, 255, 0.18) 40%, transparent 70%);
+  filter: blur(8px);
+}
+.bg-deco::after {
+  content: "";
+  position: absolute;
+  bottom: 10%; left: -80px;
+  width: 280px; height: 240px;
+  background: radial-gradient(ellipse at center, rgba(255, 200, 220, 0.28) 0%, transparent 70%);
+  filter: blur(10px);
+}
+
+.app {
+  position: relative;
+  z-index: 1;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 16px 16px 100px;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  padding: 20px 12px 12px;
+}
+.header h1 {
+  font-family: var(--font-kai);
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.header .sub {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-top: 4px;
+}
+.badge-name {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  margin: 0 4px;
+}
+
+/* Bottom nav */
+.nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 50;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(0,0,0,0.06);
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.04);
+}
+.nav button {
+  flex: 1;
+  max-width: 110px;
+  border: none;
+  background: transparent;
+  padding: 8px 4px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: 0.15s;
+}
+.nav button .ico { font-size: 1.35rem; line-height: 1; }
+.nav button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Views */
+.view { display: none; animation: fadeIn 0.25s ease; }
+.view.active { display: block; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Cards */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(91,141,239,0.08);
+}
+.card h2 {
+  font-family: var(--font-kai);
+  font-size: 1.35rem;
+  margin-bottom: 10px;
+}
+.card h3 {
+  font-size: 1.05rem;
+  margin: 12px 0 8px;
+  color: var(--accent);
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-ok { background: #d4edda; color: #1e7a3a; }
+.btn-fuzzy { background: #fff3cd; color: #8a6d1d; }
+.btn-forget { background: #f8d7da; color: #a71d2a; }
+.btn-ghost {
+  background: #f3f4f6;
+  color: var(--ink);
+}
+.btn-learn { background: var(--accent-soft); color: var(--accent); }
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 28px 12px;
+  font-size: 1.05rem;
+}
+.empty .big { font-size: 2.5rem; display: block; margin-bottom: 8px; }
+
+/* Review list */
+.review-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px dashed rgba(0,0,0,0.06);
+  cursor: pointer;
+}
+.review-item:last-child { border-bottom: none; }
+.review-item .icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  font-size: 1.3rem;
+  background: var(--accent-soft);
+  flex-shrink: 0;
+}
+.review-item .meta { flex: 1; min-width: 0; }
+.review-item .title {
+  font-family: var(--font-kai);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.review-item .desc {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.chip {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chip.due { background: #ffe8e8; color: #c0392b; }
+.chip.learned { background: #d4edda; color: #1e7a3a; }
+
+/* Poem list */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.toolbar input[type="search"] {
+  flex: 1;
+  min-width: 160px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 1rem;
+  outline: none;
+  background: #fff;
+}
+.toolbar input:focus { border-color: var(--accent); }
+.filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.filter-btns button {
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.filter-btns button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.poem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.poem-card {
+  background: #fff;
+  border: 1.5px solid rgba(91,141,239,0.12);
+  border-radius: 16px;
+  padding: 14px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+.poem-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+.poem-card .ptitle {
+  font-family: var(--font-kai);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.poem-card .pmeta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.poem-card .status {
+  margin-top: 8px;
+  font-size: 0.72rem;
+}
+
+/* Poem detail — ruby layout like reference */
+.poem-detail {
+  text-align: center;
+  padding: 24px 8px 40px;
+  position: relative;
+}
+.poem-detail .watercolor {
+  position: absolute;
+  top: -20px; right: -10px;
+  width: 200px; height: 160px;
+  background: radial-gradient(ellipse, rgba(150,190,255,0.4) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.ruby-line {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.15em 0.35em;
+  margin: 0.35em 0;
+  position: relative;
+  z-index: 1;
+}
+.ruby-char {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 1.6em;
+}
+.ruby-char .py {
+  font-family: var(--font-sans);
+  font-size: clamp(0.65rem, 2.2vw, 0.85rem);
+  color: #555;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.ruby-char .hz {
+  font-family: var(--font-kai);
+  font-size: clamp(1.8rem, 7vw, 2.8rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: #1a1a1a;
+}
+
+.poem-detail .title-line .ruby-char .hz {
+  font-size: clamp(2.2rem, 9vw, 3.4rem);
+}
+.poem-detail .author-line {
+  margin: 10px 0 28px;
+}
+.poem-detail .author-line .ruby-char .hz {
+  font-size: clamp(1.1rem, 4vw, 1.55rem);
+  font-weight: 600;
+}
+.poem-detail .author-line .ruby-char .py {
+  font-size: clamp(0.55rem, 1.8vw, 0.72rem);
+}
+.poem-detail .dot-sep {
+  font-family: var(--font-kai);
+  font-size: clamp(1.1rem, 4vw, 1.55rem);
+  margin: 0 0.15em;
+  align-self: flex-end;
+  padding-bottom: 0.05em;
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+.poem-body {
+  margin: 8px auto 24px;
+  max-width: 100%;
+}
+.poem-body .ruby-line {
+  margin: 0.55em 0;
+  gap: 0.12em 0.45em;
+}
+.poem-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.actions-bar {
+  position: sticky;
+  bottom: 72px;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+  margin-top: 20px;
+  z-index: 10;
+}
+.actions-bar .hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+/* Math */
+.math-panel { text-align: center; }
+.math-q {
+  font-family: var(--font-kai);
+  font-size: clamp(2.2rem, 10vw, 3.5rem);
+  font-weight: 700;
+  margin: 24px 0 16px;
+  letter-spacing: 0.08em;
+}
+.math-opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 360px;
+  margin: 0 auto;
+}
+.math-opts button {
+  font-size: 1.6rem;
+  font-weight: 700;
+  padding: 18px;
+  border-radius: 16px;
+  border: 2px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.math-opts button:hover { border-color: var(--accent); }
+.math-opts button.correct {
+  background: #d4edda;
+  border-color: var(--green);
+}
+.math-opts button.wrong {
+  background: #f8d7da;
+  border-color: var(--red-soft);
+}
+.feedback {
+  min-height: 1.6em;
+  margin-top: 14px;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.feedback.ok { color: var(--green); }
+.feedback.no { color: var(--red-soft); }
+.score-bar {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* Decompose */
+.decomp-viz {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+  font-size: 1.8rem;
+}
+.decomp-viz .num {
+  font-family: var(--font-kai);
+  font-weight: 700;
+  font-size: 2.4rem;
+  color: var(--accent);
+}
+.dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.dot {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.dot.alt { background: var(--pink); }
+
+/* Pinyin */
+.pinyin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.pinyin-chip {
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 1.35rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+  transition: 0.15s;
+}
+.pinyin-chip:hover, .pinyin-chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pinyin-sample {
+  text-align: center;
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 16px;
+  font-size: 1.1rem;
+  color: var(--muted);
+}
+.pinyin-sample .big-letter {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Writing */
+.tianzige {
+  width: min(220px, 55vw);
+  height: min(220px, 55vw);
+  margin: 16px auto;
+  border: 2px solid #333;
+  position: relative;
+  background: #fff;
+}
+.tianzige::before, .tianzige::after {
+  content: "";
+  position: absolute;
+  background: #ccc;
+}
+.tianzige::before {
+  left: 50%; top: 0; bottom: 0; width: 1px;
+  border-left: 1px dashed #bbb;
+}
+.tianzige::after {
+  top: 50%; left: 0; right: 0; height: 1px;
+  border-top: 1px dashed #bbb;
+}
+.tianzige .char {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-kai);
+  font-size: clamp(5rem, 28vw, 8rem);
+  color: rgba(0,0,0,0.18);
+  font-weight: 700;
+  user-select: none;
+  line-height: 1;
+}
+.write-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.write-list button {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  font-family: var(--font-kai);
+  font-size: 1.5rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.write-list button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.stroke-hint {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-top: 8px;
+}
+
+.tabs-mini {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.tabs-mini button {
+  border: none;
+  background: #f3f4f6;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.tabs-mini button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .app { padding: 12px 10px 96px; }
+  .poem-grid { grid-template-columns: repeat(2, 1fr); }
+  .actions-bar { bottom: 68px; }
+  .btn { padding: 9px 14px; font-size: 0.88rem; }
+}
