@@ -79,3 +79,20 @@ python3 -m http.server 8080
 ```js
 localStorage.removeItem('chenchen-learning-v1')
 ```
+
+
+## 云同步（Cloudflare D1）
+
+跨设备复习进度：首页「☁️ 云同步」生成或输入 6–8 位同步码，点「保存并同步」。
+
+- Worker：`cloudflare/`（D1 库名 `chenchen-learning-progress`）
+- API：`GET|PUT /api/progress`，前端 `API_BASE` 在 `app.js`
+- 本地仍用 `localStorage` 键 `chenchen-learning-v1`；有同步码时会自动拉取合并并在打卡后上传
+
+部署 Worker：
+
+```bash
+cd cloudflare && npm i && npx wrangler login
+npx wrangler d1 execute chenchen-learning-progress --remote --file=./schema.sql
+npx wrangler deploy
+```

@@ -4,6 +4,11 @@
 
   const STORAGE_KEY = "chenchen-learning-v1";
   const INTERVALS = [1, 2, 4, 7, 15, 30]; // days
+  // Cloudflare Worker API（部署后填入；空字符串则仅本地）
+  const API_BASE = "https://chenchen-learning-api.pljhonglu.workers.dev";
+  const SYNC_CODE_KEY = "chenchen-sync-code";
+  const SYNC_META_KEY = "chenchen-sync-meta";
+  const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no I/L/O/0/1
 
   // ---------- Storage / SM-2 simplified ----------
   function loadState() {
@@ -14,7 +19,243 @@
     }
   }
   function saveState(state) {
+    if (!state.updatedAt) state.updatedAt = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    scheduleCloudPush();
+  }
+
+  // ---------- Cloud sync (D1 via Worker) ----------
+  let syncStatus = { text: "未开启云同步", kind: "muted" };
+  let pushTimer = null;
+  let syncBusy = false;
+
+  function getSyncCode() {
+    return (localStorage.getItem(SYNC_CODE_KEY) || "").trim().toUpperCase();
+  }
+  function setSyncCode(code) {
+    const c = String(code || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-HJ-NP-Z2-9]/g, "");
+    if (c) localStorage.setItem(SYNC_CODE_KEY, c);
+    else localStorage.removeItem(SYNC_CODE_KEY);
+    return c;
+  }
+  function getSyncMeta() {
+    try {
+      return JSON.parse(localStorage.getItem(SYNC_META_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+  function setSyncMeta(patch) {
+    const m = { ...getSyncMeta(), ...patch };
+    localStorage.setItem(SYNC_META_KEY, JSON.stringify(m));
+    return m;
+  }
+  function generateSyncCode(len) {
+    const n = len || 8;
+    const buf = new Uint8Array(n);
+    crypto.getRandomValues(buf);
+    let out = "";
+    for (let i = 0; i < n; i++) out += CODE_ALPHABET[buf[i] % CODE_ALPHABET.length];
+    return out;
+  }
+  function setSyncStatus(text, kind) {
+    syncStatus = { text, kind: kind || "muted" };
+    const el = document.getElementById("sync-status");
+    if (el) {
+      el.textContent = text;
+      el.dataset.kind = syncStatus.kind;
+    }
+  }
+  function mergeProgressPayloads(local, remote) {
+    const a = local && typeof local === "object" ? local : { items: {} };
+    const b = remote && typeof remote === "object" ? remote : { items: {} };
+    const items = { ...(a.items || {}) };
+    for (const [id, rit] of Object.entries(b.items || {})) {
+      const lit = items[id];
+      if (!lit) {
+        items[id] = rit;
+        continue;
+      }
+      const lt = Date.parse(lit.updatedAt || lit.createdAt || 0) || 0;
+      const rt = Date.parse(rit.updatedAt || rit.createdAt || 0) || 0;
+      items[id] = rt >= lt ? { ...lit, ...rit } : { ...rit, ...lit };
+    }
+    const localAt = Number(a.updatedAt) || 0;
+    const remoteAt = Number(b.updatedAt) || 0;
+    return {
+      items,
+      updatedAt: Math.max(localAt, remoteAt, Date.now()),
+    };
+  }
+  async function cloudFetch(path, opts) {
+    if (!API_BASE) throw new Error("API_BASE 未配置");
+    const res = await fetch(API_BASE + path, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        ...(opts && opts.headers),
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || "sync_failed");
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
+  async function pullAndMerge() {
+    const code = getSyncCode();
+    if (!code || !API_BASE) return null;
+    setSyncStatus("正在从云端拉取…", "busy");
+    const data = await cloudFetch(
+      "/api/progress?code=" + encodeURIComponent(code),
+      { method: "GET" }
+    );
+    if (!data.found || !data.payload) {
+      setSyncStatus("云端暂无数据，下次上传会创建", "ok");
+      setSyncMeta({ lastPullAt: Date.now(), serverUpdatedAt: null });
+      return null;
+    }
+    const local = loadState();
+    const merged = mergeProgressPayloads(local, data.payload);
+    // Avoid recursive push during pull apply
+    const prevTimer = pushTimer;
+    pushTimer = null;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    pushTimer = prevTimer;
+    setSyncMeta({
+      lastPullAt: Date.now(),
+      serverUpdatedAt: data.updatedAt,
+    });
+    setSyncStatus("已与云端合并 · " + new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }), "ok");
+    return merged;
+  }
+  async function pushToCloud() {
+    const code = getSyncCode();
+    if (!code || !API_BASE) return null;
+    const state = loadState();
+    const clientUpdatedAt = Number(state.updatedAt) || Date.now();
+    setSyncStatus("正在上传到云端…", "busy");
+    const data = await cloudFetch("/api/progress", {
+      method: "PUT",
+      body: JSON.stringify({
+        code,
+        payload: state,
+        clientUpdatedAt,
+      }),
+    });
+    if (data.payload && data.kept === "server") {
+      // Server won LWW — adopt server
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.payload));
+    } else if (data.payload) {
+      // Keep local but bump meta
+      const s = loadState();
+      s.updatedAt = data.updatedAt || s.updatedAt;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    }
+    setSyncMeta({
+      lastPushAt: Date.now(),
+      serverUpdatedAt: data.updatedAt,
+    });
+    setSyncStatus(
+      (data.kept === "server" ? "云端较新，已采用云端 · " : "已同步到云端 · ") +
+        new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+      "ok"
+    );
+    return data;
+  }
+  function scheduleCloudPush() {
+    if (!getSyncCode() || !API_BASE) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => {
+      syncNow("push").catch(() => {});
+    }, 900);
+  }
+  async function syncNow(mode) {
+    if (syncBusy) return;
+    const code = getSyncCode();
+    if (!code) {
+      setSyncStatus("请先生成或输入同步码", "warn");
+      return;
+    }
+    if (!API_BASE) {
+      setSyncStatus("未配置云端 API", "warn");
+      return;
+    }
+    syncBusy = true;
+    try {
+      if (mode === "push") {
+        await pushToCloud();
+      } else {
+        await pullAndMerge();
+        await pushToCloud();
+      }
+      // Refresh home if visible so counts update
+      if (currentView === "home") renderHome();
+    } catch (e) {
+      console.warn("sync failed", e);
+      setSyncStatus("同步失败：" + (e.message || "网络错误"), "err");
+    } finally {
+      syncBusy = false;
+    }
+  }
+  function syncPanelHtml() {
+    const code = getSyncCode();
+    const meta = getSyncMeta();
+    const last =
+      meta.lastPushAt || meta.lastPullAt
+        ? new Date(meta.lastPushAt || meta.lastPullAt).toLocaleString("zh-CN", {
+            month: "numeric",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "尚未同步";
+    return `
+      <div class="card sync-card" id="sync-card">
+        <h2>☁️ 云同步</h2>
+        <p class="sync-desc">同一同步码可在手机/平板/电脑间共享复习进度（离线仍用本机缓存）。</p>
+        <div class="sync-code-row">
+          <label for="sync-code-input">同步码</label>
+          <input id="sync-code-input" class="sync-input" type="text" maxlength="8"
+            placeholder="6–8 位" value="${escapeHtml(code)}" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="btn-row sync-actions">
+          <button type="button" class="btn btn-ghost" id="sync-gen">生成新码</button>
+          <button type="button" class="btn btn-primary" id="sync-save">保存并同步</button>
+          <button type="button" class="btn btn-learn" id="sync-now">立即同步</button>
+        </div>
+        <div class="sync-status" id="sync-status" data-kind="${escapeHtml(syncStatus.kind)}">${escapeHtml(syncStatus.text)}</div>
+        <div class="sync-meta">上次：${escapeHtml(last)}${API_BASE ? "" : " · API 未配置"}</div>
+      </div>`;
+  }
+  function bindSyncPanel(root) {
+    const card = (root || document).querySelector("#sync-card");
+    if (!card) return;
+    const input = card.querySelector("#sync-code-input");
+    card.querySelector("#sync-gen").onclick = () => {
+      const code = generateSyncCode(8);
+      input.value = code;
+      setSyncCode(code);
+      setSyncStatus("已生成新同步码，请点「保存并同步」并抄到其他设备", "ok");
+      toast("新同步码：" + code);
+    };
+    card.querySelector("#sync-save").onclick = async () => {
+      const code = setSyncCode(input.value);
+      if (!code || code.length < 6) {
+        setSyncStatus("同步码需 6–8 位易读字符", "warn");
+        return;
+      }
+      input.value = code;
+      toast("同步码已保存");
+      await syncNow("full");
+    };
+    card.querySelector("#sync-now").onclick = () => syncNow("full");
   }
 
   function todayStr() {
@@ -215,6 +456,7 @@
           <button class="btn btn-primary" data-go="poems">去古诗馆</button>
           <button class="btn btn-ghost" data-go="math">做数学</button>
         </div></div>`;
+      el.innerHTML += syncPanelHtml();
       el.querySelectorAll("[data-go]").forEach((b) =>
         b.addEventListener("click", () => {
           if (b.dataset.go === "poems") {
@@ -226,6 +468,7 @@
           }
         })
       );
+      bindSyncPanel(el);
       return;
     }
 
@@ -249,11 +492,13 @@
     el.innerHTML =
       stats +
       `<div class="card"><h2>今日复习</h2>${list}
-      <p style="font-size:0.8rem;color:var(--muted);margin-top:10px">点开项目后，可用「记得 / 模糊 / 忘了」更新下次复习时间。</p></div>`;
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:10px">点开项目后，可用「记得 / 模糊 / 忘了」更新下次复习时间。</p></div>` +
+      syncPanelHtml();
 
     el.querySelectorAll(".review-item").forEach((row) => {
       row.addEventListener("click", () => openReviewItem(row.dataset.id, row.dataset.type));
     });
+    bindSyncPanel(el);
   }
 
   function openReviewItem(id, type) {
@@ -560,7 +805,6 @@
     }
     return { text: `${a} ${op} ${b} = ?`, answer: ans, meta: { a, b, op } };
   }
-
 
   const NB_CIRCLES = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫"];
   let bondSheet = null; // { item, qIndex, activeSlot, checked }
@@ -1136,5 +1380,11 @@
     bindNav();
     showView("home");
     renderHome();
+    if (getSyncCode() && API_BASE) {
+      setSyncStatus("启动中，正在同步…", "busy");
+      syncNow("full").catch(() => {});
+    } else if (!getSyncCode()) {
+      setSyncStatus("未开启云同步", "muted");
+    }
   });
 })();
