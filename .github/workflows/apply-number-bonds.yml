@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.js styles.css scripts/apply_number_bonds.py scripts/number-bonds/
+          git add app.js styles.css scripts/apply_number_bonds.py scripts/number_bonds_data_a.py scripts/number_bonds_data_b.py
           if git diff --cached --quiet; then
             echo "No changes"
           else

@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 """Idempotent: replace 分解组合 math UI with workbook-style number bonds."""
 from pathlib import Path
+import base64
+import re
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SNIPPET = Path(__file__).resolve().parent / "number-bonds" / "snippet.js"
-CSS_FILE = Path(__file__).resolve().parent / "number-bonds" / "nb.css"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from number_bonds_data_a import SNIPPET_B64_0
+from number_bonds_data_b import SNIPPET_B64_1, CSS_B64
+SNIPPET_B64 = SNIPPET_B64_0 + SNIPPET_B64_1
+
+def _decode(b64: str) -> str:
+    raw = re.sub(r"\s+", "", b64)
+    pad = (-len(raw)) % 4
+    return base64.b64decode(raw + ("=" * pad)).decode("utf-8")
 
 def apply_app(app_path: Path) -> bool:
     app = app_path.read_text(encoding="utf-8")
-    snippet = SNIPPET.read_text(encoding="utf-8")
+    snippet = _decode(SNIPPET_B64)
     if not snippet.endswith("\n"):
         snippet += "\n"
     start = app.find("  const NB_CIRCLES")
@@ -27,7 +37,7 @@ def apply_app(app_path: Path) -> bool:
 
 def apply_css(css_path: Path) -> bool:
     css = css_path.read_text(encoding="utf-8")
-    block = CSS_FILE.read_text(encoding="utf-8")
+    block = _decode(CSS_B64)
     if not block.endswith("\n"):
         block += "\n"
     start = css.find("/* Number bonds workbook")
@@ -49,22 +59,7 @@ def apply_css(css_path: Path) -> bool:
     print("styles.css updated", css_path.stat().st_size)
     return True
 
-def ensure_snippet():
-    import base64, re
-    parts_files = [SNIPPET.parent / f"snippet.part{i}.b64" for i in range(2)]
-    if all(fp.is_file() for fp in parts_files):
-        parts = [re.sub(r"\s+", "", fp.read_text(encoding="ascii")) for fp in parts_files]
-        SNIPPET.write_bytes(base64.b64decode("".join(parts)))
-        print("assembled snippet.js", SNIPPET.stat().st_size)
-        return
-    if SNIPPET.is_file() and SNIPPET.stat().st_size > 100:
-        return
-    raise SystemExit(f"missing snippet assets under {SNIPPET.parent}")
-
-def main():
-    ensure_snippet()
-    if not SNIPPET.is_file() or not CSS_FILE.is_file():
-        raise SystemExit(f"missing assets {SNIPPET} {CSS_FILE}")
+def main() -> None:
     changed = False
     changed |= apply_app(ROOT / "app.js")
     changed |= apply_css(ROOT / "styles.css")
