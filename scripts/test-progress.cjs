@@ -12,8 +12,12 @@ globalThis.subject = {
  loadState, getItem, markLearned, removeClassroomItem, reviewPatch, recordPractice,
  todayStr, addDays, dueItems, syncNow, commitOperations, completePractice,
  navigate, bindSessionExit, openReviewItem, startReview, renderHome,
- writingCharacters, openWriteCharacter, openParent, initializePage, customPoemFromForm, renderPoems, renderPoemDetail,
+ writingCharacters, openWriteCharacter, openParent, initializePage, customPoemFromForm, renderPoems, renderPoemDetail, openPoemFromList,
  setPoemFilter: value => poemFilter=value,
+ getPoemQuery: () => poemQuery,
+ getPoemId: () => selectedPoemId,
+ setPoemsLoadPromise: value => poemsLoadPromise=value,
+ setPoemIllustrations: value => POEM_ILLUSTRATIONS=value,
  setView: value => currentView=value,
  setSession: value => reviewSession=value,
  getSession: () => reviewSession,
@@ -37,13 +41,14 @@ function environment(initial = {}) {
   let database = {...emptyState(),...copy(initial)};
   let holdRequests = false;
   let timerId = 0;
-  const requests = [], timers = new Map(), elements = new Map();
+  const requests = [], scrolls = [], timers = new Map(), elements = new Map();
   const element = id => {
     if (!elements.has(id)) elements.set(id, {
-      id,style:{},dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,open:false,
+      id,style:{},dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,open:false,listeners:{},
       classList:{toggle:()=>false,add:()=>{},remove:()=>{}},
       querySelectorAll:()=>[],querySelector:selector=>element(selector),
-      setAttribute:()=>{},removeAttribute:()=>{},addEventListener:()=>{},
+      setAttribute:()=>{},removeAttribute:()=>{},addEventListener(name,handler){this.listeners[name]=handler;},
+      focus:()=>{},setSelectionRange:()=>{},
       showModal(){this.open=true;},close(){this.open=false;},reset(){this.value='';},
       getContext:()=>({}),getBoundingClientRect:()=>({left:0,top:0,width:600,height:600}),
     });
@@ -84,7 +89,7 @@ function environment(initial = {}) {
     Date:FakeDate,Math,console,AbortController,crypto:require('crypto').webcrypto,
     document:{getElementById:element,querySelectorAll:()=>[],querySelector:element,
       addEventListener:()=>{},createElement:()=>element(`new${elements.size}`),body:{appendChild:()=>{}}},
-    window:{scrollTo:()=>{},addEventListener:()=>{},confirm:()=>true},confirm:()=>true,
+    window:{scrollY:0,scrollTo(options){this.scrollY=options.top;scrolls.push(copy(options));},addEventListener:()=>{},confirm:()=>true},confirm:()=>true,
     setTimeout:(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),
     fetch:(url,options={})=>new Promise((resolve,reject)=>{
       const request={url,options,method:options.method||'GET',settled:false,body:options.body?JSON.parse(options.body):null,
@@ -105,7 +110,7 @@ function environment(initial = {}) {
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/writing-vocabulary.js'),'utf8'),context);
   vm.runInContext(instrumented,context,{filename:sourcePath});
   context.subject.setView('poems');context.subject.setPoems([]);
-  return {context,subject:context.subject,requests,timers,elements,element,db:()=>copy(database),
+  return {context,subject:context.subject,requests,scrolls,timers,elements,element,db:()=>copy(database),
     alterServer:change=>change(database),hold:value=>{holdRequests=value;},
     at:date=>{now=new Date(`${date}T01:30:00+08:00`).getTime();},connect:()=>context.subject.syncNow(),
     async nextRequest(){await flush();const request=requests.find(request=>!request.settled);assert.ok(request,'Expected pending request');return request;},
@@ -135,6 +140,29 @@ function writingMediaProbe(e) {
   }};
   return {viewers,voices};
 }
+
+// The real playback module runs here; only the browser's media element is fake.
+// That lets a detail-page click prove that resume keeps the recording position.
+function poemMediaProbe(e) {
+  const recordings=[];
+  e.context.window.Audio=class {
+    constructor(){this.currentTime=0;this.playCount=0;this.paused=true;recordings.push(this);}
+    play(){this.playCount++;this.paused=false;return Promise.resolve();}
+    pause(){this.paused=true;}
+    load(){this.currentTime=0;}
+    removeAttribute(name){delete this[name];}
+    emit(name){this['on'+name]?.();}
+  };
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/speech.js'),'utf8'),e.context);
+  e.context.ChenchenSpeech=e.context.window.ChenchenSpeech;
+  return {recordings,speech:e.context.ChenchenSpeech};
+}
+
+const samplePoems=()=>[
+  {id:'poem-01',title:'静夜思',author:'李白',dynasty:'唐',lines:[{text:'床前明月光',chars:[{c:'床',p:'chuáng'}]}]},
+  {id:'poem-02',title:'春晓',author:'孟浩然',dynasty:'唐',lines:[{text:'春眠不觉晓',chars:[{c:'春',p:'chūn'}]}]},
+  {id:'poem-03',title:'早发白帝城',author:'李白',dynasty:'唐',lines:[{text:'朝辞白帝彩云间',chars:[{c:'朝',p:'zhāo'}]}]},
+];
 const tests=[];
 function test(name,run){tests.push({name,run});}
 
@@ -154,7 +182,7 @@ test('classroom poems open directly for review without an enrollment button or u
   t.setPoems([poem]);await e.connect();await t.renderPoems();
   assert.match(e.element('poems-content').innerHTML,/今天复习/);
   assert.doesNotMatch(e.element('poems-content').innerHTML,/还没学过|data-f="new"|data-f="learned"/);
-  await t.renderPoemDetail(poem.id);
+  t.setView('poem-detail');await t.renderPoemDetail(poem.id);
   assert.match(e.element('poem-detail-content').innerHTML,/data-r="remember"/);
   assert.doesNotMatch(e.element('poem-detail-content').innerHTML,/btn-enroll|加入复习|课上学过吗/);
   assert.ok(e.requests.every(request=>request.method==='GET'),'Rendering must not enroll from a stale browser snapshot');
@@ -163,6 +191,110 @@ test('classroom poems open directly for review without an enrollment button or u
   await t.recordPractice(poem.id,'poem','remember');
   t.setPoemFilter('due');await t.renderPoems();assert.doesNotMatch(e.element('poems-content').innerHTML,/class="poem-card"/);
   assert.match(e.element('poems-content').innerHTML,/今天的古诗都复习好啦/);
+});
+
+test('poem detail returns to the same filtered search and list scroll position',async()=>{
+  const poems=samplePoems(),items=Object.fromEntries(poems.map(poem=>[poem.id,course(poem.id)]));
+  const e=environment({items}),t=e.subject;t.setPoems(poems);await e.connect();
+  t.navigate('poems');
+  e.element('#poem-search').listeners.input({target:{value:'李白'}});
+  t.setPoemFilter('due');await t.renderPoems();
+  const list=e.element('poems-content').innerHTML;
+  assert.match(list,/value="李白"/);assert.match(list,/data-f="due" class="active"/);
+  assert.equal((list.match(/class="poem-card"/g)||[]).length,2);
+  e.context.window.scrollY=864;t.openPoemFromList('poem-03');await flush();
+  assert.equal(t.getView(),'poem-detail');assert.equal(t.getPoemId(),'poem-03');
+  assert.equal(e.context.window.scrollY,0,'Opening a poem starts at the detail heading');
+  e.element('back-poems').onclick();await flush();
+  assert.equal(t.getView(),'poems');assert.equal(t.getPoemQuery(),'李白');
+  assert.equal(e.element('poems-content').innerHTML,list,'Returning must preserve both the search and due filter');
+  assert.equal(e.context.window.scrollY,864,'Returning must restore the originating list position');
+  assert.equal(e.scrolls.at(-1).behavior,'instant','A queued smooth scroll must not fight list restoration');
+  assert.ok(e.requests.every(request=>request.method==='GET'),'Browsing must not record practice');
+});
+
+test('a poem opened from scheduled review returns to the list top without stale browsing scroll',async()=>{
+  const poems=samplePoems(),item=course('poem-02'),e=environment({items:{[item.id]:item}}),t=e.subject;
+  t.setPoems(poems);await e.connect();t.navigate('poems');
+  e.context.window.scrollY=1240;t.openPoemFromList('poem-01');await flush();
+  e.element('back-poems').onclick();await flush();assert.equal(e.context.window.scrollY,1240);
+  t.navigate('home');await flush();
+  const session={items:[item],index:0};t.setSession(session);t.openReviewItem(item.id,'poem');await flush();
+  assert.equal(t.getView(),'poem-detail');assert.equal(t.getSession(),session);
+  e.element('back-poems').onclick();await flush();
+  assert.equal(t.getView(),'poems');assert.equal(e.context.window.scrollY,0);
+  assert.equal(t.getSession(),null);assert.equal(t.getItem(item.id).stage,0);
+  assert.equal(Object.keys(t.loadState().activity).length,0);
+  assert.ok(e.requests.every(request=>request.method==='GET'));
+});
+
+test('poem detail has one reading button without hide toggles or playback instructions',async()=>{
+  const poems=samplePoems(),e=environment({items:{'poem-01':course('poem-01')}}),t=e.subject;
+  t.setPoems(poems);t.setPoemIllustrations({'poem-01':{src:'images/poems/poem-01.png',hint:'看图背古诗'}});
+  await e.connect();t.openPoemFromList('poem-01');await flush();
+  const html=e.element('poem-detail-content').innerHTML;
+  assert.equal((html.match(/id="btn-speak"/g)||[]).length,1);
+  assert.doesNotMatch(html,/id="(?:hide-poem|hide-pinyin|btn-speak-pause|btn-speak-stop|audio-caption)"/);
+  assert.doesNotMatch(html,/藏起汉字|隐藏汉字|收起拼音|隐藏拼音|AI\s*合成|自然语音|看图想一想|看图背古诗/);
+  assert.match(html,/class="py">chuáng/,'Pinyin stays visible with the poem');
+  assert.match(html,/class="hz">床/,'Characters stay visible with the poem');
+  assert.match(html,/<figure class="poem-picture">/,'Removing instructions must retain the illustration');
+});
+
+test('one poem reading button pauses while loading or speaking and resumes the same recording',async()=>{
+  const poems=samplePoems(),e=environment(),t=e.subject;t.setPoems(poems);await e.connect();
+  const media=poemMediaProbe(e),before=e.db();t.openPoemFromList('poem-01');await flush();
+  const button=e.element('btn-speak');assert.equal(button.textContent,'▶ 朗读');
+  button.onclick();assert.equal(media.speech.getStatus(),'loading');assert.equal(button.textContent,'Ⅱ 暂停');
+  assert.equal(button.disabled,false,'Loading must still allow the same button to pause');
+  const recording=media.recordings[0];assert.equal(recording.src,'/audio/poems/poem-01.mp3');
+  button.onclick();assert.equal(media.speech.getStatus(),'paused');assert.equal(button.textContent,'▶ 继续');
+  assert.equal(recording.paused,true);
+  button.onclick();assert.equal(media.recordings.length,1,'Resume must not restart a new recording');
+  assert.equal(recording.playCount,2);recording.emit('playing');recording.currentTime=7.5;
+  button.onclick();assert.equal(media.speech.getStatus(),'paused');assert.equal(button.textContent,'▶ 继续');
+  button.onclick();assert.equal(recording.currentTime,7.5,'Continue must retain the paused time');
+  assert.equal(recording.playCount,3);assert.equal(media.recordings.length,1);
+  recording.emit('playing');assert.equal(button.textContent,'Ⅱ 暂停');
+  recording.emit('ended');assert.equal(media.speech.getStatus(),'idle');assert.equal(button.textContent,'▶ 朗读');
+  assert.deepEqual(e.db(),before);assert.ok(e.requests.every(request=>request.method==='GET'),'Listening is not completion');
+});
+
+test('leaving a poem detail stops its loading or playing audio without recording completion',async()=>{
+  for(const playing of [false,true]) {
+    const poems=samplePoems(),e=environment(),t=e.subject;t.setPoems(poems);await e.connect();
+    const media=poemMediaProbe(e);t.openPoemFromList('poem-01');await flush();
+    e.element('btn-speak').onclick();const recording=media.recordings[0];
+    if(playing) recording.emit('playing');
+    e.element('back-poems').onclick();await flush();
+    assert.equal(t.getView(),'poems');assert.equal(media.speech.getStatus(),'idle');
+    assert.equal(recording.paused,true);assert.equal(recording.src,undefined,'Leaving must release the media request');
+    assert.equal(Object.keys(t.loadState().activity).length,0);
+    assert.ok(e.requests.every(request=>request.method==='GET'));
+  }
+});
+
+test('late poem detail rendering cannot replace a newer selection or reopen a closed detail',async()=>{
+  for(const next of ['poem-03','poems']) {
+    const poems=samplePoems(),e=environment(),t=e.subject;t.setPoems(poems);await e.connect();
+    let release;t.setPoemsLoadPromise(new Promise(resolve=>{release=resolve;}));
+    const detail=e.element('poem-detail-content');detail.innerHTML='previous detail';
+    t.openPoemFromList('poem-01');
+    if(next==='poems') t.navigate('poems');
+    else {
+      t.setPoemsLoadPromise(Promise.resolve(poems));
+      await t.openPoemFromList(next);
+      assert.match(detail.innerHTML,/朝/,'The newer selection must render before the old request completes');
+    }
+    release(poems);await flush();
+    if(next==='poems') {
+      assert.equal(t.getView(),'poems');assert.equal(detail.innerHTML,'previous detail');
+    } else {
+      assert.equal(t.getView(),'poem-detail');assert.equal(t.getPoemId(),next);
+      assert.match(detail.innerHTML,/朝/);assert.doesNotMatch(detail.innerHTML,/chuáng/);
+    }
+    assert.ok(e.requests.every(request=>request.method==='GET'));
+  }
 });
 
 test('removing a built-in poem saves a tombstone and the parent can explicitly restore review',async()=>{

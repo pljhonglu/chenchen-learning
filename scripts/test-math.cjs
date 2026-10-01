@@ -358,28 +358,30 @@ test("leaving math after an answer keeps the selected page and returning starts 
   assert.equal(h.timers.size, 0);
 });
 
-test("every correct arithmetic answer waits for a button, including the third answer before finishing", () => {
+test("arithmetic rounds contain five questions and every answer waits for manual continuation", () => {
   const h = harness("addsub");
-  for (let count = 1; count <= 3; count++) {
+  assert.equal(h.find("#math-progress").textContent, "0 / 5 题");
+  for (let count = 1; count <= 5; count++) {
     const question = h.state().currentQ;
     h.click(`[data-v="${question.answer}"]`);
     assert.equal(h.state().mathCompleted, count);
+    assert.equal(h.find("#math-progress").textContent, `${count} / 5 题`);
     assert.equal(h.state().currentQ, question);
     assert.equal(h.document.getElementById("finish-math"), null, "Even the last correct answer stays visible until acknowledged");
     assert.equal(h.timers.size, 0);
-    assert.match(h.find("#math-next").textContent, count === 3 ? /完成啦/ : /下一题/);
+    assert.match(h.find("#math-next").textContent, count === 5 ? /完成啦/ : /下一题/);
     h.click("#math-next");
   }
   assert.ok(h.find("#finish-math"));
-  assert.match(h.find("#math-panel").textContent, /3 道题/);
+  assert.match(h.find("#math-panel").textContent, /5 道题/);
   assert.equal(h.find("#math-content .practice-controls").hidden, true);
-  assert.deepEqual(h.score(), { ok: 3, total: 3 });
+  assert.deepEqual(h.score(), { ok: 5, total: 5 });
   assert.equal(h.timers.size, 0);
 });
 
-test("a wrong third answer stays visible until manual finish and remains an incorrect attempt", () => {
+test("a wrong fifth answer stays visible until manual finish and remains an incorrect attempt", () => {
   const h = harness("addsub");
-  for (let count = 0; count < 2; count++) { h.click(`[data-v="${h.state().currentQ.answer}"]`); h.click("#math-next"); }
+  for (let count = 0; count < 4; count++) { h.click(`[data-v="${h.state().currentQ.answer}"]`); h.click("#math-next"); }
   const answer = h.state().currentQ.answer;
   h.document.querySelectorAll(".math-opts button").find(button => Number(button.dataset.v) !== answer).click();
   assert.equal(h.document.getElementById("finish-math"), null);
@@ -387,5 +389,28 @@ test("a wrong third answer stays visible until manual finish and remains an inco
   assert.match(h.find("#math-fb").textContent, new RegExp(`答案是 ${answer}`));
   h.click("#math-next");
   assert.ok(h.find("#finish-math"));
-  assert.deepEqual(h.score(), { ok: 2, total: 3 });
+  assert.deepEqual(h.score(), { ok: 4, total: 5 });
+});
+
+test("number-bond rounds also finish only after five questions and a final manual tap", () => {
+  const h = harness("decomp");
+  assert.equal(h.find("#math-progress").textContent, "0 / 5 题");
+  for (let count = 1; count <= 5; count++) {
+    const sheet = h.state().bondSheet;
+    assert.equal(sheet.qIndex, count);
+    while (!sheet.checked) {
+      const slot = sheet.activeSlot;
+      const answer = slot === "whole" ? sheet.item.n : sheet.item[slot];
+      h.click(`[data-n="${answer}"]`);
+    }
+    assert.equal(h.state().mathCompleted, count);
+    assert.equal(h.find("#math-progress").textContent, `${count} / 5 题`);
+    assert.equal(h.document.getElementById("finish-math"), null);
+    assert.match(h.find("#math-next").textContent, count === 5 ? /完成啦/ : /下一题/);
+    h.click("#math-next");
+  }
+  assert.ok(h.find("#finish-math"));
+  assert.match(h.find("#math-panel").textContent, /5 道题/);
+  assert.deepEqual(h.score(), { ok: 5, total: 5 });
+  assert.equal(h.timers.size, 0);
 });

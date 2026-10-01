@@ -1021,28 +1021,9 @@ button[hidden],*[hidden] {
   object-fit:cover;
 }
 
-.poem-picture figcaption {
-  display:grid;
-  gap:5px;
-  padding:16px 20px;
-  color:#536649;
-  font-size:15px;
-}
-
-.poem-picture figcaption strong {
-  font-size:14px;
-  color:#6b815d;
-}
-
 .poem-reading .poem-body {
   min-width:0;
   width:100%;
-}
-
-.audio-caption {
-  font-size:13px;
-  color:#707b64;
-  margin:0 auto 15px;
 }
 
 @media (max-width:900px) {
@@ -1164,29 +1145,7 @@ button[hidden],*[hidden] {
   margin:15px 0;
 }
 
-.poem-note {
-  font-size:13px;
-  color:var(--muted);
-  max-width:650px;
-  margin:0 auto;
-}
-
-.hide-characters .hz {
-  color:transparent;
-  background:#e9eddf;
-  border-radius:8px;
-  user-select:none;
-}
-
-.hide-characters .py {
-  visibility:hidden;
-}
-
-.hide-pinyin .py {
-  visibility:hidden;
-}
-
-.recall-tools,.speak-bar {
+.speak-bar {
   display:flex;
   gap:9px;
   flex-wrap:wrap;
@@ -1197,16 +1156,12 @@ button[hidden],*[hidden] {
 .speak-bar .btn {
   font-size:13px;
   min-height:45px;
+  min-width:96px;
 }
 
 .btn-speak {
   background:#f5ebcf;
   color:#94794b;
-}
-
-.btn-speak-secondary {
-  background:#f1f2ea;
-  color:#879279;
 }
 
 .btn-speak.is-active {
@@ -2881,19 +2836,6 @@ button[hidden],*[hidden] {
   .poem-body .ruby-char .hz {
     font-size:30px;
   }
-  .poem-note {
-    font-size:11px;
-    padding:0 8px;
-  }
-  .recall-tools {
-    gap:6px;
-    padding:0 7px;
-  }
-  .recall-tools .btn {
-    font-size:11px;
-    min-height:44px;
-    padding:10px 12px;
-  }
   .speak-bar .btn {
     font-size:11px;
     padding:10px 11px;
@@ -3177,7 +3119,6 @@ button[hidden],*[hidden] {
     font-size: 13px;
   }
   .practice-controls .btn,
-  .recall-tools .btn,
   .speak-bar .btn,
   .actions-bar .btn,
   .pinyin-sample .btn {
@@ -3185,9 +3126,6 @@ button[hidden],*[hidden] {
   }
   .practice-controls .btn {
     padding: 12px;
-  }
-  .recall-tools .btn {
-    padding: 11px 12px;
   }
   .actions-bar .btn {
     padding: 12px 8px;

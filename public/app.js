@@ -265,6 +265,8 @@
   let poemFilter = "all";
   let poemQuery = "";
   let selectedPoemId = null;
+  let poemListScroll = 0;
+  let poemDetailGeneration = 0;
   let englishModule = null;
 
   function getEnglishModule() {
@@ -286,23 +288,15 @@
     } catch (_) {}
   }
 
-  function updateSpeakButtons(state) {
+  function updateSpeakButton(state) {
     const play = document.getElementById("btn-speak");
-    const pause = document.getElementById("btn-speak-pause");
-    const stop = document.getElementById("btn-speak-stop");
     if (!play) return;
-    const speaking = state === "speaking";
-    const paused = state === "paused";
+    const playing = state === "speaking" || state === "loading";
     const loading = state === "loading";
-    play.classList.toggle("is-active", speaking || paused || loading);
-    play.textContent = loading ? "正在准备声音…" : paused ? "🔊 重新听" : speaking ? "🔊 从头听" : "🔊 听朗读";
-    play.disabled = loading;
+    play.classList.toggle("is-active", playing);
+    play.textContent = playing ? "Ⅱ 暂停" : state === "paused" ? "▶ 继续" : "▶ 朗读";
+    play.setAttribute("aria-label", playing ? "暂停朗读" : state === "paused" ? "继续朗读" : "朗读古诗");
     play.setAttribute("aria-busy", String(loading));
-    if (pause) {
-      pause.disabled = !(speaking || paused);
-      pause.textContent = paused ? "▶️ 继续" : "⏸️ 暂停";
-    }
-    if (stop) stop.disabled = !(speaking || paused || loading);
   }
 
   const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "write-detail", "english"];
@@ -330,7 +324,7 @@
       if (btn.dataset.nav === map[name]) btn.setAttribute("aria-current", "page");
       else btn.removeAttribute("aria-current");
     });
-    window.scrollTo({ top: 0, behavior: name === "write" || name === "write-detail" ? "instant" : "smooth" });
+    window.scrollTo({ top: 0, behavior: ["write", "write-detail", "poems", "poem-detail"].includes(name) ? "instant" : "smooth" });
   }
 
   // ---------- Home / Review ----------
@@ -646,6 +640,7 @@
       }});
     } else if (type === "poem") {
       selectedPoemId = id;
+      poemListScroll = 0;
       showView("poem-detail");
       renderPoemDetail(id);
     } else if (type === "math" || type === "decomp") {
@@ -674,7 +669,7 @@
     if (!art || !/^images\/poems\/[a-zA-Z0-9_-]+\.(png|webp|jpg)$/.test(art.src)) return "";
     const image = `<img src="${escapeHtml(art.src)}" alt="${escapeHtml(art.alt || poem.title)}" loading="${detail ? "eager" : "lazy"}" decoding="async" />`;
     return detail
-      ? `<figure class="poem-picture">${image}<figcaption><strong>看图想一想</strong><span>${escapeHtml(art.hint || "看着画面，试着把诗背出来吧。")}</span></figcaption></figure>`
+      ? `<figure class="poem-picture">${image}</figure>`
       : `<span class="poem-thumbnail">${image}</span>`;
   }
 
@@ -687,7 +682,7 @@
     return { label: "下次 " + (it.nextReview || "稍后"), cls: "learned" };
   }
 
-  async function renderPoems() {
+  async function renderPoems({restoreScroll = false} = {}) {
     const el = document.getElementById("poems-content");
     if (!POEMS.length) {
       el.innerHTML = '<div class="card"><div class="empty">小兔正在拿诗卡…</div></div>';
@@ -718,7 +713,6 @@
     el.innerHTML = `
       <div class="card">
         <h2>读古诗 <span class="heading-flower">✿</span></h2>
-        <p style="color:var(--muted);font-size:0.9rem;margin-bottom:10px">先自己想一想，再听一听。会一点点也很棒！</p>
         <div class="toolbar">
           <input type="search" id="poem-search" placeholder="搜索题目 / 作者 / 诗句…" value="${escapeHtml(
             poemQuery
@@ -767,18 +761,25 @@
       })
     );
     el.querySelectorAll(".poem-card").forEach((c) =>
-      c.addEventListener("click", () => {
-        selectedPoemId = c.dataset.id;
-        showView("poem-detail");
-        renderPoemDetail(c.dataset.id);
-      })
+      c.addEventListener("click", () => openPoemFromList(c.dataset.id))
     );
+    if (restoreScroll && currentView === "poems") window.scrollTo({top:poemListScroll,behavior:"instant"});
+  }
+
+  function openPoemFromList(id) {
+    poemListScroll = window.scrollY || 0;
+    selectedPoemId = id;
+    showView("poem-detail");
+    return renderPoemDetail(id);
   }
 
   async function renderPoemDetail(id) {
     stopSpeechSafe();
     selectedPoemId = id;
+    const generation = ++poemDetailGeneration;
+    const active = () => currentView === "poem-detail" && selectedPoemId === id && generation === poemDetailGeneration;
     try { await ensurePoems(); } catch (_) {}
+    if (!active()) return;
     const poem = POEMS.find((p) => p.id === id);
     const el = document.getElementById("poem-detail-content");
     if (!poem) {
@@ -802,8 +803,6 @@
 
     const it = getItem(id);
     const enrolled = !!it?.learned;
-    const today = todayStr();
-    const isDue = enrolled && it.nextReview <= today;
 
     el.innerHTML = `
       ${sessionBanner()}<div class="poem-detail card">
@@ -821,34 +820,20 @@
           ${poem.dynasty && poem.author ? `<span class="dot-sep">·</span>` : ""}
           ${authorChars.length ? rubyChars(authorChars) : `<span class="plain-author">${escapeHtml(poem.author || "")}</span>`}
         </div>
-        ${
-          poem.note
-            ? `<div class="poem-note">${escapeHtml(poem.note)}</div>`
-            : ""
-        }
         <div class="poem-reading${POEM_ILLUSTRATIONS[id] ? " has-picture" : ""}">
           ${poemIllustration(poem, true)}
           <div class="poem-body" id="poem-body">${body}</div>
         </div>
-        <div class="recall-tools"><button class="btn btn-ghost" id="hide-poem" aria-pressed="false">藏起汉字，试着背</button><button class="btn btn-ghost" id="hide-pinyin" aria-pressed="false">收起拼音</button></div>
-        <div class="speak-bar" role="group" aria-label="朗读控制">
-          <button type="button" class="btn btn-speak" id="btn-speak">🔊 朗读</button>
-          <button type="button" class="btn btn-speak-secondary" id="btn-speak-pause" disabled>⏸️ 暂停</button>
-          <button type="button" class="btn btn-speak-secondary" id="btn-speak-stop" disabled>⏹️ 停止</button>
+        <div class="speak-bar">
+          <button type="button" class="btn btn-speak" id="btn-speak">▶ 朗读</button>
         </div>
-        <p class="audio-caption" id="audio-caption">${BUILTIN_POEMS.some(p => p.id === id) ? "自然语音 · AI 合成" : "这首新诗还没有配音，可以和爸爸妈妈一起读。"}</p>
-        <div class="actions-bar">
-          ${
-            !enrolled
-              ? `<div class="hint">这首诗已暂停复习，可以请家长在课堂管理中恢复。</div>`
-              : `<div class="hint">${isDue ? "试着背一背，再告诉小兔吧" : "下次复习：" + escapeHtml(it.nextReview || "稍后") + "。今天也可以轻松背一背。"}</div>
+        ${enrolled ? `<div class="actions-bar">
                  <div class="btn-row" style="justify-content:center">
                    <button class="btn btn-ok" data-r="remember">😊 我记得</button>
                    <button class="btn btn-fuzzy" data-r="fuzzy">🌱 提醒一下</button>
                    <button class="btn btn-forget" data-r="forgot">🐰 一起再读</button>
-                 </div>`
-          }
-        </div>
+                 </div>
+        </div>` : ""}
       </div>`;
 
     document.getElementById("back-poems").onclick = () => navigate("poems");
@@ -858,6 +843,7 @@
         if (await completePractice(id, r, {
           type: "poem", title: displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""), requireClassroom: enrolled,
         })) return;
+        if (!active()) return;
         const msg =
           r === "remember"
             ? "你把它想起来啦！送你一朵小花。"
@@ -870,30 +856,17 @@
     });
 
     bindSessionExit();
-    document.getElementById("hide-poem").onclick = (event) => {
-      const hidden = document.getElementById("poem-body").classList.toggle("hide-characters");
-      event.currentTarget.textContent = hidden ? "打开汉字，看一看" : "藏起汉字，试着背";
-      event.currentTarget.setAttribute("aria-pressed", String(hidden));
-    };
-    document.getElementById("hide-pinyin").onclick = (event) => {
-      const hidden = document.getElementById("poem-body").classList.toggle("hide-pinyin");
-      event.currentTarget.textContent = hidden ? "打开拼音" : "收起拼音";
-      event.currentTarget.setAttribute("aria-pressed", String(hidden));
-    };
     const btnSpeak = document.getElementById("btn-speak");
-    const btnPause = document.getElementById("btn-speak-pause");
-    const btnStop = document.getElementById("btn-speak-stop");
-    updateSpeakButtons("idle");
+    updateSpeakButton("idle");
     if (btnSpeak) {
       btnSpeak.onclick = () => {
         if (!window.ChenchenSpeech || !ChenchenSpeech.supported(poem)) {
-          toast("暂时没有声音，可以看着文字和爸爸妈妈一起读。");
+          toast("暂时无法播放朗读。");
           return;
         }
         const st = ChenchenSpeech.getStatus();
-        if (st === "speaking" || st === "paused") {
-          ChenchenSpeech.stop();
-        }
+        if (st === "speaking" || st === "loading") { ChenchenSpeech.pause(); return; }
+        if (st === "paused") { ChenchenSpeech.resume(); return; }
         const ok = ChenchenSpeech.speakPoem(
           {
             id: poem.id,
@@ -903,36 +876,18 @@
             lines: poem.lines.map((ln) => ln.text),
           },
           {
-            onState: updateSpeakButtons,
-            onError: () => toast("朗读音频暂时没有打开，请再点一次；也可以先和爸爸妈妈一起读。"),
-            onUnsupported: () =>
-              toast("这首诗暂时没有配音，可以和爸爸妈妈一起读。"),
+            onState: state => { if (active()) updateSpeakButton(state); },
+            onError: () => { if (active()) toast("朗读暂时打不开，请再试一次。"); },
+            onUnsupported: () => { if (active()) toast("这首诗暂未配音。"); },
           }
         );
-        if (ok) updateSpeakButtons(ChenchenSpeech.getStatus());
+        if (ok) updateSpeakButton(ChenchenSpeech.getStatus());
       };
     }
-    if (btnPause) {
-      btnPause.onclick = () => {
-        if (!window.ChenchenSpeech) return;
-        if (ChenchenSpeech.getStatus() === "paused") {
-          ChenchenSpeech.resume();
-        } else {
-          ChenchenSpeech.pause();
-        }
-        updateSpeakButtons(ChenchenSpeech.getStatus());
-      };
-    }
-    if (btnStop) {
-      btnStop.onclick = () => {
-        stopSpeechSafe();
-        updateSpeakButtons("idle");
-      };
-    }
-
   }
 
   // ---------- Math ----------
+  const MATH_ROUND_SIZE = 5;
   let mathMode = "addsub";
   let mathScore = { ok: 0, total: 0 };
   let currentQ = null;
@@ -1197,9 +1152,9 @@
     mathCompleted = 0;
     bondQIndex = 0;
     const el = document.getElementById("math-content");
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / 3 题</span></div>
+    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / ${MATH_ROUND_SIZE} 题</span></div>
       ${reviewSession ? "" : `<div class="tabs-mini"><button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button><button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button></div>`}
-      <p class="practice-instruction">做 3 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
+      <p class="practice-instruction">做 ${MATH_ROUND_SIZE} 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
       <div class="btn-row practice-controls"><button class="btn btn-ghost" id="math-read">◖)) 听题目</button><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div></div>`;
     el.querySelectorAll("[data-m]").forEach(btn=>btn.onclick=()=>renderMath(btn.dataset.m));
     document.getElementById("math-next").onclick = advanceMathQuestion;
@@ -1217,7 +1172,7 @@
   function advanceMathQuestion() {
     if (!mathQuestionAnswered || currentView !== "math") return;
     mathQuestionAnswered = false;
-    if (mathCompleted >= 3) renderMathFinish();
+    if (mathCompleted >= MATH_ROUND_SIZE) renderMathFinish();
     else nextMathQ();
   }
 
@@ -1226,12 +1181,12 @@
     mathQuestionAnswered = true;
     mathCompleted++;
     const progress = document.getElementById("math-progress");
-    if(progress) progress.textContent = `${mathCompleted} / 3 题`;
+    if(progress) progress.textContent = `${mathCompleted} / ${MATH_ROUND_SIZE} 题`;
     const next = document.getElementById("math-next");
     if(next) {
       next.hidden = false;
       next.disabled = false;
-      next.textContent = (correct ? "" : "我看懂了，") + (mathCompleted >= 3 ? "完成啦 ✿" : "下一题 →");
+      next.textContent = (correct ? "" : "我看懂了，") + (mathCompleted >= MATH_ROUND_SIZE ? "完成啦 ✿" : "下一题 →");
     }
     if (!correct) {
       document.getElementById("math-read").textContent = "◖)) 听答案";
@@ -1243,10 +1198,10 @@
     const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
     const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法"};
     const panel = document.getElementById("math-panel");
-    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 3 道题，真棒！</h3><p>今天的小数字，下次再来见面。</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "收下小花，继续 →" : "收下小花，休息一下"}</button></div>`;
+    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${MATH_ROUND_SIZE} 道题，真棒！</h3><p>今天的小数字，下次再来见面。</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "收下小花，继续 →" : "收下小花，休息一下"}</button></div>`;
     document.querySelector("#math-content .practice-controls").hidden = true;
     document.getElementById("finish-math").onclick = async () => {
-      const advanced = await completePractice(id, mathScore.ok >= 3 ? "remember" : "fuzzy", meta);
+      const advanced = await completePractice(id, mathScore.ok >= MATH_ROUND_SIZE ? "remember" : "fuzzy", meta);
       if (!advanced) navigate("home");
     };
   }
@@ -1728,11 +1683,12 @@
   // ---------- Init ----------
   function navigate(v) {
     if (!stateReady) { toast("先连接服务器，再开始复习。"); return; }
+    const restorePoemScroll = v === "poems" && currentView === "poem-detail";
     showingCelebration = false;
     reviewSession = null;
     showView(v);
     if (v === "home") renderHome();
-    if (v === "poems") renderPoems();
+    if (v === "poems") renderPoems({restoreScroll:restorePoemScroll});
     if (v === "math") renderMath();
     if (v === "pinyin") {pyPracticed = new Set();renderPinyin();}
     if (v === "write") renderWrite();
