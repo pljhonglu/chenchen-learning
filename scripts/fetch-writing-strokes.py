@@ -11,7 +11,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 URL = 'https://registry.npmjs.org/hanzi-writer-data/-/hanzi-writer-data-2.0.1.tgz'
 INTEGRITY = 'nbQwM+MaryGoq7pBMIZLCd3lFq03nXuJuwku1+6UbjL58uU+9OULVcMkoNvNuJSoIV7f1bbPRfD4D/LQa5S7qg=='
-CHARACTERS = '一二三四五十人大小口子女日月水火山石田木上下土天六七八九百左右中入出回目耳手足牙心米禾竹花草牛羊马鸟虫鱼白云雨风门车书本辰春明'
+CHARACTERS = '一二三四五十人大小口子女日月水火山石田木上下土天六七八九百左右中入出回目耳手足牙心米禾竹花草牛羊马鸟虫鱼白云雨风门车书本妈爸爷奶哥姐弟妹我你他她好爱家朋友学文字写画读课校师生同桌笔尺包开关来去走跑坐立看听说笑吃喝玩洗东西南北前后里外多少长短高低早晚春夏秋冬星光电雪河海林叶果红黄蓝绿黑瓜豆茶蛋饭肉面衣辰明'
 
 def main():
     with urllib.request.urlopen(URL, timeout=90) as response:

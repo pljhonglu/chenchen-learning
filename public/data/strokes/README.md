@@ -1,6 +1,6 @@
 # Bundled stroke data
 
-These 63 JSON files are selected from **hanzi-writer-data 2.0.1**, the stroke outlines and drawing medians used by Hanzi Writer. The collection includes the application's 60 selectable characters and the existing classroom/name examples 辰、春、明.
+These 152 JSON files are selected from **hanzi-writer-data 2.0.1**, the stroke outlines and drawing medians used by Hanzi Writer. The collection includes the application's 150 selectable characters and the existing classroom/name examples 辰、明 (春 is now part of the selectable curriculum).
 
 - Upstream: https://github.com/chanind/hanzi-writer-data
 - Exact archive: https://registry.npmjs.org/hanzi-writer-data/-/hanzi-writer-data-2.0.1.tgz

@@ -304,15 +304,460 @@
       "strokeCount": 5,
       "sha256": "1507bfab8ff404936abc31790252d16b5eddf769b85791d89bc9c61c668fa838"
     },
-    "辰": {
-      "src": "/data/strokes/8fb0.json",
+    "妈": {
+      "src": "/data/strokes/5988.json",
+      "strokeCount": 6,
+      "sha256": "0b288b695765e1294ca2cbc2b463227b637047932ebdab2ff9cddba6c1d576b2"
+    },
+    "爸": {
+      "src": "/data/strokes/7238.json",
+      "strokeCount": 8,
+      "sha256": "fa40233458f9a517bcfedea1595d348831af8f73be08fe45a9554b28c59de25c"
+    },
+    "爷": {
+      "src": "/data/strokes/7237.json",
+      "strokeCount": 6,
+      "sha256": "4b14dfbd26ec432f4bfa4d2ea6e9f666430d7b29b3cae31b07e4392c5e8536ce"
+    },
+    "奶": {
+      "src": "/data/strokes/5976.json",
+      "strokeCount": 5,
+      "sha256": "151460436d8c0f29b05af02b03e456d0232f4dc9f1bfae3b2b551aa8a99d3aa9"
+    },
+    "哥": {
+      "src": "/data/strokes/54e5.json",
+      "strokeCount": 10,
+      "sha256": "0a0ccb90dba97ea99d1850523f46a7731bc0754e24b2fde3b880f00816e4edfa"
+    },
+    "姐": {
+      "src": "/data/strokes/59d0.json",
+      "strokeCount": 8,
+      "sha256": "e4fcebaec74b9a53077e2d6e067fdfdca4470aa36f23246c7a03f96e5ab000c6"
+    },
+    "弟": {
+      "src": "/data/strokes/5f1f.json",
       "strokeCount": 7,
-      "sha256": "4c8dead0f3ff298ee8ae58481c844310037c69b28eba676a425bea47cfff0108"
+      "sha256": "9a89eaf0eef53c73f69bd3cd9f53fd0e628c4c663b13f6c0a4c3773b3071a735"
+    },
+    "妹": {
+      "src": "/data/strokes/59b9.json",
+      "strokeCount": 8,
+      "sha256": "10b03e84339e4b9033d1bd9a4b1fba91ab872f810af3f6633c667872e606a7c3"
+    },
+    "我": {
+      "src": "/data/strokes/6211.json",
+      "strokeCount": 7,
+      "sha256": "08616462fc64b4c18c76a3f68a992305e98946f468bf42ec76ca9be1cd6c5ac8"
+    },
+    "你": {
+      "src": "/data/strokes/4f60.json",
+      "strokeCount": 7,
+      "sha256": "21057a26cb5c1753ea710d503b759cc17948263501ffd76ef1737cb2b5d5f966"
+    },
+    "他": {
+      "src": "/data/strokes/4ed6.json",
+      "strokeCount": 5,
+      "sha256": "93c72a3fb00f00e9d7c3da8e2bf25e913bd3eba3c71eaafacc69f55891dc5625"
+    },
+    "她": {
+      "src": "/data/strokes/5979.json",
+      "strokeCount": 6,
+      "sha256": "4e69fc6340529cfbdf572a98f3bd6f934233186943b931b59e1a3c65464518c2"
+    },
+    "好": {
+      "src": "/data/strokes/597d.json",
+      "strokeCount": 6,
+      "sha256": "c9f085fe6519e2b2c9653c7edf51bdbc78339fcc0b10f94c1f33c7f4f4d4a3a5"
+    },
+    "爱": {
+      "src": "/data/strokes/7231.json",
+      "strokeCount": 10,
+      "sha256": "26312d0cf150b55c961e890c2a205f5143a185bd2c7337c9c3622040d61489c4"
+    },
+    "家": {
+      "src": "/data/strokes/5bb6.json",
+      "strokeCount": 10,
+      "sha256": "390ad42ee60491df2ae9ddfd59358d4d6ff69208ccdac902aae0431b7e5f9aef"
+    },
+    "朋": {
+      "src": "/data/strokes/670b.json",
+      "strokeCount": 8,
+      "sha256": "f67483634bf14bcd59db35d94c7e1f560ee78be33c14754c43ad201cf98d7622"
+    },
+    "友": {
+      "src": "/data/strokes/53cb.json",
+      "strokeCount": 4,
+      "sha256": "71a33320fedcb2d37b92c5bcc4b7d6aa9bd94dbd022719561711b5eb2338547b"
+    },
+    "学": {
+      "src": "/data/strokes/5b66.json",
+      "strokeCount": 8,
+      "sha256": "9f2bdcab70ecf93632b6cf1ce9b5339cc8018d742eed7839037d146f8c294193"
+    },
+    "文": {
+      "src": "/data/strokes/6587.json",
+      "strokeCount": 4,
+      "sha256": "da58df874e176b10cbda075bb800aaa486fc716476a563fcc83f8f06b2169dbe"
+    },
+    "字": {
+      "src": "/data/strokes/5b57.json",
+      "strokeCount": 6,
+      "sha256": "d4e20f90c64acc1427d41e693c7151f3ea389eb10d8ce7f2c98613b01c6d1baf"
+    },
+    "写": {
+      "src": "/data/strokes/5199.json",
+      "strokeCount": 5,
+      "sha256": "803022b32271801f05bd0931a18608b3319f7a9ffe0ea88093b19d539cf1941f"
+    },
+    "画": {
+      "src": "/data/strokes/753b.json",
+      "strokeCount": 8,
+      "sha256": "db1e775413384d5c3258a4cb5017bd923e1ce78c07ca857fcd6542ba6601db57"
+    },
+    "读": {
+      "src": "/data/strokes/8bfb.json",
+      "strokeCount": 10,
+      "sha256": "dd8de3cdf06a29c7268ed3cc51304c8be2a57881f4ccf4444f6d980c2abed09c"
+    },
+    "课": {
+      "src": "/data/strokes/8bfe.json",
+      "strokeCount": 10,
+      "sha256": "bc5a3bcf0e757ff72df8ac9c60f236f39addf51b65f1374dbef96e4fa9c2a98c"
+    },
+    "校": {
+      "src": "/data/strokes/6821.json",
+      "strokeCount": 10,
+      "sha256": "bd810a1cf7fa8216207502a388f4593cce34b71018e8419ecff0b5364147e0bb"
+    },
+    "师": {
+      "src": "/data/strokes/5e08.json",
+      "strokeCount": 6,
+      "sha256": "80d528921fbb75b21ed1737f622adbb8e9da7b71b143a64382568f22ff812093"
+    },
+    "生": {
+      "src": "/data/strokes/751f.json",
+      "strokeCount": 5,
+      "sha256": "dbe556919f5c0a95448c40997dfce35ad56ebf26d874218e7076d8c12374cfd8"
+    },
+    "同": {
+      "src": "/data/strokes/540c.json",
+      "strokeCount": 6,
+      "sha256": "ebac44738a64a0f7cb202363be8abfafe4aed2fc20965dd66f9b1f7555766967"
+    },
+    "桌": {
+      "src": "/data/strokes/684c.json",
+      "strokeCount": 10,
+      "sha256": "ecc0365660b9cc5f03cfb1b6a3b4a8a54979ff90b84cd91a9dffa5d2b05667d6"
+    },
+    "笔": {
+      "src": "/data/strokes/7b14.json",
+      "strokeCount": 10,
+      "sha256": "89f1e201c5c67fcdd714db847c68eaee2a874de3a9f6340be4171c53b98cffa8"
+    },
+    "尺": {
+      "src": "/data/strokes/5c3a.json",
+      "strokeCount": 4,
+      "sha256": "bb53ce9fc6486d2ab0d42ecb70f9db2446a4c42ceb4d35c071191a3dd22cadbe"
+    },
+    "包": {
+      "src": "/data/strokes/5305.json",
+      "strokeCount": 5,
+      "sha256": "06c5b55a0acfd21621f9eef34bfb18c9de54320913d6b5f0aea44b36c6117d78"
+    },
+    "开": {
+      "src": "/data/strokes/5f00.json",
+      "strokeCount": 4,
+      "sha256": "0b4efab7fc994927f4244f1c6d79a7012668a9c7cbdbc40a45d0bcf9b4cbbd49"
+    },
+    "关": {
+      "src": "/data/strokes/5173.json",
+      "strokeCount": 6,
+      "sha256": "28d1c30ed1cda1ac8e0618bfe53010b6dc5bb5537670905a760a51d4d5a81399"
+    },
+    "来": {
+      "src": "/data/strokes/6765.json",
+      "strokeCount": 7,
+      "sha256": "ebf3a9165522693077a8f14d25e003565409d8751ff0a4724423315d57d9a57d"
+    },
+    "去": {
+      "src": "/data/strokes/53bb.json",
+      "strokeCount": 5,
+      "sha256": "96e01168e8c76add5a05de734f18ef282451ca9107757977e5d83d8eea2bc281"
+    },
+    "走": {
+      "src": "/data/strokes/8d70.json",
+      "strokeCount": 7,
+      "sha256": "2d73ebc4b90cdf561408b3deb5948509048f2c7a49fb005c80c6bdc001ff24a7"
+    },
+    "跑": {
+      "src": "/data/strokes/8dd1.json",
+      "strokeCount": 12,
+      "sha256": "42826e86df28e7b66c93fa17987c0af1287dee65f4122310a60a1674dbb94959"
+    },
+    "坐": {
+      "src": "/data/strokes/5750.json",
+      "strokeCount": 7,
+      "sha256": "b01ef6333805198f5b9d9443b6a157ae94d3233a30fa9d090a72e586b116d255"
+    },
+    "立": {
+      "src": "/data/strokes/7acb.json",
+      "strokeCount": 5,
+      "sha256": "be3a3135457203801eccfc357d620b742aa025938766395a3944c4f18ebbd295"
+    },
+    "看": {
+      "src": "/data/strokes/770b.json",
+      "strokeCount": 9,
+      "sha256": "bff5e00542da2f3cd5b343172777fa10c888e336224b42b8cb62c71978a7cbd4"
+    },
+    "听": {
+      "src": "/data/strokes/542c.json",
+      "strokeCount": 7,
+      "sha256": "f4be99b28792eb4915420affcc4ce6e73f1c7e0f8dd458b75095b24ca841bd51"
+    },
+    "说": {
+      "src": "/data/strokes/8bf4.json",
+      "strokeCount": 9,
+      "sha256": "56144a5cda3da7385c3f7e640985bb69bfa8eda5b22876d08bb05126ff116d2d"
+    },
+    "笑": {
+      "src": "/data/strokes/7b11.json",
+      "strokeCount": 10,
+      "sha256": "e886c958ac2e7065eda06a6b67dc9bd128613b63b9fc44ac590d530d5af5c513"
+    },
+    "吃": {
+      "src": "/data/strokes/5403.json",
+      "strokeCount": 6,
+      "sha256": "7030e0da002dbc77d79821e9b78ab848777a8b9c0dabd1340b41b5fc1dd63a36"
+    },
+    "喝": {
+      "src": "/data/strokes/559d.json",
+      "strokeCount": 12,
+      "sha256": "bf7840cc0811e59e4db4a35f476af88054625cac10e87b0338c2c267b37dca9a"
+    },
+    "玩": {
+      "src": "/data/strokes/73a9.json",
+      "strokeCount": 8,
+      "sha256": "65485d78931a81e1e09a77097b4915fce9442517300ef31ea1909c129b1116bf"
+    },
+    "洗": {
+      "src": "/data/strokes/6d17.json",
+      "strokeCount": 9,
+      "sha256": "8bfbd8a3da7a32921c855099c1f2891af1791500330a58bc941b54241219fade"
+    },
+    "东": {
+      "src": "/data/strokes/4e1c.json",
+      "strokeCount": 5,
+      "sha256": "80c3dfd836941d9507af3bfbc2257564483e134954f11d412d165f445e4f5a20"
+    },
+    "西": {
+      "src": "/data/strokes/897f.json",
+      "strokeCount": 6,
+      "sha256": "f7599c5caa9c04e450f9c5b3e3cdd09523fd675d94f18c85997af05f023171d3"
+    },
+    "南": {
+      "src": "/data/strokes/5357.json",
+      "strokeCount": 9,
+      "sha256": "94fbb129882ed5cf6b7cd19bed1bdb52b4d1eadb3e0bda8ba56acf425576d69f"
+    },
+    "北": {
+      "src": "/data/strokes/5317.json",
+      "strokeCount": 5,
+      "sha256": "580cb19cf0714405c78f9bc1076622281c3a9de23f1e6608dfa4e9d69e913eea"
+    },
+    "前": {
+      "src": "/data/strokes/524d.json",
+      "strokeCount": 9,
+      "sha256": "8126272afc54ca3a5bd512086901f4b3b40fcc43bcdf391fb60de3cb0dcd5c62"
+    },
+    "后": {
+      "src": "/data/strokes/540e.json",
+      "strokeCount": 6,
+      "sha256": "1db954c5aa12b7c8efab666a716899c98e27c2b20312ae75df405bcf68cc5c91"
+    },
+    "里": {
+      "src": "/data/strokes/91cc.json",
+      "strokeCount": 7,
+      "sha256": "5f0d84aa3b6f871759148b105314fd01c4a9019d3234afac345cbbf1ca263d5d"
+    },
+    "外": {
+      "src": "/data/strokes/5916.json",
+      "strokeCount": 5,
+      "sha256": "bab290c36ee093d6c2df1b9d95d3dbbcdf492dc108f3a7e81f0ac13cd8726d5c"
+    },
+    "多": {
+      "src": "/data/strokes/591a.json",
+      "strokeCount": 6,
+      "sha256": "d7bc212fe60eaa766209b36e5e9642940892cf43b472accedaf55f517d8313dc"
+    },
+    "少": {
+      "src": "/data/strokes/5c11.json",
+      "strokeCount": 4,
+      "sha256": "de5cd9d5b1bbd468411f82f7d57881b11b3a9b9c7bb812ff891ac66c06b31ef7"
+    },
+    "长": {
+      "src": "/data/strokes/957f.json",
+      "strokeCount": 4,
+      "sha256": "c99fe3d6a862b82befc528e49164b6bf80d461aa6a4b9c9258f4d3debbc49b81"
+    },
+    "短": {
+      "src": "/data/strokes/77ed.json",
+      "strokeCount": 12,
+      "sha256": "72dba1c53031556c2b06624c3df2f75ffd92190245a75727ad7d82de9bea8542"
+    },
+    "高": {
+      "src": "/data/strokes/9ad8.json",
+      "strokeCount": 10,
+      "sha256": "99d078f0a742511e3225a994169678c2b35ed42d4a39e4f5c41946c1e4c04567"
+    },
+    "低": {
+      "src": "/data/strokes/4f4e.json",
+      "strokeCount": 7,
+      "sha256": "f42ef54f6d74b982a63e85fbec1a46f7d67c4841b7b21a633c6e65abc650930d"
+    },
+    "早": {
+      "src": "/data/strokes/65e9.json",
+      "strokeCount": 6,
+      "sha256": "4d6b2979bd1167355372cf73800a2ce13032febb989b8bf5901e6a7dbe773454"
+    },
+    "晚": {
+      "src": "/data/strokes/665a.json",
+      "strokeCount": 11,
+      "sha256": "b545c3866d2705e569fe1784f74f505ae6f10eaa7a7fdb4068bc539569485085"
     },
     "春": {
       "src": "/data/strokes/6625.json",
       "strokeCount": 9,
       "sha256": "7361a998c0e3ff79799c803caa9a3c11173d063ab0206338d8c1b06116c118d8"
+    },
+    "夏": {
+      "src": "/data/strokes/590f.json",
+      "strokeCount": 10,
+      "sha256": "09ba2168f412d9e3b8df5cc6483659b9578fef07bd32d5922aaab68f9a98fc6e"
+    },
+    "秋": {
+      "src": "/data/strokes/79cb.json",
+      "strokeCount": 9,
+      "sha256": "95f6ac6b734a3ca9c811d8324d7c750ed939dd7718cb4dff63b4304e8ebf9aa2"
+    },
+    "冬": {
+      "src": "/data/strokes/51ac.json",
+      "strokeCount": 5,
+      "sha256": "c02ac4e9b9870df898bf29becd078d92f95ed5a4657908134d3741d3f6f95b5d"
+    },
+    "星": {
+      "src": "/data/strokes/661f.json",
+      "strokeCount": 9,
+      "sha256": "21780a0d4c52c4e5f236bd18d3aacb4101d5ce17375442cdc64564a000330945"
+    },
+    "光": {
+      "src": "/data/strokes/5149.json",
+      "strokeCount": 6,
+      "sha256": "8f993892d1e521df7b62ad9ea3fc0e8aa567c2bb9bc5597ddc8c0ad16ab7d89f"
+    },
+    "电": {
+      "src": "/data/strokes/7535.json",
+      "strokeCount": 5,
+      "sha256": "bbf199bee650b38f1d1b1da68a0c8f0eed59bdfce2302cd2abe0c5a115896850"
+    },
+    "雪": {
+      "src": "/data/strokes/96ea.json",
+      "strokeCount": 11,
+      "sha256": "d5434aa532906b64d76436c9b720df757e4cd7971093552822fdea1d95eaa174"
+    },
+    "河": {
+      "src": "/data/strokes/6cb3.json",
+      "strokeCount": 8,
+      "sha256": "3359ae1e8008f21472d997ddb66d6dd743a1896e7dceed3f31c9dd5565a473c5"
+    },
+    "海": {
+      "src": "/data/strokes/6d77.json",
+      "strokeCount": 10,
+      "sha256": "bcebc11480cb837dd2b2a8fd64dd742c46959d43a828a76c7a04464395274562"
+    },
+    "林": {
+      "src": "/data/strokes/6797.json",
+      "strokeCount": 8,
+      "sha256": "dc5643ade9f4bdebed056743076e447c24cbb5767237bd71973c28ad17544162"
+    },
+    "叶": {
+      "src": "/data/strokes/53f6.json",
+      "strokeCount": 5,
+      "sha256": "184545665446cb80b42acdf21e0f07094e215e17d9f9ff4b6b02df87f908b73b"
+    },
+    "果": {
+      "src": "/data/strokes/679c.json",
+      "strokeCount": 8,
+      "sha256": "9862414e1eab8e4ff3849cf29145d83bad8c74754c0faff35de284875ece9559"
+    },
+    "红": {
+      "src": "/data/strokes/7ea2.json",
+      "strokeCount": 6,
+      "sha256": "fd2143da03c1098beeb4d5c7d8789a1b7a345d18b1b73fd451d6a0da7177c301"
+    },
+    "黄": {
+      "src": "/data/strokes/9ec4.json",
+      "strokeCount": 11,
+      "sha256": "44aadf91995fab44d399eb60408faa5431244ee46d1fc26a3f7c31a7ea83de72"
+    },
+    "蓝": {
+      "src": "/data/strokes/84dd.json",
+      "strokeCount": 13,
+      "sha256": "04cb4fc26bd2c343d4955aa95fdd7139f3a8279993f1f9be7b4b1dcf5d4aa1d3"
+    },
+    "绿": {
+      "src": "/data/strokes/7eff.json",
+      "strokeCount": 11,
+      "sha256": "027aad4507c4ed3f5e89dc9aba32c25c584169f8b098f27128432d01d39ae8ce"
+    },
+    "黑": {
+      "src": "/data/strokes/9ed1.json",
+      "strokeCount": 12,
+      "sha256": "5bd1451a45e6781326726ce7d2d30352f8495993e4aeef2f7af32afaf45f3cda"
+    },
+    "瓜": {
+      "src": "/data/strokes/74dc.json",
+      "strokeCount": 5,
+      "sha256": "cebc4c9aba61f4fa5f9cac84c83617cdcd738fb1b91446f9396a32b245423903"
+    },
+    "豆": {
+      "src": "/data/strokes/8c46.json",
+      "strokeCount": 7,
+      "sha256": "cbe442dcce7675f367fdc0c193e610bd5a8a6c55e9c7e015b4589bb8f7a4301a"
+    },
+    "茶": {
+      "src": "/data/strokes/8336.json",
+      "strokeCount": 9,
+      "sha256": "a9bf01e1c90c9a153d7200beb3530730fe1af14266f709d32460f1a171be004e"
+    },
+    "蛋": {
+      "src": "/data/strokes/86cb.json",
+      "strokeCount": 11,
+      "sha256": "7a3b56ab5a1d959471f34409f674662a2fb85aec7baf6fd035f522ea215bde0d"
+    },
+    "饭": {
+      "src": "/data/strokes/996d.json",
+      "strokeCount": 7,
+      "sha256": "cc1fa66270ac4250e36825e9c45d7af0b43a5ae271483fc15dfc14fd95a60026"
+    },
+    "肉": {
+      "src": "/data/strokes/8089.json",
+      "strokeCount": 6,
+      "sha256": "05c46b453d470ad79c4e38743b0f9e7afa746eacd3793d518b97f18ba0d43c3c"
+    },
+    "面": {
+      "src": "/data/strokes/9762.json",
+      "strokeCount": 9,
+      "sha256": "720049f194a8d51d6cc01669f1319bed7510650a584d7185f0fa289d9f487ca2"
+    },
+    "衣": {
+      "src": "/data/strokes/8863.json",
+      "strokeCount": 6,
+      "sha256": "bb83d26ab543feaf262f3da5622aa5d7d35591f36286ad0ef5072ee96d73b7ad"
+    },
+    "辰": {
+      "src": "/data/strokes/8fb0.json",
+      "strokeCount": 7,
+      "sha256": "4c8dead0f3ff298ee8ae58481c844310037c69b28eba676a425bea47cfff0108"
     },
     "明": {
       "src": "/data/strokes/660e.json",
