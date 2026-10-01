@@ -1848,6 +1848,30 @@ button[hidden],*[hidden] {
   height:100%;
 }
 
+.write-shape-loading {
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  color:#8a977d;
+  font-size:14px;
+  pointer-events:none;
+}
+
+.write-library-page .write-library {
+  max-width:none;
+}
+
+.write-library-page .write-list button {
+  width:100%;
+  height:auto;
+}
+
+#write-back {
+  min-height:40px;
+  margin-bottom:8px;
+}
+
 .write-stroke-status {
   max-width:480px;
   margin:0 auto 12px;
@@ -2759,6 +2783,12 @@ button[hidden],*[hidden] {
   }
   .practice-card {
     padding:22px 18px;
+  }
+  .write-practice {
+    padding-top:16px;
+  }
+  .write-practice .practice-heading .eyebrow {
+    display:none;
   }
   .practice-heading {
     align-items:flex-start;

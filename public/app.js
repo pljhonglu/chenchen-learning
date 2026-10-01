@@ -305,10 +305,10 @@
     if (stop) stop.disabled = !(speaking || paused || loading);
   }
 
-  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "english"];
+  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "write-detail", "english"];
 
   function showView(name) {
-    if (name !== "write") stopWritingDemo();
+    if (name !== "write-detail") stopWritingDemo();
     if (name !== "english") englishModule?.stop();
     if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
@@ -323,13 +323,14 @@
         math: "math",
         pinyin: "pinyin",
         write: "write",
+        "write-detail": "write",
         english: "english",
       };
       btn.classList.toggle("active", btn.dataset.nav === map[name]);
       if (btn.dataset.nav === map[name]) btn.setAttribute("aria-current", "page");
       else btn.removeAttribute("aria-current");
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: name === "write" || name === "write-detail" ? "instant" : "smooth" });
   }
 
   // ---------- Home / Review ----------
@@ -538,7 +539,7 @@
   async function openParent() {
     if (!stateReady) { toast("先连接服务器，才能管理课堂内容。"); return; }
     if (currentView === "english") englishModule?.pause();
-    if (currentView === "write") {writingDemo?.stop();writingVoice?.stop();}
+    if (currentView === "write-detail") {writingDemo?.stop();writingVoice?.stop();}
     await ensurePoems().catch(() => {});
     const dialog = document.getElementById("parent-dialog");
     const scroll = dialog.open ? dialog.scrollTop : 0;
@@ -628,7 +629,7 @@
       try {
         const removedId = button.dataset.remove;
         await removeClassroomItem(removedId);
-        if (currentView === "poem-detail" && selectedPoemId === removedId || currentView === "write" && selectedWriteId === removedId || currentView === "english" || reviewSession?.items.some(item=>item.id===removedId)) navigate("home");
+        if (currentView === "poem-detail" && selectedPoemId === removedId || currentView === "write-detail" && selectedWriteId === removedId || currentView === "english" || reviewSession?.items.some(item=>item.id===removedId)) navigate("home");
         await openParent();toast("课堂内容已删除，后续不再安排复习。");
       }
       catch (_) {button.disabled = false;}
@@ -656,8 +657,9 @@
       renderPinyin();
     } else if (type === "write") {
       selectedWriteId = id;
-      showView("write");
-      renderWrite();
+      writingListScroll = 0;
+      showView("write-detail");
+      renderWriteDetail();
     }
   }
 
@@ -1513,6 +1515,7 @@
     {"c":"衣","level":"everyday","group":"身边物品","example":"衣服","strokes":"6画","tip":"小点在上，下面撇捺舒展开。"},
   ];
   let selectedWriteId = null;
+  let writingListScroll = 0;
   let writingDemo = null;
   let writingVoice = null;
   let writingGeneration = 0;
@@ -1539,23 +1542,47 @@
     return [...characters.values()].sort((a,b)=>count(a)-count(b));
   }
 
+  function writingRuby(text,pinyin) {
+    return Array.from(text).map((c,index)=>`<ruby>${escapeHtml(c)}<rt>${escapeHtml((pinyin || "").split(" ")[index] || "")}</rt></ruby>`).join("");
+  }
+
   function renderWrite() {
     stopWritingDemo();
     stopSpeechSafe();
-    const token = writingGeneration;
     const el = document.getElementById("write-content");
+    const all = writingCharacters();
+    el.innerHTML = `<div class="card practice-card write-library-page"><div class="practice-heading"><div><p class="eyebrow">先选一个字</p><h2>写汉字</h2></div><span class="practice-count">${all.length} 个字</span></div><p class="practice-instruction">简单的在前面，点一个字开始读写。</p><div class="write-list write-library" aria-label="从简单到复杂的汉字">${all.map(w=>`<button class="${w.id === selectedWriteId ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-label="选择汉字 ${escapeHtml(w.c)}" aria-pressed="${w.id === selectedWriteId}">${writingRuby(w.c,w.pinyin)}</button>`).join("")}</div></div>`;
+    el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>openWriteCharacter(btn.dataset.writeId));
+  }
+
+  function openWriteCharacter(id) {
+    if (!writingCharacters().some(ch=>ch.id === id)) return;
+    writingListScroll = window.scrollY || 0;
+    selectedWriteId = id;
+    showView("write-detail");
+    renderWriteDetail();
+  }
+
+  function returnToWriteLibrary() {
+    navigate("write");
+    window.scrollTo({top:writingListScroll,behavior:"instant"});
+  }
+
+  function renderWriteDetail() {
+    stopWritingDemo();
+    stopSpeechSafe();
+    const token = writingGeneration;
+    const el = document.getElementById("write-detail-content");
     const all = writingCharacters();
     const ch = all.find(it=>it.id===selectedWriteId) || all[0];
     selectedWriteId = ch.id;
-    const ruby = (text,pinyin) => Array.from(text).map((c,index)=>`<ruby>${escapeHtml(c)}<rt>${escapeHtml((pinyin || "").split(" ")[index] || "")}</rt></ruby>`).join("");
     const words = ch.words || [];
-    const library = reviewSession ? "" : `<div class="write-library-heading"><h3>选一个字</h3><span>${all.length} 个字 · 简单的在前面</span></div><div class="write-list write-library" aria-label="从简单到复杂的汉字">${all.map(w=>`<button class="${w.id === ch.id ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-label="选择汉字 ${escapeHtml(w.c)}" aria-pressed="${w.id === ch.id}">${ruby(w.c,w.pinyin)}</button>`).join("")}</div>`;
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">听一听，描一描</p><h2>汉字描一描</h2></div><span class="practice-count">今天描 1 个就好</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字${escapeHtml(ch.c)}的读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><div class="tianzige write-stage"><div class="char" id="write-font-outline">${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas><button id="write-clear" class="write-erase" hidden aria-label="擦掉，重新描">↶ 擦掉</button></div>${words.length ? `<div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${ruby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p>` : ""}<div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-primary" id="write-finish">写好啦 ✓</button></div><div class="write-paper-confirm" id="write-paper-confirm" hidden><p>已经在纸上写过这个字了吗？</p><div class="btn-row"><button class="btn btn-primary" id="write-paper">在纸上写好啦 ✓</button><button class="text-btn" id="write-keep-drawing">我再描一描</button></div></div>${library}</div>`;
-    el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>{selectedWriteId=btn.dataset.writeId;renderWrite();el.scrollIntoView?.({block:"start"});});
+    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">听一听，描一描</p><h2>汉字描一描</h2></div><span class="practice-count">今天描 1 个就好</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字${escapeHtml(ch.c)}的读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div class="char" id="write-font-outline" hidden>${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" hidden width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas><button id="write-clear" class="write-erase" hidden aria-label="擦掉，重新描">↶ 擦掉</button></div>${words.length ? `<div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p>` : ""}<div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-primary" id="write-finish">写好啦 ✓</button></div><div class="write-paper-confirm" id="write-paper-confirm" hidden><p>已经在纸上写过这个字了吗？</p><div class="btn-row"><button class="btn btn-primary" id="write-paper">在纸上写好啦 ✓</button><button class="text-btn" id="write-keep-drawing">我再描一描</button></div></div></div>`;
+    document.getElementById("write-back").onclick = returnToWriteLibrary;
     const canvas = document.getElementById("write-canvas");
     const ctx = canvas.getContext("2d");
     ctx.strokeStyle = "#668753"; ctx.lineWidth = 14; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    let drawing = false, moved = false, watching = false, demoStatus = "loading", readingRequest = 0;
+    let drawing = false, moved = false, watching = false, glyphMode = "loading", demoStatus = "loading", readingRequest = 0;
     const status = document.getElementById("write-stroke-status");
     const playButton = document.getElementById("write-strokes-play");
     const pronounceButton = document.getElementById("write-pronounce");
@@ -1563,7 +1590,20 @@
     const eraseButton = document.getElementById("write-clear");
     const paperConfirm = document.getElementById("write-paper-confirm");
     const layer = document.getElementById("write-stroke-layer");
-    const active = () => token === writingGeneration && currentView === "write";
+    const stage = document.getElementById("write-stage");
+    const shapeLoading = document.getElementById("write-shape-loading");
+    const fontOutline = document.getElementById("write-font-outline");
+    const showGlyph = mode => {
+      glyphMode = mode;
+      shapeLoading.hidden = mode !== "loading";
+      fontOutline.hidden = mode !== "fallback";
+      layer.hidden = mode !== "svg";
+      canvas.hidden = mode === "loading" || watching;
+      eraseButton.hidden = mode === "loading" || watching || !moved;
+      if (mode === "loading") drawing = false;
+      stage.setAttribute("aria-busy",String(mode === "loading"));
+    };
+    const active = () => token === writingGeneration && currentView === "write-detail";
     const readingButtons = [pronounceButton,...el.querySelectorAll("[data-write-word]")];
     writingVoice = window.ChenchenWritingAudio?.create() || null;
     const voice = writingVoice;
@@ -1572,7 +1612,7 @@
       readingButtons.forEach(button=>button.classList.remove("is-reading"));
     };
     const trace = (reset = true) => {
-      watching = false; drawing = false; canvas.hidden = false; finishButton.disabled = false; eraseButton.hidden = !moved;
+      watching = false; drawing = false; canvas.hidden = glyphMode === "loading"; finishButton.disabled = false; eraseButton.hidden = !moved;
       if (reset) { writingDemo?.restart(); layer.classList.remove("is-copy-guide"); }
       else layer.classList.add("is-copy-guide");
     };
@@ -1581,11 +1621,17 @@
     };
     const setupDemo = () => {
       writingDemo?.destroy();
-      document.getElementById("write-font-outline").hidden = false;
+      showGlyph("loading");
+      layer.classList.remove("is-copy-guide");
+      const unavailable = () => {
+        demoStatus = "error"; showGlyph("fallback"); trace(false);
+        playButton.disabled = false; playButton.textContent = "↻ 重试笔顺";
+        status.textContent = "笔顺暂时没有打开，仍可以照着描一描。";
+      };
       if (!window.ChenchenWritingStrokes || !voice) {
-        demoStatus = "error"; status.textContent = "笔顺暂时没有打开，仍可以照着描一描。"; return;
+        unavailable(); return;
       }
-      writingDemo = window.ChenchenWritingStrokes.create({
+      try { writingDemo = window.ChenchenWritingStrokes.create({
         target:layer, character:ch.c,
         playStroke:(index,signal)=>voice.playStroke(index,signal),
         onState(state) {
@@ -1594,7 +1640,7 @@
           const busy = state.status === "playing", loading = state.status === "loading";
           playButton.disabled = loading;
           playButton.textContent = busy ? "■ 停下" : state.status === "error" ? "↻ 重试笔顺" : state.completed ? "▶ 再看一遍" : "▶ 看笔顺";
-          if (["ready","playing","paused","complete"].includes(state.status)) document.getElementById("write-font-outline").hidden = true;
+          if (["ready","playing","paused","complete"].includes(state.status)) showGlyph("svg");
           status.classList.toggle("is-playing",busy);
           if (busy) status.textContent = `第 ${state.stroke || state.completed + 1} 画 / 共 ${state.total} 画`;
           else if (state.status === "complete") {
@@ -1605,16 +1651,17 @@
         },
         onError(code) {
           if (!active()) return;
+          showGlyph(code === "stroke-data-unavailable" ? "fallback" : "svg");
           trace(false); status.classList.remove("is-playing");
           status.textContent = code === "stroke-playback-unavailable" ? "声音或笔顺没有打开，再点一次试试。" : "这个字的笔顺暂时没有打开，仍可以照着描。";
           playButton.disabled = false;
         },
-      });
+      }); } catch (_) { unavailable(); }
     };
     setupDemo();
     playButton.onclick = () => {
       if (demoStatus === "playing") {writingDemo.stop();trace();return;}
-      if (demoStatus === "error") {stopReading();setupDemo();return;}
+      if (demoStatus === "error" && glyphMode !== "svg") {stopReading();setupDemo();return;}
       watch(); writingDemo?.play();
     };
     const read = async (id,text,button) => {
@@ -1638,15 +1685,15 @@
       return read(`word-${Array.from(word.text).map(c=>c.codePointAt(0).toString(16)).join("-")}`,word.text,button);
     });
     const position = event => { const r=canvas.getBoundingClientRect(); return [(event.clientX-r.left)*600/r.width,(event.clientY-r.top)*600/r.height]; };
-    canvas.onpointerdown = event => { if(watching)return;event.preventDefault();drawing=true;canvas.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(...position(event));paperConfirm.hidden=true; };
-    canvas.onpointermove = event => { if(!drawing || watching)return;event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;eraseButton.hidden=false; };
+    canvas.onpointerdown = event => { if(watching || glyphMode === "loading")return;event.preventDefault();drawing=true;canvas.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(...position(event));paperConfirm.hidden=true; };
+    canvas.onpointermove = event => { if(!drawing || watching || glyphMode === "loading")return;event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;eraseButton.hidden=false; };
     canvas.onpointerup = canvas.onpointercancel = () => { drawing=false; };
     eraseButton.onclick = () => {ctx.clearRect(0,0,600,600);moved=false;trace();paperConfirm.hidden=true;};
     const finish = async () => {
       writingDemo?.stop(); stopReading();
       const id = reviewSession?.items[reviewSession.index]?.id || ch.id;
       const title = id === "write-basic" ? "常用汉字描红" : `汉字·${ch.c}`;
-      if(!await completePractice(id,"remember",{type:"write",title})) navigate("home");
+      if(!await completePractice(id,"remember",{type:"write",title}) && active()) returnToWriteLibrary();
     };
     finishButton.onclick = () => {
       if (watching) return;

@@ -12,7 +12,7 @@ globalThis.subject = {
  loadState, getItem, markLearned, removeClassroomItem, reviewPatch, recordPractice,
  todayStr, addDays, dueItems, syncNow, commitOperations, completePractice,
  navigate, bindSessionExit, openReviewItem, startReview, renderHome,
- writingCharacters, openParent, initializePage, customPoemFromForm, renderPoems, renderPoemDetail,
+ writingCharacters, openWriteCharacter, openParent, initializePage, customPoemFromForm, renderPoems, renderPoemDetail,
  setPoemFilter: value => poemFilter=value,
  setView: value => currentView=value,
  setSession: value => reviewSession=value,
@@ -110,6 +110,30 @@ function environment(initial = {}) {
     at:date=>{now=new Date(`${date}T01:30:00+08:00`).getTime();},connect:()=>context.subject.syncNow(),
     async nextRequest(){await flush();const request=requests.find(request=>!request.settled);assert.ok(request,'Expected pending request');return request;},
   };
+}
+
+// The real media modules have separate playback tests. This probe observes the
+// detail page's lifetime without fetching assets or simulating SVG rendering.
+function writingMediaProbe(e) {
+  const viewers=[],voices=[];
+  e.context.window.ChenchenWritingAudio={create(){
+    const voice={destroyed:false,stops:0,stop(){this.stops++;},destroy(){this.destroyed=true;this.stop();},
+      playStroke:()=>Promise.resolve(),playReading:()=>Promise.resolve()};
+    voices.push(voice);return voice;
+  }};
+  e.context.window.ChenchenWritingStrokes={create(options){
+    const viewer={destroyed:false,character:options.character,playing:false,
+      notify(status){if(!this.destroyed) options.onState({status,total:1,completed:0,stroke:1});},
+      play(){this.playing=true;this.notify('playing');return Promise.resolve(true);},
+      stop(){this.playing=false;this.notify('ready');},
+      restart(){this.stop();return true;},
+      destroy(){this.playing=false;this.destroyed=true;},
+    };
+    viewers.push(viewer);viewer.notify('loading');
+    viewer.ready=Promise.resolve().then(()=>{viewer.notify('ready');return !viewer.destroyed;});
+    return viewer;
+  }};
+  return {viewers,voices};
 }
 const tests=[];
 function test(name,run){tests.push({name,run});}
@@ -263,8 +287,12 @@ test('custom course enrollment persists together with content and routes to the 
   await t.markLearned(character.id,{type:'write',title:'汉字·明'},[{op:'set',collection:'customCharacters',key:character.id,value:character}]);
   assert.ok(t.getItem(poem.id));assert.ok(t.getItem(character.id));assert.equal(e.requests.filter(r=>r.method==='PATCH').length,2);
   const fresh=environment(e.db());await fresh.connect();assert.equal(fresh.subject.loadState().customPoems[poem.id].title,poem.title);
-  fresh.subject.setSession({items:[fresh.subject.getItem(character.id)],index:0});fresh.subject.openReviewItem(character.id,'write');
-  assert.equal(fresh.subject.getWritingId(),character.id);assert.match(fresh.element('write-content').innerHTML,/明 字描红画布/);
+  const session={items:[fresh.subject.getItem(character.id)],index:0};
+  fresh.subject.setSession(session);fresh.subject.openReviewItem(character.id,'write');
+  assert.equal(fresh.subject.getSession(),session,'Review routing must preserve the active session');
+  assert.equal(fresh.subject.getView(),'write-detail');assert.equal(fresh.subject.getWritingId(),character.id);
+  assert.match(fresh.element('write-detail-content').innerHTML,/明 字描红画布/);
+  assert.doesNotMatch(fresh.element('write-detail-content').innerHTML,/data-write-id=/,'Review detail must not contain a character library');
   await fresh.element('write-finish').onclick();
   assert.equal(fresh.element('write-paper-confirm').hidden,false);
   assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-01','Opening paper confirmation must not save progress');
@@ -308,9 +336,78 @@ test('one writing library sorts by stroke count and preserves custom identity, p
   const custom=cards.find(ch=>ch.id===character.id);
   assert.equal(custom.id,character.id);assert.equal(custom.tip,'老师的提示');assert.equal(custom.pinyin,'mù');
   assert.equal(custom.words.length,3);assert.ok(custom.words.every(word=>word.text.includes('木')));
-  t.navigate('write');assert.equal(t.getWritingId(),'write-char-4e00');
+  t.navigate('write');assert.equal(t.getWritingId(),null,'Opening the library must not choose a character');
   assert.doesNotMatch(e.element('write-content').innerHTML,/data-write-level|class="write-group"/);
   assert.ok(e.requests.every(request=>request.method==='GET'),'Opening the expanded library must not enroll or complete anything');
+});
+
+test('writing opens a list of all 150 characters without a canvas, media or progress mutation',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
+  const before=e.db();t.navigate('write');
+  assert.equal(t.getView(),'write');assert.equal(t.getWritingId(),null);
+  const html=e.element('write-content').innerHTML;
+  assert.equal((html.match(/data-write-id=/g)||[]).length,150,'Every character must be selectable from the first page');
+  assert.doesNotMatch(html,/<canvas\b|id="write-strokes-play"|id="write-finish"/,'The library must not include writing-detail controls');
+  assert.equal(media.viewers.length,0);assert.equal(media.voices.length,0);
+  assert.deepEqual(e.db(),before);assert.ok(e.requests.every(request=>request.method==='GET'));
+});
+
+test('selecting a character opens its detail and returning stops media without completing it',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
+  t.navigate('write');t.openWriteCharacter('write-char-6728');await flush();
+  assert.equal(t.getView(),'write-detail');assert.equal(t.getWritingId(),'write-char-6728');
+  const html=e.element('write-detail-content').innerHTML;
+  assert.match(html,/木 字描红画布/);assert.match(html,/id="write-back"/);
+  assert.doesNotMatch(html,/data-write-id=/,'The detail page must not repeat the character library');
+  assert.equal(media.viewers.length,1);assert.equal(media.viewers[0].character,'木');
+  e.element('write-strokes-play').onclick();assert.equal(media.viewers[0].playing,true);
+  e.element('write-back').onclick();
+  assert.equal(t.getView(),'write');assert.equal(t.getSession(),null);
+  assert.equal(media.viewers[0].destroyed,true);assert.equal(media.voices[0].destroyed,true);
+  assert.equal(Object.keys(t.loadState().activity).length,0);assert.deepEqual(e.db().items,{});
+  assert.ok(e.requests.every(request=>request.method==='GET'),'Leaving an unfinished detail must not save completion');
+});
+
+test('returning from a scheduled writing detail exits the session without advancing review',async()=>{
+  const item=course('write-char-6728','write'),e=environment({items:{[item.id]:item}}),t=e.subject;
+  await e.connect();const media=writingMediaProbe(e),before=e.db();
+  const session={items:[item],index:0};t.setSession(session);t.openReviewItem(item.id,'write');await flush();
+  assert.equal(t.getView(),'write-detail');assert.equal(t.getSession(),session);
+  e.element('write-back').onclick();
+  assert.equal(t.getView(),'write');assert.equal(t.getSession(),null);
+  assert.equal(media.viewers[0].destroyed,true);assert.equal(media.voices[0].destroyed,true);
+  assert.deepEqual(e.db(),before);assert.equal(t.getItem(item.id).stage,0);
+});
+
+test('free writing returns to the library only after saving the selected character',async()=>{
+  const e=environment(),t=e.subject;await e.connect();
+  t.navigate('write');t.openWriteCharacter('write-char-6728');
+  e.element('write-finish').onclick();assert.equal(e.element('write-paper-confirm').hidden,false);
+  assert.equal(Object.keys(t.loadState().activity).length,0,'Opening paper confirmation is not completion');
+  e.hold(true);const saving=e.element('write-paper').onclick(),request=await e.nextRequest();
+  assert.equal(t.getView(),'write-detail');assert.equal(Object.keys(t.loadState().activity).length,0);
+  request.reply();await saving;
+  assert.equal(t.getView(),'write');assert.equal(t.getSession(),null);
+  const activities=Object.values(t.loadState().activity);
+  assert.equal(activities.length,1);assert.equal(activities[0].id,'write-char-6728');
+  assert.deepEqual(e.db().items,{},'Free writing must not automatically enroll the character');
+});
+
+test('a delayed writing save cannot navigate away from another character opened meanwhile',async()=>{
+  const e=environment(),t=e.subject;await e.connect();
+  t.navigate('write');t.openWriteCharacter('write-char-6728');
+  e.element('write-finish').onclick();e.hold(true);
+  const saving=e.element('write-paper').onclick(),request=await e.nextRequest();
+  e.element('write-back').onclick();assert.equal(t.getView(),'write');
+  t.openWriteCharacter('write-char-6c34');
+  assert.equal(t.getView(),'write-detail');assert.equal(t.getWritingId(),'write-char-6c34');
+  const currentDetail=e.element('write-detail-content').innerHTML;
+  request.reply();await saving;
+  assert.equal(t.getView(),'write-detail','The old save must not send the new detail back to the library');
+  assert.equal(t.getWritingId(),'write-char-6c34');assert.equal(e.element('write-detail-content').innerHTML,currentDetail);
+  const activities=Object.values(t.loadState().activity);
+  assert.equal(activities.length,1);assert.equal(activities[0].id,'write-char-6728');
+  assert.equal(t.getSession(),null);assert.equal(e.requests.filter(request=>request.method==='PATCH').length,1);
 });
 
 test('course deletion removes custom data and 120 history entries without exceeding PATCH limits',async()=>{
