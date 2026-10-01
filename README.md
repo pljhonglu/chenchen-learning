@@ -88,6 +88,7 @@ docker run -d --name chenchen-learning \
 ```bash
 go test -race ./...
 node scripts/test-progress.cjs
+node scripts/test-math.cjs
 node scripts/test-speech.cjs
 node scripts/test-poem-media.cjs
 node scripts/test-english.cjs

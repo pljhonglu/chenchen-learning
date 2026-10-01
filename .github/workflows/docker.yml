@@ -31,6 +31,7 @@ jobs:
           node --check public/english.js
           node --check public/english-audio.js
           node scripts/test-progress.cjs
+          node scripts/test-math.cjs
           node scripts/test-speech.cjs
           node scripts/test-poem-media.cjs
           node scripts/test-english.cjs

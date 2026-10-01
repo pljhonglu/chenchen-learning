@@ -308,6 +308,7 @@
   const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "english"];
 
   function showView(name) {
+    if (name !== "math") clearMathAutoNext();
     if (name !== "english") englishModule?.stop();
     if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
@@ -932,6 +933,16 @@
   let mathMode = "addsub";
   let mathScore = { ok: 0, total: 0 };
   let currentQ = null;
+  let mathAutoNextTimer = null;
+  let mathQuestionToken = 0;
+  let mathQuestionAnswered = false;
+  let mathExplanation = "";
+
+  function clearMathAutoNext() {
+    clearTimeout(mathAutoNextTimer);
+    mathAutoNextTimer = null;
+    mathQuestionToken++;
+  }
 
   function randInt(a, b) {
     return a + Math.floor(Math.random() * (b - a + 1));
@@ -1033,7 +1044,7 @@
     if (isActive) cls += " is-active";
     if (item.status === "ok") cls += " is-ok";
     if (item.status === "bad") cls += " is-bad";
-    return `<button type="button" class="${cls}" data-slot="${slot}" aria-label="填写">${val || "&nbsp;"}</button>`;
+    return `<button type="button" class="${cls}" data-slot="${slot}" aria-label="填写"${bondSheet?.checked ? " disabled" : ""}>${val || "&nbsp;"}</button>`;
   }
 
   function nbCardHtml(item, qIndex) {
@@ -1085,7 +1096,8 @@
         item.answers[slot] = Number(btn.dataset.n);
         item.status = "open";
         bondSheet.activeSlot = nextBlankSlot(item, slot);
-        renderBondPanel();
+        if (firstBlankSlot(item)) renderBondPanel();
+        else checkBondSheet();
       };
     });
     const clearBtn = panel.querySelector("#nb-clear");
@@ -1097,10 +1109,6 @@
         bondSheet.item.status = "open";
         renderBondPanel();
       };
-    }
-    const checkBtn = panel.querySelector("#nb-check");
-    if (checkBtn) {
-      checkBtn.onclick = () => checkBondSheet();
     }
   }
 
@@ -1117,24 +1125,26 @@
     const right = item.blanks.right ? Number(item.answers.right) : item.right;
     const whole = item.blanks.whole ? Number(item.answers.whole) : item.n;
     const good = left >= 0 && right >= 0 && whole <= 10 && left + right === whole;
-    if (!item.attempted) mathScore.total++;
-    item.attempted = true;
+    mathScore.total++;
+    bondSheet.checked = true;
+    bondSheet.activeSlot = null;
     if(good) {
       item.status = "ok";
-      bondSheet.checked = true;
-      bondSheet.activeSlot = null;
       mathScore.ok++;
       renderBondPanel();
-      document.getElementById("math-fb").textContent = "你把数字朋友找到啦！✿";
+      document.getElementById("math-fb").textContent = "答对啦！✿";
       document.getElementById("math-fb").className = "feedback ok";
-      finishMathQuestion();
     } else {
       item.status = "bad";
-      bondSheet.activeSlot = need[0];
       renderBondPanel();
-      document.getElementById("math-fb").textContent = "两边合起来，要和总数一样哦。点空格换个数字试试。";
+      // With two blanks, keep a valid first part and show its matching part.
+      const answerLeft = item.blanks.left && item.blanks.right && left <= item.n && left >= 0 ? left : item.left;
+      const answerRight = item.n - answerLeft;
+      mathExplanation = `正确答案：${item.n} 等于 ${answerLeft} 加 ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。看懂了，再点下一题。`;
+      document.getElementById("math-fb").textContent = `正确答案：${item.n} = ${answerLeft} + ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。`;
       document.getElementById("math-fb").className = "feedback no";
     }
+    finishMathQuestion(good);
   }
 
   function renderBondPanel() {
@@ -1153,14 +1163,11 @@
       <div class="nb-single-wrap">
         ${nbCardHtml(item, bondSheet.qIndex)}
       </div>
-      <div class="nb-pad" id="nb-pad">
+      <div class="nb-pad" id="nb-pad"${bondSheet.checked ? " hidden" : ""}>
         ${pad}
         <button type="button" class="nb-pad-clear" id="nb-clear">清除</button>
       </div>
-      <div class="nb-actions">
-        <button type="button" class="btn btn-learn" id="nb-check"${bondSheet.checked ? " disabled" : ""}>我填好啦</button>
-      </div>
-      <div class="feedback" id="math-fb"></div>`;
+      <div class="feedback" id="math-fb" role="status" aria-live="polite"></div>`;
     bindBondSheet(panel);
   }
 
@@ -1175,6 +1182,8 @@
 
   let mathCompleted = 0;
   function renderMath(forceMode) {
+    clearMathAutoNext();
+    stopSpeechSafe();
     if (forceMode) mathMode = forceMode;
     mathScore = { ok: 0, total: 0 };
     mathCompleted = 0;
@@ -1182,15 +1191,13 @@
     const el = document.getElementById("math-content");
     el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / 3 题</span></div>
       ${reviewSession ? "" : `<div class="tabs-mini"><button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button><button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button></div>`}
-      <p class="practice-instruction">做 3 道小题就休息。答错也没关系，我们一起想。</p><div class="math-panel" id="math-panel"></div>
-      <div class="btn-row practice-controls"><button class="btn btn-ghost" id="math-read">◖)) 听题目</button><button class="btn btn-primary" id="math-next" disabled>下一题 →</button></div><div id="math-review-bar"></div></div>`;
+      <p class="practice-instruction">做 3 道小题就休息。答对自动换题，答错一起看答案。</p><div class="math-panel" id="math-panel"></div>
+      <div class="btn-row practice-controls"><button class="btn btn-ghost" id="math-read">◖)) 听题目</button><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div></div>`;
     el.querySelectorAll("[data-m]").forEach(btn=>btn.onclick=()=>renderMath(btn.dataset.m));
-    document.getElementById("math-next").onclick = () => {
-      if (mathCompleted >= 3) renderMathFinish();
-      else nextMathQ();
-    };
+    document.getElementById("math-next").onclick = advanceMathQuestion;
     document.getElementById("math-read").onclick = () => {
-      if (mathMode === "decomp") {
+      if (mathExplanation) speakGuide(mathExplanation);
+      else if (mathMode === "decomp") {
         const it = bondSheet.item;
         speakGuide(it.mode === "decomp" ? `把 ${it.n} 分成两部分，点空格，再点数字。` : "两部分合起来是多少？点空格，再点数字。");
       } else speakGuide(`${currentQ.meta.a} ${currentQ.meta.op === "+" ? "加" : "减"} ${currentQ.meta.b} 等于几？点一点击答案。`);
@@ -1199,15 +1206,38 @@
     bindSessionExit();
   }
 
-  function finishMathQuestion() {
+  function advanceMathQuestion() {
+    if (!mathQuestionAnswered || currentView !== "math") return;
+    mathQuestionAnswered = false;
+    if (mathCompleted >= 3) renderMathFinish();
+    else nextMathQ();
+  }
+
+  function finishMathQuestion(correct) {
+    if (mathQuestionAnswered) return;
+    mathQuestionAnswered = true;
     mathCompleted++;
     const progress = document.getElementById("math-progress");
     if(progress) progress.textContent = `${mathCompleted} / 3 题`;
     const next = document.getElementById("math-next");
-    if(next) { next.disabled = false; next.textContent = mathCompleted >= 3 ? "完成啦 ✿" : "下一题 →"; }
+    if(next) {
+      next.hidden = correct;
+      next.disabled = correct;
+      next.textContent = mathCompleted >= 3 ? "我看懂了，完成啦 ✿" : "我看懂了，下一题 →";
+    }
+    if (correct) {
+      const token = mathQuestionToken;
+      mathAutoNextTimer = setTimeout(() => {
+        if (token === mathQuestionToken && currentView === "math") advanceMathQuestion();
+      }, 900);
+    } else {
+      document.getElementById("math-read").textContent = "◖)) 听答案";
+    }
   }
 
   function renderMathFinish() {
+    clearMathAutoNext();
+    stopSpeechSafe();
     const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
     const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法"};
     const panel = document.getElementById("math-panel");
@@ -1220,8 +1250,14 @@
   }
 
   function nextMathQ() {
+    clearMathAutoNext();
+    stopSpeechSafe();
+    mathQuestionAnswered = false;
+    mathExplanation = "";
     const next = document.getElementById("math-next");
-    if (next) next.disabled = true;
+    if (next) { next.disabled = true; next.hidden = true; }
+    const read = document.getElementById("math-read");
+    if (read) read.textContent = "◖)) 听题目";
     if (mathMode === "decomp") {
       bondSheet = genBondSheet();
       renderBondPanel();
@@ -1239,11 +1275,11 @@
           .map((o) => `<button data-v="${o}">${o}</button>`)
           .join("")}
       </div>
-      <div class="feedback" id="math-fb"></div>`;
+      <div class="feedback" id="math-fb" role="status" aria-live="polite"></div>`;
 
     panel.querySelectorAll(".math-opts button").forEach((btn) => {
       btn.onclick = () => {
-        if (btn.disabled) return;
+        if (btn.disabled || mathQuestionAnswered) return;
         const v = Number(btn.dataset.v);
         mathScore.total++;
         const fb = document.getElementById("math-fb");
@@ -1258,10 +1294,12 @@
           fb.className = "feedback ok";
         } else {
           btn.classList.add("wrong");
-          fb.textContent = `我们一起数一数，答案是 ${currentQ.answer}。下次再试试！`;
+          const {a,b,op} = currentQ.meta;
+          fb.textContent = `正确答案是 ${currentQ.answer}：${a} ${op} ${b} = ${currentQ.answer}。看懂了，再点下一题。`;
+          mathExplanation = `正确答案是 ${currentQ.answer}。${a} ${op === "+" ? "加" : "减"} ${b} 等于 ${currentQ.answer}。看懂了，再点下一题。`;
           fb.className = "feedback no";
         }
-        finishMathQuestion();
+        finishMathQuestion(v === currentQ.answer);
       };
     });
   }
