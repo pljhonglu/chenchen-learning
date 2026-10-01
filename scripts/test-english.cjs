@@ -49,7 +49,7 @@ function makeDOM() {
 }
 function harness(options = {}) {
   const root = makeDOM(), database = { ...emptyState(), ...copy(options.state || {}) };
-  const commits = [], reviews = [], plays = [], exits = [], syncs = [];
+  const commits = [], reviews = [], plays = [], exits = [], syncs = [], scrolls = [];
   let active = true, pendingAudio = null, callbacks, audioStatus = "idle";
   const changeAudioState = value => { audioStatus = value; callbacks?.onState(value); };
   const audio = {
@@ -78,6 +78,8 @@ function harness(options = {}) {
   const context = {
     document: { getElementById: id => id === "english-content" ? root : null },
     ChenchenEnglishAudio: { create(config) { callbacks = config; return audio; } },
+    scrollY: 0,
+    scrollTo(position) { scrolls.push(copy(position)); context.scrollY = position.top; },
     AbortController, setTimeout, clearTimeout,
     fetch: async url => ({ ok: true, json: async () => url.endsWith("english.json") ? copy(curriculum) : {} })
   };
@@ -85,6 +87,12 @@ function harness(options = {}) {
   const app = context.ChenchenEnglish.create(hooks);
   function button(id) { const result = root.querySelector("#" + id); assert.ok(result, `Missing button: ${id}`); return result; }
   function click(id) { const target = button(id); assert.equal(target.disabled, false, `${id} should be enabled`); return target.onclick(); }
+  function clickData(attribute, value) {
+    const target = root.querySelectorAll(`[${attribute}]`).find(el => el.attrs[attribute] === value);
+    assert.ok(target, `Missing ${attribute}=${value}`);
+    assert.equal(target.disabled, false);
+    return target.onclick();
+  }
   async function answer(id, wrong = false) {
     const choices = root.querySelectorAll("[data-english-choice]");
     const selected = choices.find(el => wrong ? el.dataset.englishChoice !== id : el.dataset.englishChoice === id);
@@ -106,7 +114,8 @@ function harness(options = {}) {
     if (!root.querySelector("#english-listen-only")) { click("english-next"); await audio.complete(); }
     assert.ok(root.querySelector("#english-listen-only"), "Lesson should reach its optional speaking step");
   }
-  return { app, audio, root, database, commits, reviews, plays, exits, syncs, button, click, answer, reachRecall,
+  return { app, audio, root, database, commits, reviews, plays, exits, syncs, scrolls, button, click, clickData, answer, reachRecall,
+    scrollTo: top => { context.scrollY = top; }, getScroll: () => context.scrollY,
     selectDaily: context.ChenchenEnglish.selectDaily, leave: () => { active = false; app.stop(); } };
 }
 
@@ -136,6 +145,59 @@ test("daily plan honors hidden cards, future reviews and today's distinct comple
   assert.equal(h.selectDaily(curriculum.items, state, today).length, 0);
 });
 
+test("English opens the complete unified library without starting audio or a daily lesson", async () => {
+  const h = harness();
+  await h.app.open();
+  const cards = h.root.querySelectorAll("[data-english-card]");
+  assert.equal(cards.length, 87);
+  assert.deepEqual(cards.map(card => card.dataset.englishCard), curriculum.items.map(item => item.id));
+  assert.equal(h.root.querySelectorAll("[data-english-mode]").length, 0);
+  assert.equal(h.root.querySelector("#english-daily"), null);
+  assert.equal(h.root.querySelector("#english-picture"), null);
+  assert.equal(h.plays.length, 0);
+  assert.equal(h.syncs.length, 0);
+  assert.equal(h.commits.length, 0);
+});
+
+test("theme filtering includes both vocabulary sources and returning from a card restores its list position", async () => {
+  const h = harness();
+  await h.app.open();
+  await h.clickData("data-english-theme", "food");
+  const expected = curriculum.items.filter(item => item.theme === "food");
+  assert.equal(new Set(expected.map(item => item.source)).size, 2, "Fixture should cover both old groups");
+  assert.deepEqual(h.root.querySelectorAll("[data-english-card]").map(card => card.dataset.englishCard), expected.map(item => item.id));
+  h.scrollTo(640);
+  await h.clickData("data-english-card", "english-water");
+  assert.equal(h.getScroll(), 0, "Card detail should start at the top");
+  assert.equal(h.root.querySelectorAll("[data-english-card]").length, 0);
+  assert.ok(h.root.querySelector("#english-word-play"));
+  assert.equal(h.audio.pending, true);
+  await h.click("english-back");
+  await flush();
+  assert.equal(h.getScroll(), 640);
+  assert.equal(h.audio.pending, false, "Returning to the list should stop detail audio");
+  assert.deepEqual(h.root.querySelectorAll("[data-english-card]").map(card => card.dataset.englishCard), expected.map(item => item.id));
+  await h.clickData("data-english-theme", "all");
+  assert.equal(h.root.querySelectorAll("[data-english-card]").length, 87);
+  assert.equal(h.commits.length, 0, "Browsing and listening must not count as practice completion");
+});
+
+test("reading the homepage daily summary does not interrupt a live lesson", async () => {
+  const h = harness();
+  await h.app.open({ itemId: "english-cat" });
+  const before = h.root.innerHTML, plays = h.plays.length, syncs = h.syncs.length;
+  const summary = await h.app.getDailySummary();
+  assert.deepEqual(copy(summary), { remaining: 3, count: 0 });
+  assert.equal(h.root.innerHTML, before);
+  assert.equal(h.plays.length, plays);
+  assert.equal(h.syncs.length, syncs);
+  assert.equal(h.audio.pending, true);
+  await h.audio.complete();
+  assert.ok(h.root.querySelectorAll("[data-english-choice]").every(choice => !choice.disabled), "Summary must not invalidate active audio callbacks");
+  assert.equal(h.commits.length, 0);
+  h.leave();
+});
+
 test("listening choices remain locked until audio succeeds, including after retry", async () => {
   const h = harness();
   await h.app.open({ itemId: "english-cat" });
@@ -157,12 +219,62 @@ test("today's task is recomputed after syncing another device's completed round"
     for (const [index,id] of ["english-dog","english-cat","english-mouse"].entries()) h.database.activity[index] = {id,type:"english",day:today};
     return true;
   }});
-  await h.app.open();
-  assert.equal(h.button("english-daily").disabled,false);
-  await h.click("english-daily");
-  assert.equal(h.button("english-daily").disabled,true);
+  assert.deepEqual(copy(await h.app.getDailySummary()), { remaining: 3, count: 0 });
+  await h.app.open({ daily: true });
+  assert.equal(h.syncs.length, 1);
+  assert.ok(h.root.querySelector("#english-daily-home"));
+  assert.ok(h.root.querySelector("#english-daily-library"));
+  assert.equal(h.root.querySelector("#english-next"), null);
+  assert.deepEqual(copy(await h.app.getDailySummary()), { remaining: 0, count: 3 });
   assert.equal(h.plays.length,0);
   assert.equal(h.commits.length,0);
+  await h.click("english-daily-library");
+  assert.equal(h.root.querySelectorAll("[data-english-card]").length, 87);
+});
+
+test("daily route selects the remaining cards only after successful synchronization", async () => {
+  const syncing = deferred(), syncStarted = deferred();
+  const h = harness({ sync: () => { syncStarted.resolve(); return syncing.promise; } });
+  const opening = h.app.open({ daily: true });
+  await syncStarted.promise;
+  assert.equal(h.syncs.length, 1);
+  assert.equal(h.plays.length, 0);
+  h.database.activity.remote = { id: "english-dog", type: "english", day: today };
+  const expected = h.selectDaily(curriculum.items, h.database, today);
+  syncing.resolve(true);
+  await opening;
+  assert.match(h.root.innerHTML, /小小练习 1 \/ 2/);
+  assert.ok(h.plays[0].includes(expected[0].id + "-word"));
+  assert.equal(h.commits.length, 0);
+  h.leave();
+});
+
+test("a delayed daily start cannot replace a library opened in the meantime", async () => {
+  const syncing = deferred(), syncStarted = deferred();
+  const h = harness({ sync: () => { syncStarted.resolve(); return syncing.promise; } });
+  const opening = h.app.open({ daily: true });
+  await syncStarted.promise;
+  await h.app.open();
+  await h.clickData("data-english-theme", "fruit");
+  const library = h.root.innerHTML;
+  syncing.resolve(true);
+  await opening;
+  assert.equal(h.root.innerHTML, library);
+  assert.equal(h.plays.length, 0);
+  assert.equal(h.commits.length, 0);
+});
+
+test("daily route rests when nothing is due even if no words were practiced today", async () => {
+  const h = harness();
+  for (const item of curriculum.items) h.database.items[item.id] = { id: item.id, learned: true, nextReview: "2026-10-07" };
+  assert.deepEqual(copy(await h.app.getDailySummary()), { remaining: 0, count: 0 });
+  await h.app.open({ daily: true });
+  assert.ok(h.root.querySelector("#english-daily-home"));
+  assert.equal(h.root.querySelector("#english-next"), null);
+  assert.equal(h.plays.length, 0);
+  assert.equal(h.commits.length, 0);
+  await h.click("english-daily-home");
+  assert.deepEqual(h.exits, ["home"]);
 });
 
 test("learn and sentence playback can recover through retry or a relevant replay button", async () => {

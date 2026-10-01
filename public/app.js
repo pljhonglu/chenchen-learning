@@ -324,7 +324,7 @@
       if (btn.dataset.nav === map[name]) btn.setAttribute("aria-current", "page");
       else btn.removeAttribute("aria-current");
     });
-    window.scrollTo({ top: 0, behavior: ["write", "write-detail", "poems", "poem-detail"].includes(name) ? "instant" : "smooth" });
+    window.scrollTo({ top: 0, behavior: ["write", "write-detail", "poems", "poem-detail", "english"].includes(name) ? "instant" : "smooth" });
   }
 
   // ---------- Home / Review ----------
@@ -500,14 +500,39 @@
         <button class="subject-card subject-math" data-go="math"><span class="subject-drawing math-drawing" aria-hidden="true"><i>2</i><i>＋</i><i>3</i></span><span class="subject-text"><strong>玩数学</strong><small>数一数 · 想一想</small></span><span class="subject-arrow">↗</span></button>
         <button class="subject-card subject-pinyin" data-go="pinyin"><span class="subject-drawing pinyin-drawing" aria-hidden="true"><i>a</i><i>o</i><i>e</i></span><span class="subject-text"><strong>读拼音</strong><small>张开嘴 · 读一读</small></span><span class="subject-arrow">↗</span></button>
         <button class="subject-card subject-write" data-go="write"><span class="subject-drawing write-drawing" aria-hidden="true"><i>大</i><span>✎</span></span><span class="subject-text"><strong>写汉字</strong><small>看一看 · 描一描</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-english" data-go="english"><span class="subject-drawing english-drawing" aria-hidden="true"><i>Aa</i><span>◖))</span></span><span class="subject-text"><strong>玩英语</strong><small>听一听 · 找一找 · 说一说</small></span><span class="subject-arrow">↗</span></button>
+        <button class="subject-card subject-english" id="home-english-daily" disabled><span class="subject-drawing english-drawing" aria-hidden="true"><i>Aa</i><span>◖))</span></span><span class="subject-text"><strong>复习今日英语</strong><small id="home-english-status">准备今日词卡…</small></span><span class="subject-arrow" aria-hidden="true">↗</span></button>
       </div>
       <section class="today-card"><div class="today-intro"><span class="today-tag">TODAY'S LITTLE STEPS</span><h2>今天，和它们见个面</h2><p>${due.length ? "小兔按记忆间隔，找到了今天的复习内容" : learned.length ? "今天没有到期内容，休息也是成长" : "请爸爸妈妈把课上学过的内容记下来"}</p></div><div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>今天不用再复习啦</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}</div></section>`;
     document.getElementById("start-review").onclick = startReview;
+    const dailyEnglish = document.getElementById("home-english-daily");
+    dailyEnglish.onclick = startDailyEnglish;
+    void updateHomeEnglishDaily(dailyEnglish);
     document.getElementById("home-guide").onclick = () => speakGuide("小兔会帮你安排今天到期的复习。点开始复习，把课上学过的再想一想。复习完就休息，慢慢来。");
     document.getElementById("home-setup")?.addEventListener("click", openParent);
     el.querySelectorAll("[data-go]").forEach(btn => btn.onclick = () => navigate(btn.dataset.go));
     el.querySelectorAll("[data-review]").forEach(btn => btn.onclick = () => { reviewSession = {items:[getItem(btn.dataset.review)],index:0}; openReviewItem(btn.dataset.review,btn.dataset.type); });
+  }
+
+  async function updateHomeEnglishDaily(button) {
+    const active = () => currentView === "home" && document.getElementById("home-english-daily") === button;
+    try {
+      const {remaining, count} = await getEnglishModule().getDailySummary();
+      if (!active()) return;
+      button.disabled = !remaining;
+      document.getElementById("home-english-status").textContent = remaining ? `今日 ${remaining} 个词` : count ? "今日已完成 ✓" : "今天没有待复习";
+    } catch (_) {
+      if (!active()) return;
+      button.disabled = false;
+      document.getElementById("home-english-status").textContent = "听一听 · 找一找 · 说一说";
+    }
+  }
+
+  function startDailyEnglish() {
+    if (!stateReady) return;
+    showingCelebration = false;
+    reviewSession = null;
+    showView("english");
+    return getEnglishModule().open({daily:true});
   }
 
   function customPoemFromForm(form) {

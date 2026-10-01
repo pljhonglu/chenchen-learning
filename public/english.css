@@ -3,14 +3,6 @@
 .english-drawing { position:relative; color:#a47d45; }
 .english-drawing i { font:italic 44px Georgia,serif; }
 .english-drawing span { position:absolute; right:0; bottom:0; font-size:20px; }
-.english-hero { display:grid; grid-template-columns:1.15fr 1fr; align-items:center; gap:28px; padding:42px 46px; background:#f0eedf; border:1px solid #e4e3d4; border-radius:30px; overflow:hidden; }
-.english-hero h1 { font-size:38px; letter-spacing:2px; margin:10px 0 16px; }
-.english-intro { color:#79836b; line-height:1.9; margin-bottom:25px; }
-.english-hero-note { font-size:12px; color:#818570; margin:12px 0 7px; }
-.english-hero-pictures { display:flex; align-items:center; justify-content:center; padding:14px; }
-.english-hero-pictures > div { width:60%; flex-shrink:0; background:#fff9eb; border:8px solid #fffdf6; border-radius:23px; box-shadow:0 10px 25px #62653c10; transform:rotate(-7deg); text-align:center; overflow:hidden; }
-.english-hero-pictures > div + div { width:43%; transform:translate(-12px,27px) rotate(10deg); }
-.english-hero-pictures > div > span:last-child { display:block; padding:3px 5px 10px; font:italic 14px Georgia,serif; color:#8c826a; }
 .english-art { display:block; width:100%; aspect-ratio:1; background-color:#fff9eb; background-repeat:no-repeat; border-radius:18px; overflow:hidden; }
 .english-art-missing { display:grid; place-items:center; padding:15px; color:var(--muted); font-size:13px; }
 .english-color { display:grid; place-items:center; }
@@ -20,16 +12,11 @@
 .english-soundbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:13px 4px 19px; font-size:12px; color:#858b79; min-height:28px; }
 .english-soundbar button { font-size:12px; min-height:35px; }
 .english-error { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; background:#f8ebe3; border-radius:16px; padding:15px; margin-bottom:20px; color:#875b47; }
-.english-family-note { display:flex; gap:16px; align-items:center; padding:21px 25px; background:#edf1e6; border-radius:20px; margin:20px 0 35px; font-size:13px; color:#7b8470; }
-.english-family-note > span { color:#9eaa7d; font-size:28px; }
-.english-family-note strong { color:#536c46; }
-.english-family-note button { margin-left:auto; white-space:nowrap; }
-.english-library-heading { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; }
-.english-library-heading h2 { font-size:23px; }
-.english-library-heading .tabs-mini { margin:0; }
-.english-library-help { font-size:13px; margin:10px 0 18px; }
-.english-themes { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px; }
-.english-themes button { border:1px solid #e0e2d4; background:transparent; border-radius:99px; padding:7px 15px; min-height:39px; color:#7d826e; font-size:13px; }
+.english-library-heading { display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.english-library-heading h1 { font-size:29px; margin:0; }
+.english-library-count { color:#929981; font-size:13px; font-weight:400; white-space:nowrap; }
+.english-themes { display:flex; gap:8px; overflow-x:auto; padding:4px 2px 10px; margin:0 -2px 15px; scrollbar-width:thin; scrollbar-color:#cbd9b9 transparent; }
+.english-themes button { flex-shrink:0; white-space:nowrap; border:1px solid #e0e2d4; background:transparent; border-radius:99px; padding:7px 15px; min-height:39px; color:#7d826e; font-size:13px; }
 .english-themes button.active { background:#e4ebd9; border-color:#cbd9b9; color:#557445; }
 .english-word-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; }
 .english-word-card { text-align:left; display:flex; flex-direction:column; position:relative; border:1px solid #e5e5d9; padding:11px 11px 18px; background:var(--card); border-radius:22px; min-width:0; }
@@ -39,8 +26,6 @@
 .english-word-card .english-word { color:#475a3e; font-size:22px; font-weight:650; line-height:1.4; }
 .english-word-card > span:nth-child(3) { font-size:13px; color:#828771; }
 .english-word-card small { color:#8d9580; font-size:10px; margin:8px 5px 0; }
-.english-word-card .english-card-play { position:absolute; right:16px; bottom:47px; color:#96a581; font-size:17px; }
-.english-footnote { color:#979b8d; font-size:11px; margin:25px 0 15px; }
 .english-detail { padding:30px 36px; }
 .english-detail-layout,.english-practice-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); align-items:center; gap:40px; }
 .english-main-picture { border:1px solid #e9e2d3; padding:9px; background:#fffaf0; border-radius:25px; width:100%; text-align:center; overflow:hidden; }
@@ -48,17 +33,22 @@
 .english-main-picture > .english-art { border-radius:18px; }
 .english-detail-copy h1 { font-size:46px; line-height:1.3; margin:8px 0 0; overflow-wrap:anywhere; }
 .english-meaning { font-size:17px; color:#8b907e; margin:9px 0 22px; }
-.english-sentence { border-left:3px solid #c7d2ad; padding:4px 0 4px 17px; margin:22px 0; }
-.english-sentence p { font-size:23px; line-height:1.5; }
-.english-sentence span { font-size:13px; color:#8d9281; }
-.english-detail .btn-row { gap:9px; }
-.english-detail .btn-row .btn { font-size:13px; padding:12px 16px; }
+.english-read-word,.english-read-meaning { display:block; text-align:left; border:0; padding:4px 0; background:transparent; }
+.english-read-word { font-size:inherit; line-height:inherit; font-weight:inherit; overflow-wrap:anywhere; }
+.english-read-word > span,.english-read-meaning > span,.english-sentence-text > i { font-size:15px; font-style:normal; font-weight:400; color:#889d70; white-space:nowrap; }
+.english-read-meaning { min-height:42px; }
+.english-sentence { display:block; width:100%; text-align:left; border:0; border-left:3px solid #c7d2ad; background:transparent; padding:7px 0 7px 17px; margin:22px 0; }
+.english-sentence > span { display:block; font-size:13px; color:#8d9281; }
+.english-sentence > .english-sentence-text { font-size:23px; line-height:1.5; color:var(--ink); margin-bottom:6px; }
+.english-detail .english-main-picture { position:relative; }
+.english-detail .english-main-picture > span:last-child { position:absolute; right:16px; bottom:16px; display:grid; place-items:center; padding:0; width:36px; height:36px; border-radius:50%; background:#fffdf0e8; font-size:16px; }
+.english-read-word:hover,.english-read-meaning:hover,.english-sentence:hover { color:#567442; }
+.english-detail .english-error { margin-top:20px; }
 .english-action { color:#75805f; padding:15px; background:#eff2e7; border-radius:14px; margin:17px 0; font-size:14px; }
 .english-content-note { color:#93917e; margin:20px 0; font-size:12px; }
 .english-content-note summary { cursor:pointer; }
 .english-content-note p { margin-top:8px; }
 .english-practice-button { margin:23px 0 10px; }
-.english-detail-copy > .muted { font-size:12px; }
 .english-round-top { display:flex; align-items:center; gap:15px; justify-content:space-between; color:#8a917d; font-size:13px; margin:0 0 17px; }
 .english-step-dots { display:flex; gap:10px; justify-content:center; margin:0 0 24px; }
 .english-step-dots span { border-bottom:3px solid #e2e5d6; color:#a1a593; padding:8px 15px; font-size:12px; }
@@ -101,6 +91,6 @@
 .english-report td small { display:block; color:#969c89; font-size:10px; }
 .english-report-note { margin:20px 0; }
 @media(min-width:901px) { .subject-grid { grid-template-columns:repeat(5,minmax(0,1fr)); } .subject-card { padding-left:16px; padding-right:16px; } .subject-text small { font-size:11px; } .nav { gap:5px; } .nav button { padding-left:18px; padding-right:18px; } }
-@media(max-width:900px) { .english-hero { padding:28px; gap:12px; } .english-hero h1 { font-size:30px; } .english-word-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; } .english-detail-layout,.english-practice-layout { gap:24px; } .english-detail { padding:25px; } .english-detail-copy h1 { font-size:36px; } .english-family-note { flex-wrap:wrap; } }
-@media(max-width:600px) { .english-hero { grid-template-columns:1fr; padding:25px; position:relative; } .english-hero h1 { font-size:29px; } .english-hero-pictures { display:none; } .english-intro { font-size:14px; margin-bottom:19px; } .english-hero-note { font-size:11px; } .english-family-note { padding:17px; gap:9px; font-size:12px; margin-bottom:26px; } .english-family-note > span { display:none; } .english-family-note button { margin-left:0; } .english-library-heading h2 { font-size:21px; } .english-library-heading .tabs-mini { width:100%; } .english-library-heading .tabs-mini button { flex:1; } .english-word-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .english-word-card { padding:8px 8px 14px; border-radius:19px; } .english-word-card .english-word { font-size:20px; } .english-word-card small { font-size:9px; } .english-themes { gap:7px; } .english-themes button { padding:6px 12px; font-size:12px; } .english-detail { padding:18px; } .english-detail-layout,.english-practice-layout { grid-template-columns:1fr; gap:19px; } .english-main-picture { max-width:290px; margin:auto; display:block; } .english-detail-copy h1 { font-size:34px; } .english-detail-copy .eyebrow { margin-top:6px; } .english-meaning { margin-bottom:14px; } .english-sentence { margin:16px 0; } .english-detail-copy .btn-row .btn { font-size:12px; padding:11px 14px; } .english-practice { padding:20px 15px; } .english-practice-heading h1 { font-size:24px; } .english-practice-heading .eyebrow { font-size:10px; } .english-step-dots { gap:3px; margin-bottom:17px; } .english-step-dots span { padding:7px 5px; font-size:10px; flex:1; text-align:center; } .english-round-top { font-size:11px; } .english-choices { gap:8px; } .english-choice { padding:3px; border-width:2px; border-radius:14px; } .english-choice .english-art { border-radius:9px; } .english-choice > span:last-child { margin:4px auto; width:21px; height:21px; font-size:11px; } .english-feedback { font-size:13px; } .english-practice-copy { text-align:center; } .english-practice-copy h2 { font-size:27px; } .english-practice-copy .btn-row { justify-content:center; } .english-practice-copy .english-next,.english-listen-only { margin-left:auto; margin-right:auto; } .english-practice-copy .english-turn { margin-top:15px; } .english-report { padding:20px 16px; } .english-report h1 { font-size:23px; } .english-finish { padding:30px 20px; } .english-finish h1 { font-size:27px; } }
+@media(max-width:900px) { .english-word-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; } .english-detail-layout,.english-practice-layout { gap:24px; } .english-detail { padding:25px; } .english-detail-copy h1 { font-size:36px; } }
+@media(max-width:600px) { .english-library-heading h1 { font-size:25px; } .english-word-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .english-word-card { padding:8px 8px 14px; border-radius:19px; } .english-word-card .english-word { font-size:20px; } .english-word-card small { font-size:9px; } .english-themes { gap:7px; } .english-themes button { padding:6px 12px; font-size:12px; } .english-detail { padding:18px; } .english-detail-layout,.english-practice-layout { grid-template-columns:1fr; gap:19px; } .english-main-picture { max-width:290px; margin:auto; display:block; } .english-detail-copy h1 { font-size:34px; } .english-meaning { margin-bottom:14px; } .english-sentence { margin:16px 0; } .english-practice { padding:20px 15px; } .english-practice-heading h1 { font-size:24px; } .english-practice-heading .eyebrow { font-size:10px; } .english-step-dots { gap:3px; margin-bottom:17px; } .english-step-dots span { padding:7px 5px; font-size:10px; flex:1; text-align:center; } .english-round-top { font-size:11px; } .english-choices { gap:8px; } .english-choice { padding:3px; border-width:2px; border-radius:14px; } .english-choice .english-art { border-radius:9px; } .english-choice > span:last-child { margin:4px auto; width:21px; height:21px; font-size:11px; } .english-feedback { font-size:13px; } .english-practice-copy { text-align:center; } .english-practice-copy h2 { font-size:27px; } .english-practice-copy .btn-row { justify-content:center; } .english-practice-copy .english-next,.english-listen-only { margin-left:auto; margin-right:auto; } .english-practice-copy .english-turn { margin-top:15px; } .english-report { padding:20px 16px; } .english-report h1 { font-size:23px; } .english-finish { padding:30px 20px; } .english-finish h1 { font-size:27px; } }
 @media(max-width:520px) { .nav { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0; } .nav button { min-width:0; padding-left:2px; padding-right:2px; } .nav button > span:last-child { font-size:11px; } .nav .letter-ico { font-size:23px; } }

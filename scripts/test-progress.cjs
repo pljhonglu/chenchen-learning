@@ -11,7 +11,7 @@ const instrumented = source.replace(/\}\)\(\);\s*$/, `
 globalThis.subject = {
  loadState, getItem, markLearned, removeClassroomItem, reviewPatch, recordPractice,
  todayStr, addDays, dueItems, syncNow, commitOperations, completePractice,
- navigate, bindSessionExit, openReviewItem, startReview, renderHome,
+ navigate, bindSessionExit, openReviewItem, startReview, renderHome, updateHomeEnglishDaily,
  writingCharacters, openWriteCharacter, openParent, initializePage, customPoemFromForm, renderPoems, renderPoemDetail, openPoemFromList,
  setPoemFilter: value => poemFilter=value,
  getPoemQuery: () => poemQuery,
@@ -570,6 +570,76 @@ test('initial connection failure has a retry and cannot report successful practi
   await t.completePractice('pinyin-basic','remember',{type:'pinyin'});assert.equal(Object.keys(t.loadState().activity).length,0);
   assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
   const retry=e.element('retry-connection').onclick();(await e.nextRequest()).reply();await retry;assert.equal(t.isReady(),true);
+});
+
+test('home English tile opens today directly and clears the unrelated shared review',async()=>{
+  const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;
+  await e.connect();const opened=[];
+  e.context.window.ChenchenEnglish={create:()=>({
+    getDailySummary:async()=>({remaining:4,count:6}),open:options=>opened.push(options),stop:()=>{},pause:()=>{},
+  })};
+  t.setView('home');await t.renderHome();await flush();
+  assert.match(e.element('home-content').innerHTML,/id="home-english-daily"/);
+  assert.match(e.element('home-content').innerHTML,/<strong>复习今日英语<\/strong>/);
+  assert.doesNotMatch(e.element('home-content').innerHTML,/<strong>玩英语<\/strong>/);
+  assert.equal(e.element('home-english-status').textContent,'今日 4 个词');
+  assert.equal(e.element('home-english-daily').disabled,false);
+  assert.equal(opened.length,0,'Reading the daily summary must not start a lesson');
+  const before=e.db();t.setSession({items:[item],index:0});
+  await e.element('home-english-daily').onclick();
+  assert.equal(t.getView(),'english');assert.deepEqual(copy(opened),[{daily:true}]);
+  assert.equal(t.getSession(),null,'The home daily lesson must not retain an unrelated shared review');
+  assert.deepEqual(e.db(),before);assert.ok(e.requests.every(request=>request.method==='GET'));
+});
+
+test('normal English navigation continues to open the card library',async()=>{
+  const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;
+  await e.connect();const opened=[];
+  e.context.window.ChenchenEnglish={create:()=>({open:options=>opened.push(options),stop:()=>{},pause:()=>{}})};
+  t.setSession({items:[item],index:0});t.navigate('english');
+  assert.equal(t.getView(),'english');assert.equal(t.getSession(),null);
+  assert.equal(opened.length,1);assert.equal(opened[0],undefined,'The navigation tab must not start the daily lesson');
+  assert.ok(e.requests.every(request=>request.method==='GET'));
+});
+
+test('home English rest states stay quiet and a failed summary leaves a retryable entry',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const opened=[];
+  let summary={remaining:0,count:6};
+  e.context.window.ChenchenEnglish={create:()=>({
+    getDailySummary:async()=>{if(summary instanceof Error)throw summary;return summary;},
+    open:options=>opened.push(options),stop:()=>{},pause:()=>{},
+  })};
+  t.setView('home');await t.renderHome();await flush();
+  const button=e.element('home-english-daily');
+  assert.equal(button.disabled,true);assert.equal(e.element('home-english-status').textContent,'今日已完成 ✓');
+  summary={remaining:0,count:0};await t.updateHomeEnglishDaily(button);
+  assert.equal(button.disabled,true);assert.equal(e.element('home-english-status').textContent,'今天没有待复习');
+  assert.equal(opened.length,0);assert.ok(e.requests.every(request=>request.method==='GET'));
+  summary=new Error('temporarily unavailable');await t.updateHomeEnglishDaily(button);
+  assert.equal(button.disabled,false,'A summary failure must allow the lesson to retry loading');
+  await button.onclick();assert.deepEqual(copy(opened),[{daily:true}]);
+  assert.ok(e.requests.every(request=>request.method==='GET'));
+});
+
+test('late English summaries cannot alter another page or a replacement home tile',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const replies=[];
+  e.context.window.ChenchenEnglish={create:()=>({
+    getDailySummary:()=>new Promise(resolve=>replies.push(resolve)),open:()=>assert.fail('Summary must not open a lesson'),stop:()=>{},pause:()=>{},
+  })};
+  t.setView('home');await t.renderHome();
+  const oldButton=e.element('home-english-daily'),status=e.element('home-english-status');
+  oldButton.disabled=true;status.textContent='waiting on the old home';
+  t.navigate('poems');replies.shift()({remaining:4,count:6});await flush();
+  assert.equal(t.getView(),'poems');assert.equal(oldButton.disabled,true);
+  assert.equal(status.textContent,'waiting on the old home');
+  t.setView('home');const oldUpdate=t.updateHomeEnglishDaily(oldButton);
+  const replacement={...oldButton,disabled:true};e.elements.set('home-english-daily',replacement);
+  status.textContent='waiting on the current home';replies.shift()({remaining:5,count:6});await oldUpdate;
+  assert.equal(replacement.disabled,true);assert.equal(oldButton.disabled,true);
+  assert.equal(status.textContent,'waiting on the current home','An old summary must not overwrite a newly rendered home');
+  const currentUpdate=t.updateHomeEnglishDaily(replacement);replies.shift()({remaining:2,count:6});await currentUpdate;
+  assert.equal(replacement.disabled,false);assert.equal(status.textContent,'今日 2 个词');
+  assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
 test('English saved completion advances the shared review once without writing progress twice',async()=>{
