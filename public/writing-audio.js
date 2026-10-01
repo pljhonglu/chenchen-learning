@@ -1,9 +1,10 @@
-/* Bundled Mandarin stroke announcements; no device speech or remote service. */
+/* Bundled Mandarin strokes and vocabulary; no device speech or remote service. */
 (function (global) {
   "use strict";
 
   const PLAYBACK_TIMEOUT_MS = 20000;
   const clipPath = index => `/audio/writing/stroke-${String(index).padStart(2, "0")}.mp3`;
+  const READING_ID = /^(?:char-[0-9a-f]{4,6}|word-[0-9a-f]{4,6}(?:-[0-9a-f]{4,6})*)$/;
 
   function audioError(name, message) {
     const error = new Error(message);
@@ -59,6 +60,18 @@
       if (!Number.isInteger(index) || index < 1 || index > 20) {
         return Promise.reject(audioError("RangeError", "Stroke number must be an integer from 1 to 20."));
       }
+      return playSource(clipPath(index), signal);
+    }
+
+    function playReading(id, signal) {
+      if (destroyed) return Promise.reject(audioError("InvalidStateError", "Writing audio player was destroyed."));
+      if (typeof id !== "string" || !READING_ID.test(id)) {
+        return Promise.reject(audioError("RangeError", "Invalid writing vocabulary recording ID."));
+      }
+      return playSource(`/audio/writing-vocabulary/${id}.mp3`, signal);
+    }
+
+    function playSource(src, signal) {
       if (signal && signal.aborted) return Promise.reject(audioError("AbortError", "Writing narration aborted."));
       if (setupError) return Promise.reject(setupError);
       stop();
@@ -77,7 +90,7 @@
         }, PLAYBACK_TIMEOUT_MS);
 
         try {
-          audio.src = clipPath(index);
+          audio.src = src;
           // Keep this synchronous with the click that requested playback.
           // Fetching a manifest or awaiting anything here loses user activation.
           const playback = audio.play();
@@ -102,7 +115,7 @@
       }
     }
 
-    return { playStroke, stop, destroy };
+    return { playStroke, playReading, stop, destroy };
   }
 
   global.ChenchenWritingAudio = { create };

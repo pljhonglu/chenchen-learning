@@ -30,6 +30,7 @@ jobs:
           node --check public/speech.js
           node --check public/english.js
           node --check public/english-audio.js
+          node --check public/writing-vocabulary.js
           node --check public/writing-audio.js
           node --check public/writing-strokes.js
           node scripts/test-progress.cjs

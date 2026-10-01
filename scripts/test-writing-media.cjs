@@ -17,50 +17,83 @@ const curriculum = vm.runInNewContext(`(${literal[1]})`, Object.create(null), { 
 const strokes = json('data/writing-strokes.json').characters;
 const audio = json('data/writing-audio.json');
 const characters = new Set(curriculum.map(item => item.c));
+const vocabularyWindow = {};
+vm.runInNewContext(text('writing-vocabulary.js'), { window: vocabularyWindow }, { timeout: 1000 });
+const vocabulary = vocabularyWindow.ChenchenWritingVocabulary;
+const vocabularyAudio = json('data/writing-vocabulary-audio.json');
 
 assert.equal(curriculum.length, 150, 'Expected 150 selectable characters');
 assert.equal(characters.size, 150, 'Duplicate characters in writing curriculum');
-const levelSizes = { starter: 24, explore: 36, everyday: 90 };
-for (const [level, count] of Object.entries(levelSizes)) {
-  assert.equal(curriculum.filter(item => item.level === level).length, count, `${level}: wrong collection size`);
-}
-const originalCollections = {
-  starter: '一二三四五十人大小口子女日月水火山石田木上下土天',
-  explore: '六七八九百左右中入出回目耳手足牙心米禾竹花草牛羊马鸟虫鱼白云雨风门车书本',
-};
-for (const [level, originalCharacters] of Object.entries(originalCollections)) {
-  for (const c of originalCharacters) {
-    assert.ok(characters.has(c), `Original character ${c} was lost`);
-    assert.equal(curriculum.find(item => item.c === c).level, level, `${c}: original collection changed`);
-  }
-}
+const originalCharacters = '一二三四五十人大小口子女日月水火山石田木上下土天六七八九百左右中入出回目耳手足牙心米禾竹花草牛羊马鸟虫鱼白云雨风门车书本妈爸爷奶哥姐弟妹我你他她好爱家朋友学文字写画读课校师生同桌笔尺包开关来去走跑坐立看听说笑吃喝玩洗东西南北前后里外多少长短高低早晚春夏秋冬星光电雪河海林叶果红黄蓝绿黑瓜豆茶蛋饭肉面衣';
+assert.deepEqual(Array.from(characters).sort(), Array.from(originalCharacters).sort(), 'The original 150-character collection must be preserved');
 for (const item of curriculum) {
   assert.equal(Array.from(item.c).length, 1, `Not a single character: ${item.c}`);
-  assert.ok(Object.hasOwn(levelSizes, item.level), `${item.c}: unknown collection ${item.level}`);
-  for (const key of ['group', 'example', 'tip']) assert.ok(item[key]?.trim(), `${item.c}: missing ${key}`);
+  assert.ok(item.tip?.trim(), `${item.c}: missing shape hint`);
   assert.ok(strokes[item.c], `${item.c}: missing bundled stroke data`);
   assert.match(item.strokes, /^\d+\s*画/, `${item.c}: missing readable stroke count`);
   assert.equal(Number.parseInt(item.strokes, 10), strokes[item.c].strokeCount, `${item.c}: displayed stroke count disagrees with drawing`);
 }
 
-// Keep the family-facing character table synchronized with the actual choices,
-// including examples and shape tips, without depending on the order of rows.
-const curriculumDoc = fs.readFileSync(path.join(__dirname, '../docs/writing-curriculum.md'), 'utf8');
-const documented = curriculumDoc.split(/\r?\n/).filter(line => /^\|\s*\p{Script=Han}\s*\|/u.test(line)).map(line => {
-  const cells = line.trim().slice(1, -1).split('|').map(cell => cell.trim());
-  assert.equal(cells.length, 5, `${cells[0]}: expected c / level / group / example / tip table columns`);
-  const [c, level, group, example, tip] = cells;
-  return { c, level, group, example, tip };
-});
-assert.equal(documented.length, 150, 'Curriculum document must list all 150 characters');
-assert.equal(new Set(documented.map(item => item.c)).size, 150, 'Duplicate character in curriculum document');
-assert.deepEqual(documented.map(item => item.c).sort(), Array.from(characters).sort(), 'Documented characters differ from selectable characters');
-const levelNames = { starter: ['起步', '简单起步'], explore: ['拓展', '兴趣拓展'], everyday: ['常用', '生活常用'] };
-for (const row of documented) {
-  const item = curriculum.find(character => character.c === row.c);
-  assert.ok(levelNames[item.level].includes(row.level), `${row.c}: documented collection differs from curriculum`);
-  for (const key of ['group', 'example', 'tip']) assert.equal(row[key], item[key], `${row.c}: documented ${key} differs from curriculum`);
+function checkPinyin(label, pinyin) {
+  assert.equal(typeof pinyin, 'string', `${label}: pinyin must be text`);
+  const syllables = pinyin.trim().split(/\s+/);
+  const characterCount = Array.from(label).filter(c => /\p{Script=Han}/u.test(c)).length;
+  assert.equal(syllables.length, characterCount, `${label}: expected one pinyin syllable per Han character`);
+  for (const syllable of syllables) {
+    // Diacritic tone marks and unmarked neutral-tone syllables are both valid.
+    assert.match(syllable.normalize('NFD').replace(/\p{Mark}/gu, ''), /^[a-z]+$/i, `${label}: invalid pinyin syllable ${syllable}`);
+  }
 }
+
+const vocabularyClips = new Map();
+function expectVocabularyClip(kind, label, pinyin) {
+  const suffix = Array.from(label, c => c.codePointAt(0).toString(16)).join('-');
+  const id = `${kind}-${suffix}`;
+  const previous = vocabularyClips.get(id);
+  if (previous) assert.equal(previous.pinyin, pinyin, `${label}: shared recording has conflicting readings`);
+  vocabularyClips.set(id, { text: label, pinyin, src: `/audio/writing-vocabulary/${id}.mp3` });
+}
+assert.ok(Array.isArray(vocabulary), 'Writing vocabulary array is missing');
+assert.equal(vocabulary.length, 150, 'Vocabulary must cover all 150 characters');
+const vocabularyCharacters = Array.from(vocabulary, item => item.c);
+assert.equal(new Set(vocabularyCharacters).size, 150, 'Duplicate character in writing vocabulary');
+assert.deepEqual(vocabularyCharacters.sort(), Array.from(characters).sort(), 'Vocabulary and selectable characters differ');
+for (const item of vocabulary) {
+  checkPinyin(item.c, item.pinyin);
+  expectVocabularyClip('char', item.c, item.pinyin);
+  assert.ok(Array.isArray(item.words), `${item.c}: word examples must be an array`);
+  assert.equal(item.words.length, 3, `${item.c}: expected three common words`);
+  assert.equal(new Set(item.words.map(word => word.text)).size, 3, `${item.c}: duplicate word example`);
+  for (const word of item.words) {
+    assert.ok(typeof word.text === 'string' && /^\p{Script=Han}+$/u.test(word.text), `${item.c}: word must contain Han characters`);
+    assert.ok(word.text.includes(item.c), `${item.c}: example ${word.text} does not contain its character`);
+    checkPinyin(word.text, word.pinyin);
+    expectVocabularyClip('word', word.text, word.pinyin);
+  }
+}
+assert.deepEqual(Object.keys(vocabularyAudio).sort(), Array.from(vocabularyClips.keys()).sort(), 'Vocabulary audio manifest must match every character and unique word');
+for (const [id, expected] of vocabularyClips) {
+  const clip = vocabularyAudio[id];
+  for (const key of ['src', 'text', 'pinyin']) assert.equal(clip[key], expected[key], `${id}: wrong ${key}`);
+  assert.ok(typeof clip.synthesisText === 'string' && clip.synthesisText.trim(), `${id}: missing synthesis text`);
+  const bytes = fs.readFileSync(path.join(root, expected.src.slice(1)));
+  assert.ok(bytes.length > 1000, `${id}: vocabulary recording is too short or empty`);
+  assert.equal(bytes.length, clip.bytes, `${id}: vocabulary recording byte count mismatch`);
+  assert.equal(sha256(bytes), clip.sha256, `${id}: vocabulary recording hash mismatch`);
+  assert.ok(clip.durationSeconds > 0.25 && clip.durationSeconds < 20, `${id}: invalid vocabulary recording duration`);
+  assert.equal(clip.language, 'zh-CN', `${id}: vocabulary language`);
+  assert.equal(clip.synthetic, true, `${id}: missing synthetic voice disclosure`);
+}
+
+// Check the family-facing table's coverage without tying it to particular
+// column names, grouping, row order, or presentation of pinyin and words.
+const curriculumDoc = fs.readFileSync(path.join(__dirname, '../docs/writing-curriculum.md'), 'utf8');
+const documented = curriculumDoc.split(/\r?\n/).filter(line => /^\s*\|/.test(line))
+  .map(line => line.trim().split('|')[1]?.trim().replace(/[`*]/g, ''))
+  .filter(c => /^\p{Script=Han}$/u.test(c));
+assert.equal(documented.length, 150, 'Curriculum document must list all 150 characters');
+assert.equal(new Set(documented).size, 150, 'Duplicate character in curriculum document');
+assert.deepEqual(documented.sort(), Array.from(characters).sort(), 'Documented characters differ from selectable characters');
 const readme = fs.readFileSync(path.join(__dirname, '../README.md'), 'utf8');
 const writingReadme = readme.match(/## 汉字描一描\s*\n([\s\S]*?)(?=\n## |$)/)?.[1];
 assert.ok(writingReadme, 'Writing README section is missing');
@@ -130,9 +163,10 @@ for (const match of scriptTags) {
 const renderer = scripts.findIndex(src => /^vendor\/hanzi-writer-.*\.js$/.test(src));
 const player = scripts.indexOf('writing-strokes.js');
 const voice = scripts.indexOf('writing-audio.js');
+const vocabularyIndex = scripts.indexOf('writing-vocabulary.js');
 const appIndex = scripts.indexOf('app.js');
-assert.ok(renderer >= 0 && player > renderer && appIndex > player && voice >= 0 && appIndex > voice, 'Writing scripts must load their dependencies before app.js');
-for (const index of [renderer, player, voice, appIndex]) assert.doesNotMatch(scriptTags[index][0], /\sasync(?:\s|=|>)/i, 'Dependent writing scripts cannot use unordered async loading');
+assert.ok(renderer >= 0 && player > renderer && appIndex > player && voice >= 0 && appIndex > voice && vocabularyIndex >= 0 && appIndex > vocabularyIndex, 'Writing scripts must load their dependencies before app.js');
+for (const index of [renderer, player, voice, vocabularyIndex, appIndex]) assert.doesNotMatch(scriptTags[index][0], /\sasync(?:\s|=|>)/i, 'Dependent writing scripts cannot use unordered async loading');
 
 // Observe actual loader configuration with local files. This catches accidental
 // fallback to Hanzi Writer's built-in CDN without coupling to source formatting.
@@ -169,7 +203,7 @@ async function verifyLocalLoader() {
 }
 
 verifyLocalLoader().then(() => {
-  console.log(`PASS: ${characters.size} curriculum characters (24 starter / 36 explore / 90 everyday), matching documented table, ${drawingData.size} local drawings, ${Object.keys(audio).length} narration files, hashes, counts, licenses and load order`);
+  console.log(`PASS: ${characters.size} curriculum characters with pinyin and three words each, ${vocabularyClips.size} vocabulary clips, documented coverage, ${drawingData.size} local drawings, ${Object.keys(audio).length} stroke narration files, hashes, counts, licenses and load order`);
 }).catch(error => {
   console.error(error);
   process.exitCode = 1;

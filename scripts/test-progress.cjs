@@ -102,6 +102,7 @@ function environment(initial = {}) {
   for(const name of ['localStorage','sessionStorage','indexedDB']) {
     Object.defineProperty(context,name,{get(){throw new Error(`${name} must not be used`);}});
   }
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/writing-vocabulary.js'),'utf8'),context);
   vm.runInContext(instrumented,context,{filename:sourcePath});
   context.subject.setView('poems');context.subject.setPoems([]);
   return {context,subject:context.subject,requests,timers,elements,element,db:()=>copy(database),
@@ -264,6 +265,9 @@ test('custom course enrollment persists together with content and routes to the 
   const fresh=environment(e.db());await fresh.connect();assert.equal(fresh.subject.loadState().customPoems[poem.id].title,poem.title);
   fresh.subject.setSession({items:[fresh.subject.getItem(character.id)],index:0});fresh.subject.openReviewItem(character.id,'write');
   assert.equal(fresh.subject.getWritingId(),character.id);assert.match(fresh.element('write-content').innerHTML,/明 字描红画布/);
+  await fresh.element('write-finish').onclick();
+  assert.equal(fresh.element('write-paper-confirm').hidden,false);
+  assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-01','Opening paper confirmation must not save progress');
   await fresh.element('write-paper').onclick();assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-02');
   assert.equal(fresh.subject.getItem('write-basic'),null);assert.equal(fresh.subject.getItem(poem.id).nextReview,'2026-10-01');
 });
@@ -293,6 +297,20 @@ test('parent character form rejects non-single Han input and updates built-in hi
   form.elements.character.value='木';form.elements.tip.value='老师说：横短竖长';await form.onsubmit(event);
   const cards=t.writingCharacters().filter(ch=>ch.c==='木');assert.equal(cards.length,1);assert.equal(cards[0].tip,'老师说：横短竖长');
   assert.ok(t.getItem(cards[0].id));assert.equal(t.getItem('write-basic'),null);
+});
+
+test('one writing library sorts by stroke count and preserves custom identity, pronunciation and words',async()=>{
+  const character={id:'custom-classroom-mu',c:'木',strokes:'4画',tip:'老师的提示'};
+  const e=environment({customCharacters:{[character.id]:character}}),t=e.subject;await e.connect();
+  const cards=t.writingCharacters(),counts=cards.map(ch=>Number.parseInt(ch.strokes,10));
+  assert.equal(cards.length,151);assert.equal(cards[0].c,'一');assert.equal(cards.at(-1).c,'蓝');
+  assert.ok(counts.every((count,index)=>!index || count>=counts[index-1]),'Simpler stroke counts must come first');
+  const custom=cards.find(ch=>ch.id===character.id);
+  assert.equal(custom.id,character.id);assert.equal(custom.tip,'老师的提示');assert.equal(custom.pinyin,'mù');
+  assert.equal(custom.words.length,3);assert.ok(custom.words.every(word=>word.text.includes('木')));
+  t.navigate('write');assert.equal(t.getWritingId(),'write-char-4e00');
+  assert.doesNotMatch(e.element('write-content').innerHTML,/data-write-level|class="write-group"/);
+  assert.ok(e.requests.every(request=>request.method==='GET'),'Opening the expanded library must not enroll or complete anything');
 });
 
 test('course deletion removes custom data and 120 history entries without exceeding PATCH limits',async()=>{

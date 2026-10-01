@@ -259,3 +259,74 @@ test("missing browser Audio support reports a rejected Promise and can be destro
   h.player.destroy();
   assert.equal(h.timers.size, 0);
 });
+
+test("character and word readings start synchronously and use local MP3 paths", async () => {
+  const h = harness();
+  const audio = h.recordings[0];
+  const character = h.player.playReading("char-4e00");
+  assert.equal(audio.src, "/audio/writing-vocabulary/char-4e00.mp3");
+  assert.equal(audio.playCalls, 1);
+  audio.emit("ended");
+  await character;
+  const word = h.player.playReading("word-4e00-4e2a");
+  assert.equal(audio.src, "/audio/writing-vocabulary/word-4e00-4e2a.mp3");
+  assert.equal(audio.playCalls, 2);
+  audio.emit("ended");
+  await word;
+  assert.equal(h.recordings.length, 1);
+  assert.equal(h.timers.size, 0);
+});
+
+test("reading IDs reject remote URLs, traversal, unknown kinds, and malformed codepoints", async () => {
+  const h = harness();
+  for (const invalid of [null, undefined, 1, "", "stroke-01", "char-1", "char-4E00", "char-4e00-4e2a",
+    "word-", "word-4e00-", "word--4e00", "char-4e00.mp3", "../char-4e00", "char-4e00?x=1",
+    "char-4e00/../x", "https://example.com/char-4e00", "word-%2e%2e"]) {
+    await assert.rejects(h.player.playReading(invalid), { name: "RangeError" });
+  }
+  assert.equal(h.recordings[0].playCalls, 0);
+  assert.equal(h.timers.size, 0);
+});
+
+test("switching between stroke and vocabulary cancels the old clip on the same element", async () => {
+  const h = harness();
+  const strokeRejected = assert.rejects(h.player.playStroke(1), { name: "AbortError" });
+  const oldEnd = [...h.recordings[0].listeners.get("ended")][0];
+  const readingRejected = assert.rejects(h.player.playReading("char-4e00"), { name: "AbortError" });
+  await strokeRejected;
+  oldEnd();
+  const stroke = h.player.playStroke(2);
+  await readingRejected;
+  assert.equal(h.recordings.length, 1);
+  assert.equal(h.recordings[0].src, "/audio/writing/stroke-02.mp3");
+  h.recordings[0].emit("ended");
+  await stroke;
+});
+
+test("readings honor abort, stop, and permanent destruction", async () => {
+  const h = harness();
+  const controller = new AbortController();
+  const abortRejected = assert.rejects(h.player.playReading("char-4e00", controller.signal), { name: "AbortError" });
+  controller.abort();
+  await abortRejected;
+  const stopRejected = assert.rejects(h.player.playReading("word-4e00-4e2a"), { name: "AbortError" });
+  h.player.stop();
+  await stopRejected;
+  const destroyRejected = assert.rejects(h.player.playReading("char-4e00"), { name: "AbortError" });
+  h.player.destroy();
+  await destroyRejected;
+  await assert.rejects(h.player.playReading("char-4e00"), { name: "InvalidStateError" });
+  assert.equal(h.recordings[0].listenerCount(), 0);
+  assert.equal(h.timers.size, 0);
+});
+
+test("readings report playback refusal and timeout just like stroke announcements", async () => {
+  const blocked = Object.assign(new Error("Tap required"), { name: "NotAllowedError" });
+  const h = harness({ play: audio => audio.playCalls === 1 ? Promise.reject(blocked) : new Promise(() => {}) });
+  await assert.rejects(h.player.playReading("char-4e00"), { name: "NotAllowedError" });
+  const timeout = assert.rejects(h.player.playReading("word-4e00-4e2a"), { name: "TimeoutError" });
+  await h.advance(20000);
+  await timeout;
+  assert.equal(h.recordings[0].listenerCount(), 0);
+  assert.equal(h.timers.size, 0);
+});
