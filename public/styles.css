@@ -1318,6 +1318,7 @@ button[hidden],*[hidden] {
 }
 
 .math-opts button {
+  position:relative;
   background:#f5f6ed;
   border:2px solid #e1e7d4;
   border-radius:22px;
@@ -1331,15 +1332,169 @@ button[hidden],*[hidden] {
 }
 
 .math-opts button.correct {
-  background:#e0ebd2;
-  border-color:#8aa26f;
+  background:#dcefdc;
+  border-color:#397541;
+  color:#285f30;
   opacity:1;
 }
 
 .math-opts button.wrong {
-  background:#f8e7dc;
-  border-color:#d2ae92;
+  background:#ffebe5;
+  border-color:#bd4c3a;
+  color:#9b392d;
   opacity:1;
+}
+
+.math-option-mark {
+  position:absolute;
+  top:7px;
+  right:7px;
+  display:grid;
+  place-items:center;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  background:#397541;
+  color:#fff;
+  font-size:22px;
+  line-height:1;
+}
+
+.wrong .math-option-mark {
+  background:#bd4c3a;
+}
+
+.math-verdict {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  padding:10px 14px;
+  border-radius:18px;
+  font-size:24px;
+  line-height:1.2;
+  letter-spacing:0;
+}
+
+.math-verdict.is-correct {
+  background:#e1efda;
+  color:#285f30;
+}
+
+.math-verdict.is-wrong {
+  background:#ffebe5;
+  color:#9b392d;
+}
+
+.math-verdict>span {
+  display:grid;
+  place-items:center;
+  flex:none;
+  width:44px;
+  height:44px;
+  border-radius:50%;
+  background:#397541;
+  color:#fff;
+  font-size:34px;
+  font-weight:700;
+}
+
+.math-verdict.is-wrong>span {
+  background:#bd4c3a;
+}
+
+.math-feedback-visual {
+  max-width:350px;
+  margin:22px auto 0;
+}
+
+.math-answer-result {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  min-width:0;
+  padding:12px 0 4px;
+  letter-spacing:0;
+  line-height:1;
+  vertical-align:middle;
+}
+
+.math-answer-correct,.math-answer-attempt {
+  display:inline-grid;
+  place-items:center;
+  position:relative;
+  flex:none;
+  border-radius:12px;
+  font-weight:750;
+}
+
+.math-answer-correct {
+  width:58px;
+  height:62px;
+  border:3px solid #397541;
+  background:#e1efda;
+  color:#285f30;
+  font-size:40px;
+}
+
+.math-answer-attempt {
+  width:34px;
+  height:42px;
+  border:2px solid #bd4c3a;
+  background:#ffebe5;
+  color:#9b392d;
+  font-size:26px;
+  text-decoration:line-through;
+  text-decoration-thickness:2px;
+}
+
+.math-answer-arrow {
+  color:#827c64;
+  font-size:18px;
+  font-weight:700;
+}
+
+.math-answer-mark {
+  position:absolute;
+  top:-12px;
+  right:-9px;
+  display:grid;
+  place-items:center;
+  width:25px;
+  height:25px;
+  border:2px solid #fffdf2;
+  border-radius:50%;
+  background:#397541;
+  color:#fff;
+  font-size:19px;
+  line-height:1;
+  text-decoration:none;
+}
+
+.math-answer-attempt .math-answer-mark {
+  top:-10px;
+  right:-7px;
+  width:21px;
+  height:21px;
+  background:#bd4c3a;
+  font-size:17px;
+}
+
+.math-answer-result.is-wrong .math-answer-correct {
+  width:48px;
+  height:58px;
+  font-size:36px;
+}
+
+.math-q.is-answered {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:12px;
+  font-size:clamp(28px,6vw,48px);
+  letter-spacing:1px;
 }
 
 .feedback {
@@ -1434,11 +1589,27 @@ button[hidden],*[hidden] {
   border-radius:24px;
   position:relative;
   width:320px;
+  max-width:100%;
   min-height:245px;
   padding:33px 20px 20px;
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
+}
+
+.nb-card.status-ok {
+  border-color:#397541;
+  background:#f4faed;
+}
+
+.nb-card.status-bad {
+  border-color:#ce8b76;
+}
+
+.nb-card .math-verdict {
+  width:100%;
+  margin:4px 0 18px;
 }
 
 .nb-no,.nb-mode-tag {
@@ -1472,6 +1643,13 @@ button[hidden],*[hidden] {
   min-height:53px;
 }
 
+.nb-bot,.nb-parts {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  justify-items:center;
+  gap:8px;
+}
+
 .nb-num {
   font-size:35px;
   min-width:50px;
@@ -1493,17 +1671,8 @@ button[hidden],*[hidden] {
   background:#eef3e4;
 }
 
-.nb-box.is-ok {
-  background:#e1ecd3;
-  border-color:#98af77;
-}
-
-.nb-box.is-bad {
-  background:#f8eddb;
-}
-
 .nb-fork {
-  width:130px;
+  width:100%;
   height:46px;
   margin:5px 0;
 }
@@ -2731,6 +2900,24 @@ button[hidden],*[hidden] {
   }
   .mini-success p {
     font-size:12px;
+  }
+}
+
+@media(max-width:380px) {
+  .nb-card {
+    padding-inline:12px;
+  }
+  .nb-card .math-verdict {
+    gap:8px;
+    padding-inline:10px;
+    font-size:22px;
+  }
+  .nb-card .math-answer-result.is-wrong .math-answer-correct {
+    width:44px;
+    font-size:34px;
+  }
+  .nb-card .math-answer-arrow {
+    font-size:16px;
   }
 }
 

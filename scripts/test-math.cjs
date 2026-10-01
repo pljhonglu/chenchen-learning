@@ -118,10 +118,29 @@ function harness(mode = "decomp") {
   subject.showView("math"); subject.renderMath(mode);
   const find = selector => { const result = document.querySelector(selector); assert.ok(result, `Missing element: ${selector}`); return result; };
   const click = selector => { const target = find(selector); assert.equal(target.disabled, false, `${selector} should be enabled`); target.click(); return target; };
-  function fixedBond({ mode = "decomp", blanks = { whole: false, left: false, right: true } } = {}) {
-    subject.setBond({ item: { n: 7, left: 3, right: 4, mode, blanks, answers: { whole: null, left: null, right: null }, status: "open" }, qIndex: 1, activeSlot: ["whole", "left", "right"].find(slot => blanks[slot]), checked: false });
+  function fixedBond({ n = 7, left = 3, right = n - left, mode = "decomp", blanks = { whole: false, left: false, right: true } } = {}) {
+    subject.setBond({ item: { n, left, right, mode, blanks, answers: { whole: null, left: null, right: null }, status: "open" }, qIndex: 1, activeSlot: ["whole", "left", "right"].find(slot => blanks[slot]), checked: false });
   }
   return { subject, document, timers, spoken, find, click, fixedBond, state: () => subject.state(), score: () => copy(subject.state().mathScore) };
+}
+
+// The correction must be inside the diagram or equation, beside the actual
+// attempted number. A sentence elsewhere on the page does not satisfy this.
+function assertVisualAnswer(h, { slot, expected, attempted = expected }) {
+  const selector = slot ? `.nb-bond .math-answer-result[data-slot="${slot}"]` : ".math-q .math-answer-result";
+  const result = h.find(selector);
+  const correct = attempted === expected;
+  assert.match(result.className, correct ? /\bis-correct\b/ : /\bis-wrong\b/);
+  assert.equal(result.querySelector(".math-answer-correct .math-answer-value")?.textContent, String(expected));
+  assert.equal(result.querySelector(".math-answer-correct .math-answer-mark")?.textContent, "✓");
+  if (correct) {
+    assert.equal(result.querySelector(".math-answer-attempt"), null, "A valid answer must not display a crossed-out attempt");
+    assert.equal(result.querySelector(".math-answer-arrow"), null);
+  } else {
+    assert.equal(result.querySelector(".math-answer-attempt .math-answer-value")?.textContent, String(attempted));
+    assert.equal(result.querySelector(".math-answer-attempt .math-answer-mark")?.textContent, "×");
+    assert.equal(result.querySelector(".math-answer-arrow")?.textContent, "→");
+  }
 }
 
 test("a complete number bond is checked on the final digit and waits for manual continuation", () => {
@@ -132,6 +151,9 @@ test("a complete number bond is checked on the final digit and waits for manual 
   assert.equal(h.state().mathCompleted, 1);
   assert.equal(h.state().bondSheet.checked, true);
   assert.match(h.find("#math-fb").textContent, /答对/);
+  assertVisualAnswer(h, { slot: "right", expected: 4 });
+  assert.match(h.find(".nb-card .math-verdict.is-correct").textContent, /✓/);
+  assert.equal(h.document.querySelectorAll(".nb-box").length, 0, "Answered blanks are static feedback, not disabled inputs");
   assert.equal(h.find("#math-next").hidden, false);
   assert.equal(h.find("#math-next").disabled, false);
   assert.match(h.find("#math-next").textContent, /下一题/);
@@ -152,9 +174,13 @@ test("two blanks wait for both digits and accept a valid alternative partition i
   assert.equal(h.state().bondSheet.activeSlot, "right");
   assert.equal(h.state().mathCompleted, 0);
   assert.deepEqual(h.score(), { ok: 0, total: 0 });
+  assert.equal(h.document.querySelectorAll(".math-answer-result").length, 0, "Do not mark either blank until the pair is complete");
   assert.equal(h.timers.size, 0);
   h.click('[data-n="7"]');
   assert.equal(h.state().bondSheet.item.status, "ok", "0 + 7 is valid even if the generated partition was 3 + 4");
+  assertVisualAnswer(h, { slot: "left", expected: 0 });
+  assertVisualAnswer(h, { slot: "right", expected: 7 });
+  assert.equal(h.document.querySelectorAll(".math-answer-result.is-wrong").length, 0);
   assert.deepEqual(h.score(), { ok: 1, total: 1 });
   assert.equal(h.state().bondSheet.qIndex, 1);
   assert.equal(h.timers.size, 0);
@@ -168,6 +194,9 @@ test("a wrong number bond shows the correct relationship and waits for manual co
   assert.equal(h.state().bondSheet.checked, true);
   assert.equal(h.state().bondSheet.item.answers.right, 5, "Keep the child's attempt visible for comparison");
   assert.match(h.find("#math-fb").textContent, /7\s*=\s*3\s*\+\s*4/);
+  assertVisualAnswer(h, { slot: "right", expected: 4, attempted: 5 });
+  assert.match(h.find(".nb-card .math-verdict.is-wrong").textContent, /×/);
+  assert.equal(h.document.querySelectorAll(".nb-bond .math-answer-result").length, 1, "Given numbers are not marked as attempted answers");
   assert.deepEqual(h.score(), { ok: 0, total: 1 });
   assert.equal(h.state().mathCompleted, 1);
   assert.equal(h.timers.size, 0, "An incorrect answer must never auto-advance");
@@ -178,10 +207,11 @@ test("a wrong number bond shows the correct relationship and waits for manual co
   assert.match(h.spoken.at(-1), /7 等于 3 加 4/);
   digit.onclick(); h.subject.checkBondSheet();
   assert.deepEqual(h.score(), { ok: 0, total: 1 });
-  assert.ok(h.document.querySelectorAll(".nb-box").every(button => button.disabled));
+  assert.equal(h.document.querySelectorAll(".nb-box").length, 0);
   h.click("#math-next");
   assert.equal(h.state().bondSheet.qIndex, 2);
   assert.equal(h.find("#math-next").hidden, true);
+  assert.equal(h.document.querySelectorAll(".math-answer-result").length, 0, "Do not carry the previous diagram's correction into the next question");
   assert.match(h.find("#math-read").textContent, /听题目/);
   h.click("#math-read");
   assert.doesNotMatch(h.spoken.at(-1), /正确答案/, "The next question must not read the previous correction");
@@ -191,6 +221,9 @@ test("wrong two-part answers get a valid correction that preserves a usable firs
   const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
   h.click('[data-n="2"]'); h.click('[data-n="4"]');
   assert.match(h.find("#math-fb").textContent, /7\s*=\s*2\s*\+\s*5/);
+  assertVisualAnswer(h, { slot: "left", expected: 2 });
+  assertVisualAnswer(h, { slot: "right", expected: 5, attempted: 4 });
+  assert.equal(h.document.querySelectorAll(".math-answer-result.is-wrong").length, 1, "Keep the usable first part marked correct");
   assert.equal(h.timers.size, 0);
   assert.deepEqual(h.score(), { ok: 0, total: 1 });
 });
@@ -199,6 +232,8 @@ test("a first part larger than the whole gets a valid correction without a negat
   const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
   h.click('[data-n="9"]'); h.click('[data-n="4"]');
   assert.match(h.find("#math-fb").textContent, /7\s*=\s*3\s*\+\s*4/);
+  assertVisualAnswer(h, { slot: "left", expected: 3, attempted: 9 });
+  assertVisualAnswer(h, { slot: "right", expected: 4 });
   assert.doesNotMatch(h.find("#math-fb").textContent, /-\d/);
   assert.equal(h.timers.size, 0);
 });
@@ -207,10 +242,58 @@ test("composition also checks its only blank immediately and explains an incorre
   const h = harness(); h.fixedBond({ mode: "compose", blanks: { whole: true, left: false, right: false } });
   h.click('[data-n="8"]');
   assert.match(h.find("#math-fb").textContent, /7\s*=\s*3\s*\+\s*4/);
+  assertVisualAnswer(h, { slot: "whole", expected: 7, attempted: 8 });
   assert.equal(h.state().mathCompleted, 1);
   assert.equal(h.timers.size, 0);
   h.click("#math-next");
   assert.equal(h.state().bondSheet.qIndex, 2);
+});
+
+test("an unusable first part preserves a valid alternative second part in the diagram and audio", () => {
+  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
+  h.click('[data-n="9"]'); h.click('[data-n="2"]');
+  assertVisualAnswer(h, { slot: "left", expected: 5, attempted: 9 });
+  assertVisualAnswer(h, { slot: "right", expected: 2 });
+  assert.match(h.find("#math-fb").textContent, /7\s*=\s*5\s*\+\s*2/);
+  h.click("#math-read");
+  assert.match(h.spoken.at(-1), /7 等于 5 加 2/);
+  assert.deepEqual(h.score(), { ok: 0, total: 1 });
+  assert.equal(h.timers.size, 0);
+});
+
+test("two unusable parts receive a complete valid correction with both attempts crossed out", () => {
+  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
+  h.click('[data-n="9"]'); h.click('[data-n="10"]');
+  assertVisualAnswer(h, { slot: "left", expected: 3, attempted: 9 });
+  assertVisualAnswer(h, { slot: "right", expected: 4, attempted: 10 });
+  assert.equal(h.document.querySelectorAll(".math-answer-result.is-wrong").length, 2);
+  assert.deepEqual(h.score(), { ok: 0, total: 1 });
+  assert.equal(h.timers.size, 0);
+});
+
+test("a wrong single left blank is corrected in place without changing either given number", () => {
+  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: false } });
+  h.click('[data-n="0"]');
+  assertVisualAnswer(h, { slot: "left", expected: 3, attempted: 0 });
+  assert.deepEqual(h.document.querySelectorAll(".nb-bond .nb-num").map(node => node.textContent), ["7", "4"]);
+  assert.equal(h.document.querySelectorAll(".math-answer-result").length, 1);
+  assert.equal(h.timers.size, 0);
+});
+
+test("zero and ten remain explicit numbers in correct and incorrect answer feedback", () => {
+  for (const { n, left, answer, expected } of [
+    { n: 10, left: 10, answer: 0, expected: 0 },
+    { n: 10, left: 10, answer: 1, expected: 0 },
+    { n: 10, left: 0, answer: 10, expected: 10 },
+    { n: 10, left: 0, answer: 0, expected: 10 },
+  ]) {
+    const h = harness(); h.fixedBond({ n, left });
+    h.click(`[data-n="${answer}"]`);
+    assertVisualAnswer(h, { slot: "right", expected, attempted: answer });
+    assert.equal(h.state().bondSheet.qIndex, 1);
+    assert.equal(h.find("#math-next").hidden, false);
+    assert.equal(h.timers.size, 0);
+  }
 });
 
 test("a correct addition or subtraction choice shows feedback and waits for the Next button", () => {
@@ -219,6 +302,8 @@ test("a correct addition or subtraction choice shows feedback and waits for the 
   answer.onclick();
   assert.deepEqual(h.score(), { ok: 1, total: 1 });
   assert.match(h.find("#math-fb").textContent, /答对/);
+  assertVisualAnswer(h, { expected: question.answer });
+  assert.match(answer.textContent, /✓/);
   assert.equal(h.find("#math-next").hidden, false);
   assert.equal(h.find("#math-next").disabled, false);
   assert.match(h.find("#math-next").textContent, /下一题/);
@@ -235,6 +320,9 @@ test("a wrong arithmetic choice shows the answer and advances only after the chi
   const wrong = h.document.querySelectorAll(".math-opts button").find(button => Number(button.dataset.v) !== question.answer);
   wrong.click();
   assert.match(h.find("#math-fb").textContent, new RegExp(`答案是 ${question.answer}`));
+  assertVisualAnswer(h, { expected: question.answer, attempted: Number(wrong.dataset.v) });
+  assert.match(wrong.textContent, /×/);
+  assert.match(h.find(`[data-v="${question.answer}"]`).textContent, /✓/);
   assert.equal(h.timers.size, 0);
   assert.equal(h.state().currentQ, question);
   assert.deepEqual(h.score(), { ok: 0, total: 1 });

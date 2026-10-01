@@ -1022,6 +1022,16 @@
     };
   }
 
+  function mathVerdictHtml(correct) {
+    return `<div class="math-verdict ${correct ? "is-correct" : "is-wrong"}"><span aria-hidden="true">${correct ? "✓" : "×"}</span><strong>${correct ? "答对啦！" : "这次不对哦"}</strong></div>`;
+  }
+
+  function mathAnswerHtml(value, answer, slot = "") {
+    const correct = value === answer;
+    const label = correct ? `${value}，答对了` : `填了 ${value}，正确答案是 ${answer}`;
+    return `<span class="math-answer-result ${correct ? "is-correct" : "is-wrong"}"${slot ? ` data-slot="${slot}"` : ""} role="img" aria-label="${label}">${correct ? "" : `<span class="math-answer-attempt" aria-hidden="true"><span class="math-answer-value">${value}</span><span class="math-answer-mark">×</span></span><span class="math-answer-arrow" aria-hidden="true">→</span>`}<span class="math-answer-correct" aria-hidden="true"><span class="math-answer-value">${answer}</span><span class="math-answer-mark">✓</span></span></span>`;
+  }
+
   function nbCellHtml(item, slot) {
     const isBlank = item.blanks[slot];
     const truth = item[slot === "whole" ? "n" : slot];
@@ -1030,11 +1040,10 @@
     if (!isBlank) {
       return `<span class="nb-num">${truth}</span>`;
     }
+    if (item.solution) return mathAnswerHtml(filled, item.solution[slot], slot);
     const val = filled === null || filled === undefined ? "" : String(filled);
     let cls = "nb-box";
     if (isActive) cls += " is-active";
-    if (item.status === "ok") cls += " is-ok";
-    if (item.status === "bad") cls += " is-bad";
     return `<button type="button" class="${cls}" data-slot="${slot}" aria-label="填写"${bondSheet?.checked ? " disabled" : ""}>${val || "&nbsp;"}</button>`;
   }
 
@@ -1066,6 +1075,7 @@
     return `<div class="nb-card nb-single status-${item.status}">
       <span class="nb-no">${no}</span>
       <span class="nb-mode-tag">${modeLabel}</span>
+      ${item.status === "open" ? "" : mathVerdictHtml(item.status === "ok")}
       <div class="nb-bond nb-${item.mode}">${body}</div>
     </div>`;
   }
@@ -1121,19 +1131,23 @@
     bondSheet.activeSlot = null;
     if(good) {
       item.status = "ok";
+      item.solution = {whole,left,right};
       mathScore.ok++;
       renderBondPanel();
       document.getElementById("math-fb").textContent = "答对啦！✿";
-      document.getElementById("math-fb").className = "feedback ok";
     } else {
       item.status = "bad";
-      renderBondPanel();
-      // With two blanks, keep a valid first part and show its matching part.
-      const answerLeft = item.blanks.left && item.blanks.right && left <= item.n && left >= 0 ? left : item.left;
+      // Keep a usable part in open-ended questions, then correct only its partner.
+      let answerLeft = item.left;
+      if (item.blanks.left && item.blanks.right) {
+        if (left >= 0 && left <= item.n) answerLeft = left;
+        else if (right >= 0 && right <= item.n) answerLeft = item.n - right;
+      }
       const answerRight = item.n - answerLeft;
+      item.solution = {whole:item.n,left:answerLeft,right:answerRight};
+      renderBondPanel();
       mathExplanation = `正确答案：${item.n} 等于 ${answerLeft} 加 ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。看懂了，再点下一题。`;
       document.getElementById("math-fb").textContent = `正确答案：${item.n} = ${answerLeft} + ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。`;
-      document.getElementById("math-fb").className = "feedback no";
     }
     finishMathQuestion(good);
   }
@@ -1149,7 +1163,7 @@
     panel.innerHTML = `
       <div class="nb-sheet-head">
         <div class="nb-sheet-title">10以内 · 一题一练</div>
-        <div class="nb-sheet-hint">${modeHint} · 点空格，再点数字</div>
+        <div class="nb-sheet-hint">${modeHint}${bondSheet.checked ? "" : " · 点空格，再点数字"}</div>
       </div>
       <div class="nb-single-wrap">
         ${nbCardHtml(item, bondSheet.qIndex)}
@@ -1158,7 +1172,7 @@
         ${pad}
         <button type="button" class="nb-pad-clear" id="nb-clear">清除</button>
       </div>
-      <div class="feedback" id="math-fb" role="status" aria-live="polite"></div>`;
+      <div class="${bondSheet.checked ? "sr-only" : "feedback"}" id="math-fb" role="status" aria-live="polite"></div>`;
     bindBondSheet(panel);
   }
 
@@ -1264,25 +1278,33 @@
       btn.onclick = () => {
         if (btn.disabled || mathQuestionAnswered) return;
         const v = Number(btn.dataset.v);
+        const correct = v === currentQ.answer;
         mathScore.total++;
         const fb = document.getElementById("math-fb");
         panel.querySelectorAll(".math-opts button").forEach((b) => {
           b.disabled = true;
-          if (Number(b.dataset.v) === currentQ.answer) b.classList.add("correct");
+          if (Number(b.dataset.v) === currentQ.answer) {
+            b.classList.add("correct");
+            b.innerHTML = `<span>${b.dataset.v}</span><span class="math-option-mark" aria-hidden="true">✓</span>`;
+            b.setAttribute("aria-label", `${b.dataset.v}，正确答案`);
+          }
         });
-        if (v === currentQ.answer) {
+        const {a,b,op} = currentQ.meta;
+        const equation = panel.querySelector(".math-q");
+        equation.classList.add("is-answered");
+        equation.innerHTML = `<span>${a} ${op} ${b} =</span>${mathAnswerHtml(v,currentQ.answer)}`;
+        if (correct) {
           mathScore.ok++;
-          btn.classList.add("correct");
-          fb.textContent = "答对啦！真棒 ⭐";
-          fb.className = "feedback ok";
+          fb.innerHTML = mathVerdictHtml(true);
         } else {
           btn.classList.add("wrong");
-          const {a,b,op} = currentQ.meta;
-          fb.textContent = `正确答案是 ${currentQ.answer}：${a} ${op} ${b} = ${currentQ.answer}。看懂了，再点下一题。`;
+          btn.innerHTML = `<span>${v}</span><span class="math-option-mark" aria-hidden="true">×</span>`;
+          btn.setAttribute("aria-label", `${v}，这次不对`);
+          fb.innerHTML = `${mathVerdictHtml(false)}<span class="sr-only">正确答案是 ${currentQ.answer}：${a} ${op} ${b} = ${currentQ.answer}。看懂了，再点下一题。</span>`;
           mathExplanation = `正确答案是 ${currentQ.answer}。${a} ${op === "+" ? "加" : "减"} ${b} 等于 ${currentQ.answer}。看懂了，再点下一题。`;
-          fb.className = "feedback no";
         }
-        finishMathQuestion(v === currentQ.answer);
+        fb.className = "feedback math-feedback-visual";
+        finishMathQuestion(correct);
       };
     });
   }
