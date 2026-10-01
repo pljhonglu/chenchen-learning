@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f7f6ee" />
   <meta name="color-scheme" content="light" />
-  <meta name="description" content="辰辰的复习小花园：把课上学过的古诗、数学、拼音和汉字，再轻轻复习一遍。" />
+  <meta name="description" content="辰辰的复习小花园：用图片、声音和小游戏，复习古诗、数学、拼音、汉字和英语。" />
   <title>辰辰的复习小花园</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="english.css" />
 </head>
 <body>
   <div class="app">
@@ -21,6 +22,7 @@
       <button type="button" data-nav="math"><span class="ico" aria-hidden="true">＋</span><span>玩数学</span></button>
       <button type="button" data-nav="pinyin"><span class="ico letter-ico" aria-hidden="true">a</span><span>读拼音</span></button>
       <button type="button" data-nav="write"><span class="ico" aria-hidden="true">✎</span><span>写汉字</span></button>
+      <button type="button" data-nav="english"><span class="ico letter-ico" aria-hidden="true">Aa</span><span>玩英语</span></button>
     </nav>
     <main id="main-content">
       <section class="view active" data-view="home" id="home-content" aria-label="今日复习"></section>
@@ -29,12 +31,15 @@
       <section class="view" data-view="math" id="math-content" aria-label="数学练习"></section>
       <section class="view" data-view="pinyin" id="pinyin-content" aria-label="拼音练习"></section>
       <section class="view" data-view="write" id="write-content" aria-label="写字练习"></section>
+      <section class="view" data-view="english" id="english-content" aria-label="英语小花园"></section>
     </main>
     <footer class="footer"><span aria-hidden="true">❀</span> 慢慢来，每一次想起来，都是小小的成长。</footer>
   </div>
   <dialog id="parent-dialog" class="parent-dialog" aria-labelledby="parent-title"></dialog>
   <div id="live-status" class="sr-only" aria-live="polite"></div>
   <script src="speech.js"></script>
+  <script src="english-audio.js"></script>
+  <script src="english.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

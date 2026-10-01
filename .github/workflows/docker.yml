@@ -28,9 +28,14 @@ jobs:
         run: |
           node --check public/app.js
           node --check public/speech.js
+          node --check public/english.js
+          node --check public/english-audio.js
           node scripts/test-progress.cjs
           node scripts/test-speech.cjs
           node scripts/test-poem-media.cjs
+          node scripts/test-english.cjs
+          node scripts/test-english-audio.cjs
+          node scripts/test-english-media.cjs
 
   docker:
     needs: test

@@ -213,7 +213,7 @@
   async function removeClassroomItem(id) {
     const state = loadState();
     const operations = [{op:"delete",collection:"items",key:id}];
-    if (BUILTIN_POEMS.some(poem=>poem.id===id)) operations.push({op:"set",collection:"hiddenCourses",key:id,value:{removedAt:new Date().toISOString()}});
+    if (BUILTIN_POEMS.some(poem=>poem.id===id) || id.startsWith("english-")) operations.push({op:"set",collection:"hiddenCourses",key:id,value:{removedAt:new Date().toISOString()}});
     if(state.customPoems[id]) operations.push({op:"delete",collection:"customPoems",key:id});
     if(state.customCharacters[id]) operations.push({op:"delete",collection:"customCharacters",key:id});
     await commitOperations(operations);
@@ -265,6 +265,19 @@
   let poemFilter = "all";
   let poemQuery = "";
   let selectedPoemId = null;
+  let englishModule = null;
+
+  function getEnglishModule() {
+    if (!englishModule) englishModule = window.ChenchenEnglish.create({
+      loadState, commitOperations, reviewPatch, todayStr, syncNow,
+      newItem:newClassroomItem,
+      isActive:() => currentView === "english",
+      onHome:() => navigate("home"),
+      onExit:() => navigate("english"),
+      onParent:openParent,
+    });
+    return englishModule;
+  }
 
 
   function stopSpeechSafe() {
@@ -292,9 +305,10 @@
     if (stop) stop.disabled = !(speaking || paused || loading);
   }
 
-  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write"];
+  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "english"];
 
   function showView(name) {
+    if (name !== "english") englishModule?.stop();
     if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
     document.querySelectorAll(".view").forEach((el) => {
@@ -308,6 +322,7 @@
         math: "math",
         pinyin: "pinyin",
         write: "write",
+        english: "english",
       };
       btn.classList.toggle("active", btn.dataset.nav === map[name]);
       if (btn.dataset.nav === map[name]) btn.setAttribute("aria-current", "page");
@@ -319,7 +334,7 @@
   // ---------- Home / Review ----------
   function typeIcon(type) {
     return (
-      { poem: "📜", math: "➕", decomp: "🔢", pinyin: "🔤", write: "✍️" }[type] ||
+      { poem: "📜", math: "➕", decomp: "🔢", pinyin: "🔤", write: "✍️", english:"🔊" }[type] ||
       "📌"
     );
   }
@@ -331,6 +346,7 @@
         decomp: "分解组合",
         pinyin: "拼音",
         write: "写字",
+        english: "英语",
       }[type] || type
     );
   }
@@ -429,6 +445,10 @@
     completingPractice = false;
     if (pendingPracticeAttempt === attemptAtStart) pendingPracticeAttempt = null;
     if (reviewSession !== sessionAtStart || currentView !== viewAtStart) return true;
+    return advanceReviewItem(id);
+  }
+
+  function advanceReviewItem(id) {
     if (!reviewSession || reviewSession.items[reviewSession.index]?.id !== id) { toast("一朵小花送给认真练习的你！"); return false; }
     reviewSession.index++;
     if (reviewSession.index < reviewSession.items.length) {
@@ -484,6 +504,7 @@
         <button class="subject-card subject-math" data-go="math"><span class="subject-drawing math-drawing" aria-hidden="true"><i>2</i><i>＋</i><i>3</i></span><span class="subject-text"><strong>玩数学</strong><small>数一数 · 想一想</small></span><span class="subject-arrow">↗</span></button>
         <button class="subject-card subject-pinyin" data-go="pinyin"><span class="subject-drawing pinyin-drawing" aria-hidden="true"><i>a</i><i>o</i><i>e</i></span><span class="subject-text"><strong>读拼音</strong><small>张开嘴 · 读一读</small></span><span class="subject-arrow">↗</span></button>
         <button class="subject-card subject-write" data-go="write"><span class="subject-drawing write-drawing" aria-hidden="true"><i>大</i><span>✎</span></span><span class="subject-text"><strong>写汉字</strong><small>看一看 · 描一描</small></span><span class="subject-arrow">↗</span></button>
+        <button class="subject-card subject-english" data-go="english"><span class="subject-drawing english-drawing" aria-hidden="true"><i>Aa</i><span>◖))</span></span><span class="subject-text"><strong>玩英语</strong><small>听一听 · 找一找 · 说一说</small></span><span class="subject-arrow">↗</span></button>
       </div>
       <section class="today-card"><div class="today-intro"><span class="today-tag">TODAY'S LITTLE STEPS</span><h2>今天，和它们见个面</h2><p>${due.length ? "小兔按记忆间隔，找到了今天的复习内容" : learned.length ? "今天没有到期内容，休息也是成长" : "请爸爸妈妈把课上学过的内容记下来"}</p></div><div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>今天不用再复习啦</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}</div></section>`;
     document.getElementById("start-review").onclick = startReview;
@@ -515,6 +536,7 @@
 
   async function openParent() {
     if (!stateReady) { toast("先连接服务器，才能管理课堂内容。"); return; }
+    if (currentView === "english") englishModule?.pause();
     await ensurePoems().catch(() => {});
     const dialog = document.getElementById("parent-dialog");
     const scroll = dialog.open ? dialog.scrollTop : 0;
@@ -542,6 +564,7 @@
       <h3>汉字 · 一个字一张复习卡</h3>
       <form id="custom-character-form" class="classroom-form"><div class="form-two"><label>今天学的汉字<input name="character" maxlength="2" required placeholder="如：春" /></label><label>笔画 / 笔顺 <small>可选</small><input name="strokes" maxlength="120" placeholder="如：9 画" /></label></div><label>记忆或书写提示 <small>可选</small><input name="tip" maxlength="160" placeholder="写下老师教过的小提示" /></label><p class="form-error" id="character-form-error" role="alert"></p><button class="btn btn-learn" type="submit">记录这个汉字</button></form>
       <h3>数学与拼音 · 记录已学内容</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" ${getItem(c.id)?.learned ? "disabled" : ""}><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已记录" : "+ 记录"}</span></button>`).join("")}</div>
+      <h3>英语 · 程序带着听和说</h3><p class="form-help">39 项课堂词汇与 48 项生活拓展，单词、句子和中文引导都能播放。完成小练习后加入间隔复习；生活拓展不会一次全部加入。家长无需示范发音。</p><button class="btn btn-ghost" id="parent-open-english">打开英语小花园 →</button>
       <h3>课堂记录 <span class="muted">${learned.length} 项</span></h3><div class="parent-enrolled">${learned.length ? learned.map(it=>`<div><span>${escapeHtml(it.title)}<small>${it.nextReview <= todayStr() ? "今天到期" : "下次 "+escapeHtml(it.nextReview)} · 自动安排</small></span><button class="text-btn delete-course" data-remove="${escapeHtml(it.id)}" aria-label="删除课堂内容 ${escapeHtml(it.title)}">删除</button></div>`).join("") : '<p class="muted">还没有课堂记录。先添加今天学过的一两项就好。</p>'}</div>
       <p class="parent-tip">陪练建议：古诗先回想再听示范；拼音请家长示范发音；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">记录好啦，回小花园</button>`;
     if (!dialog.open) dialog.showModal();
@@ -549,6 +572,7 @@
     const close = () => {dialog.close(); if(currentView === "home" && !showingCelebration) renderHome();};
     document.getElementById("close-parent").onclick = close;
     document.getElementById("parent-done").onclick = () => {dialog.close();navigate("home");};
+    document.getElementById("parent-open-english").onclick = () => {dialog.close();navigate("english");};
     const restorePoem = document.getElementById("restore-class-poem");
     if (restorePoem) restorePoem.onclick = async (event) => {
       const poem = POEMS.find(p=>p.id===document.getElementById("parent-poem").value);
@@ -602,7 +626,7 @@
       try {
         const removedId = button.dataset.remove;
         await removeClassroomItem(removedId);
-        if (currentView === "poem-detail" && selectedPoemId === removedId || currentView === "write" && selectedWriteId === removedId || reviewSession?.items.some(item=>item.id===removedId)) navigate("home");
+        if (currentView === "poem-detail" && selectedPoemId === removedId || currentView === "write" && selectedWriteId === removedId || currentView === "english" || reviewSession?.items.some(item=>item.id===removedId)) navigate("home");
         await openParent();toast("课堂内容已删除，后续不再安排复习。");
       }
       catch (_) {button.disabled = false;}
@@ -611,7 +635,13 @@
   }
 
   function openReviewItem(id, type) {
-    if (type === "poem") {
+    if (type === "english") {
+      const session = reviewSession;
+      showView("english");
+      getEnglishModule().open({itemId:id,onDone:() => {
+        if (currentView === "english" && reviewSession === session) advanceReviewItem(id);
+      }});
+    } else if (type === "poem") {
       selectedPoemId = id;
       showView("poem-detail");
       renderPoemDetail(id);
@@ -1365,6 +1395,7 @@
     if (v === "math") renderMath();
     if (v === "pinyin") {pyPracticed = new Set();renderPinyin();}
     if (v === "write") renderWrite();
+    if (v === "english") getEnglishModule().open();
   }
   function bindNav() {
     document.querySelectorAll(".nav button").forEach(btn=>btn.onclick=()=>navigate(btn.dataset.nav));

@@ -104,7 +104,7 @@ function environment(initial = {}) {
   }
   vm.runInContext(instrumented,context,{filename:sourcePath});
   context.subject.setView('poems');context.subject.setPoems([]);
-  return {subject:context.subject,requests,timers,elements,element,db:()=>copy(database),
+  return {context,subject:context.subject,requests,timers,elements,element,db:()=>copy(database),
     alterServer:change=>change(database),hold:value=>{holdRequests=value;},
     at:date=>{now=new Date(`${date}T01:30:00+08:00`).getTime();},connect:()=>context.subject.syncNow(),
     async nextRequest(){await flush();const request=requests.find(request=>!request.settled);assert.ok(request,'Expected pending request');return request;},
@@ -323,6 +323,23 @@ test('initial connection failure has a retry and cannot report successful practi
   await t.completePractice('pinyin-basic','remember',{type:'pinyin'});assert.equal(Object.keys(t.loadState().activity).length,0);
   assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
   const retry=e.element('retry-connection').onclick();(await e.nextRequest()).reply();await retry;assert.equal(t.isReady(),true);
+});
+
+test('English saved completion advances the shared review once without writing progress twice',async()=>{
+  const word=course('english-cat','english'),other=course('pinyin-basic','pinyin');
+  const e=environment({items:{[word.id]:word,[other.id]:other}}),t=e.subject;await e.connect();
+  const opened=[];let stops=0;
+  e.context.window.ChenchenEnglish={create:()=>({open:options=>opened.push(options),stop:()=>stops++,pause:()=>{}})};
+  t.setSession({items:[word,other],index:0});t.openReviewItem(word.id,'english');
+  assert.equal(t.getView(),'english');assert.equal(opened[0].itemId,word.id);
+  const before=e.requests.length;opened[0].onDone();
+  assert.equal(t.getView(),'pinyin');assert.equal(t.getSession().index,1);
+  assert.equal(e.requests.length,before,'English module already saved; shared router must not save twice');
+  assert.ok(stops>0);
+  t.setSession({items:[word],index:0});t.openReviewItem(word.id,'english');
+  const stale=opened[1].onDone;t.navigate('home');await flush();stale();
+  assert.equal(t.getSession(),null);assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
+  await t.removeClassroomItem(word.id);assert.ok(t.loadState().hiddenCourses[word.id]);
 });
 
 async function main(){

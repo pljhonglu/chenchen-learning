@@ -1,0 +1,589 @@
+{
+  "english-dog": {
+    "src": "/images/english/animals-and-box.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "一只坐着的金棕色小狗"
+  },
+  "english-cat": {
+    "src": "/images/english/animals-and-box.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "一只坐着的橘色小猫"
+  },
+  "english-mouse": {
+    "src": "/images/english/animals-and-box.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "一只长尾巴的灰色老鼠"
+  },
+  "english-hippo": {
+    "src": "/images/english/animals-and-box.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "一只紫灰色的河马"
+  },
+  "english-hamster": {
+    "src": "/images/english/animals-and-box.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "一只圆脸的金色仓鼠"
+  },
+  "english-box": {
+    "src": "/images/english/animals-and-box.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "一个打开的空纸盒"
+  },
+  "english-schoolbag": {
+    "src": "/images/english/school.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "一个红色书包"
+  },
+  "english-book": {
+    "src": "/images/english/school.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "一本绿色封面的书"
+  },
+  "english-pencil": {
+    "src": "/images/english/school.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "一支黄色铅笔"
+  },
+  "english-scissors": {
+    "src": "/images/english/school.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "一把圆头儿童剪刀"
+  },
+  "english-glue": {
+    "src": "/images/english/school.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "一瓶蓝盖胶水"
+  },
+  "english-pencil-case": {
+    "src": "/images/english/school.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "一个蓝色拉链铅笔袋"
+  },
+  "english-pear": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 0,
+    "alt": "一个黄绿色的梨"
+  },
+  "english-apple": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 1,
+    "alt": "一个红苹果"
+  },
+  "english-plum": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 2,
+    "alt": "一颗紫色李子"
+  },
+  "english-banana": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 3,
+    "alt": "一根黄色香蕉"
+  },
+  "english-watermelon": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 4,
+    "alt": "一个完整的绿皮西瓜"
+  },
+  "english-grape": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 5,
+    "alt": "一颗紫色葡萄"
+  },
+  "english-orange": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 6,
+    "alt": "一个橙子"
+  },
+  "english-carrot": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 7,
+    "alt": "一根胡萝卜"
+  },
+  "english-beans": {
+    "src": "/images/english/fruit-and-vegetables.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 8,
+    "alt": "几颗红褐色菜豆，非豌豆"
+  },
+  "english-cheese": {
+    "src": "/images/english/food-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "一块奶酪"
+  },
+  "english-pizza": {
+    "src": "/images/english/food-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "一张圆形披萨"
+  },
+  "english-milk": {
+    "src": "/images/english/food-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "一杯白色牛奶"
+  },
+  "english-egg": {
+    "src": "/images/english/food-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "一个完整的鸡蛋"
+  },
+  "english-cake": {
+    "src": "/images/english/food-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "一个小蛋糕"
+  },
+  "english-rice": {
+    "src": "/images/english/food-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "一碗白米饭"
+  },
+  "english-chicken": {
+    "src": "/images/english/food-and-play.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "盘中的熟鸡腿，表示鸡肉"
+  },
+  "english-honey": {
+    "src": "/images/english/food-and-play.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "一罐金色蜂蜜与蜂蜜棒"
+  },
+  "english-hamburger": {
+    "src": "/images/english/food-and-play.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "一个汉堡包"
+  },
+  "english-water": {
+    "src": "/images/english/food-and-play.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "一杯透明清水"
+  },
+  "english-ball": {
+    "src": "/images/english/food-and-play.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "一个彩色皮球"
+  },
+  "english-happy": {
+    "src": "/images/english/food-and-play.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "一个开心微笑的小朋友"
+  },
+  "english-eye": {
+    "src": "/images/english/body-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "一只眼睛的近景"
+  },
+  "english-ear": {
+    "src": "/images/english/body-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "一只耳朵的近景"
+  },
+  "english-knee": {
+    "src": "/images/english/body-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "弯曲的腿，箭头指向膝盖"
+  },
+  "english-toe": {
+    "src": "/images/english/body-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "一只脚的近景，箭头指向大脚趾"
+  },
+  "english-head": {
+    "src": "/images/english/body-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "小朋友完整的头部"
+  },
+  "english-shoulder": {
+    "src": "/images/english/body-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "小朋友上半身，箭头指向肩膀"
+  },
+  "english-nose": {
+    "src": "/images/english/body-and-size.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "鼻子的近景"
+  },
+  "english-mouth": {
+    "src": "/images/english/body-and-size.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "嘴巴的近景"
+  },
+  "english-hand": {
+    "src": "/images/english/body-and-size.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "一只张开的手，有五根手指"
+  },
+  "english-foot": {
+    "src": "/images/english/body-and-size.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "一只完整的脚，有五根脚趾"
+  },
+  "english-big": {
+    "src": "/images/english/body-and-size.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "并排的大小两个红球，箭头指向大球"
+  },
+  "english-small": {
+    "src": "/images/english/body-and-size.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "并排的大小两个红球，箭头指向小球"
+  },
+  "english-running": {
+    "src": "/images/english/actions-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "一只正在奔跑的小狗"
+  },
+  "english-dancing": {
+    "src": "/images/english/actions-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "一个正在跳舞的小朋友"
+  },
+  "english-sleeping": {
+    "src": "/images/english/actions-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "一只蜷在软垫上睡觉的小猫"
+  },
+  "english-look": {
+    "src": "/images/english/actions-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "小朋友正在仔细看一只小猫"
+  },
+  "english-listen": {
+    "src": "/images/english/actions-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "小朋友把手放在耳边认真听"
+  },
+  "english-point": {
+    "src": "/images/english/actions-one.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "小朋友伸出食指指向一本书"
+  },
+  "english-touch": {
+    "src": "/images/english/actions-two.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "小朋友用手摸自己的头"
+  },
+  "english-clap": {
+    "src": "/images/english/actions-two.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "小朋友正在拍手"
+  },
+  "english-jump": {
+    "src": "/images/english/actions-two.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "小朋友双脚离地向上跳"
+  },
+  "english-sit": {
+    "src": "/images/english/actions-two.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "小朋友坐在椅子上"
+  },
+  "english-stand": {
+    "src": "/images/english/actions-two.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "小朋友双脚着地站立"
+  },
+  "english-sad": {
+    "src": "/images/english/actions-two.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "一个伤心流泪的小朋友"
+  },
+  "english-mum": {
+    "src": "/images/english/family.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 0,
+    "alt": "一位年轻的妈妈"
+  },
+  "english-dad": {
+    "src": "/images/english/family.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 1,
+    "alt": "一位年轻的爸爸"
+  },
+  "english-grandma": {
+    "src": "/images/english/family.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 2,
+    "alt": "一位银发的奶奶或外婆"
+  },
+  "english-grandpa": {
+    "src": "/images/english/family.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 3,
+    "alt": "一位银发的爷爷或外公"
+  },
+  "english-brother": {
+    "src": "/images/english/family.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 4,
+    "alt": "一个男孩，表示哥哥或弟弟"
+  },
+  "english-sister": {
+    "src": "/images/english/family.webp",
+    "columns": 3,
+    "rows": 2,
+    "index": 5,
+    "alt": "一个女孩，表示姐姐或妹妹"
+  },
+  "english-hungry": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 0,
+    "alt": "小朋友摸着肚子，面前是空盘子，表示饿了"
+  },
+  "english-thirsty": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 1,
+    "alt": "小朋友拿着空杯子，望向水壶，表示渴了"
+  },
+  "english-hello": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 2,
+    "alt": "两个小朋友面对面挥手问好"
+  },
+  "english-goodbye": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 3,
+    "alt": "背着书包的小朋友出门时回头挥手告别"
+  },
+  "english-yes": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 4,
+    "alt": "小朋友微笑点头并竖起拇指"
+  },
+  "english-no": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 5,
+    "alt": "小朋友摇头，举起手掌温和拒绝"
+  },
+  "english-please": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 6,
+    "alt": "小朋友伸出双手，礼貌地请求一个球"
+  },
+  "english-thanks": {
+    "src": "/images/english/feelings-and-greetings.webp",
+    "columns": 3,
+    "rows": 3,
+    "index": 7,
+    "alt": "小朋友收到礼物后微笑点头表示感谢"
+  },
+  "english-red": {
+    "kind": "color",
+    "color": "#df5347",
+    "alt": "红色色块"
+  },
+  "english-yellow": {
+    "kind": "color",
+    "color": "#f2cd52",
+    "alt": "黄色色块"
+  },
+  "english-blue": {
+    "kind": "color",
+    "color": "#5c91bd",
+    "alt": "蓝色色块"
+  },
+  "english-green": {
+    "kind": "color",
+    "color": "#759663",
+    "alt": "绿色色块"
+  },
+  "english-black": {
+    "kind": "color",
+    "color": "#343434",
+    "alt": "黑色色块"
+  },
+  "english-white": {
+    "kind": "color",
+    "color": "#fffdf6",
+    "alt": "白色色块"
+  },
+  "english-one": {
+    "kind": "number",
+    "count": 1,
+    "illustration": "english-apple",
+    "alt": "1 个苹果"
+  },
+  "english-two": {
+    "kind": "number",
+    "count": 2,
+    "illustration": "english-apple",
+    "alt": "2 个苹果"
+  },
+  "english-three": {
+    "kind": "number",
+    "count": 3,
+    "illustration": "english-apple",
+    "alt": "3 个苹果"
+  },
+  "english-four": {
+    "kind": "number",
+    "count": 4,
+    "illustration": "english-apple",
+    "alt": "4 个苹果"
+  },
+  "english-five": {
+    "kind": "number",
+    "count": 5,
+    "illustration": "english-apple",
+    "alt": "5 个苹果"
+  },
+  "english-six": {
+    "kind": "number",
+    "count": 6,
+    "illustration": "english-apple",
+    "alt": "6 个苹果"
+  },
+  "english-seven": {
+    "kind": "number",
+    "count": 7,
+    "illustration": "english-apple",
+    "alt": "7 个苹果"
+  },
+  "english-eight": {
+    "kind": "number",
+    "count": 8,
+    "illustration": "english-apple",
+    "alt": "8 个苹果"
+  },
+  "english-nine": {
+    "kind": "number",
+    "count": 9,
+    "illustration": "english-apple",
+    "alt": "9 个苹果"
+  },
+  "english-ten": {
+    "kind": "number",
+    "count": 10,
+    "illustration": "english-apple",
+    "alt": "10 个苹果"
+  }
+}
