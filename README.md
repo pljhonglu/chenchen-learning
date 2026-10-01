@@ -35,6 +35,17 @@
 
 这是一套家庭听说练习内容，不是幼升小必会词表。每天是否继续、是否增加拓展词，按孩子的状态决定。
 
+## 汉字描一描
+
+内置 **60 个生活常用字**，分为「简单起步」24 字和「兴趣拓展」36 字，按数字、身体、自然等主题选字；「课堂与姓名」保留已练习和家长录入的字。教育部相关指南没有统一的大班必写字表，这份字库用于兴趣选择，不会自动把全部汉字加入每日任务。选字依据、完整字表与官方来源见 [书写准备调研](docs/writing-curriculum.md)。
+
+- 点「看笔顺」，田字格里会按笔顺逐笔写出，配合“第一画、第二画……”的普通话朗读；橙色显示正在写的一画，绿色保留写好的笔画。
+- 可点「下一画」逐笔观看，也可暂停、从头重播。点「我来描」回到手指描写；原先的描画会保留，只有「重新描」才清空。
+- 看动画不会被记录成完成书写。孩子自己描过后点「描好啦」，或者在纸上写完后确认，才沿用原有的复习记录流程。手指描画不评分、不自动判断笔顺或纸笔书写能力。
+- 60 字的笔顺路径、动画库和序数音频全部随应用分发，播放时无需外部服务。另带「辰、春、明」供已有课堂和姓名示例使用；其他自定义字仍能对照字形描写，尚未内置笔顺的字会提示暂不可播放。
+
+一次选 1 个字、约 3–5 分钟是家庭使用建议，按孩子的兴趣随时休息。音频为 AI 合成普通话，详见 [写字音频说明](docs/writing-audio.md)。逐笔动画采用 [Hanzi Writer](public/vendor/README.md)，字形数据来源、独立许可和重建方式见 [笔顺数据说明](public/data/strokes/README.md)。
+
 ## Docker 快速启动
 
 GitHub Actions 构建 `linux/amd64` 和 `linux/arm64`，镜像为：
@@ -94,6 +105,9 @@ node scripts/test-poem-media.cjs
 node scripts/test-english.cjs
 node scripts/test-english-audio.cjs
 node scripts/test-english-media.cjs
+node scripts/test-writing-audio.cjs
+node scripts/test-writing-strokes.cjs
+node scripts/test-writing-media.cjs
 DATA_DIR=./data PUBLIC_DIR=./public HOST=127.0.0.1 PORT=8080 go run ./server
 ```
 

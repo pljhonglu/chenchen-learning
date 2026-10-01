@@ -308,6 +308,7 @@
   const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "english"];
 
   function showView(name) {
+    if (name !== "write") stopWritingDemo();
     if (name !== "english") englishModule?.stop();
     if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
@@ -537,6 +538,7 @@
   async function openParent() {
     if (!stateReady) { toast("先连接服务器，才能管理课堂内容。"); return; }
     if (currentView === "english") englishModule?.pause();
+    if (currentView === "write") writingDemo?.stop();
     await ensurePoems().catch(() => {});
     const dialog = document.getElementById("parent-dialog");
     const scroll = dialog.open ? dialog.scrollTop : 0;
@@ -1359,51 +1361,183 @@
 
   // ---------- Writing ----------
   const WRITE_CHARS = [
-    { c: "人", strokes: "2画 · 撇、捺", tip: "撇捺舒展，像人在走路" },
-    { c: "大", strokes: "3画 · 横、撇、捺", tip: "横要平，撇捺对称" },
-    { c: "小", strokes: "3画 · 竖钩、撇、点", tip: "中间竖钩居中" },
-    { c: "口", strokes: "3画 · 竖、横折、横", tip: "方口略扁，下横封口" },
-    { c: "日", strokes: "4画 · 竖、横折、横、横", tip: "比「口」瘦长，中间一横" },
-    { c: "月", strokes: "4画 · 撇、横折钩、横、横", tip: "外面像月牙" },
-    { c: "水", strokes: "4画 · 竖钩、横撇、撇、捺", tip: "中间竖钩为主笔" },
-    { c: "火", strokes: "4画 · 点、撇、撇、捺", tip: "两点像火苗" },
-    { c: "山", strokes: "3画 · 竖、竖折、竖", tip: "中间最高" },
-    { c: "石", strokes: "5画 · 横、撇、竖、横折、横", tip: "上面「厂」，下面「口」" },
-    { c: "田", strokes: "5画 · 竖、横折、横、竖、横", tip: "中间十字" },
-    { c: "木", strokes: "4画 · 横、竖、撇、捺", tip: "竖在横中间" },
+    {"c":"一","level":"starter","group":"数字","example":"一只","strokes":"1画","tip":"一条横线放中间。"},
+    {"c":"二","level":"starter","group":"数字","example":"二月","strokes":"2画","tip":"上面的横短，下面的横长。"},
+    {"c":"三","level":"starter","group":"数字","example":"三只","strokes":"3画","tip":"三条横线，下面一条最长。"},
+    {"c":"四","level":"starter","group":"数字","example":"四个","strokes":"5画","tip":"外面像个小方框。"},
+    {"c":"五","level":"starter","group":"数字","example":"五个","strokes":"4画","tip":"看看上下两条横的位置。"},
+    {"c":"十","level":"starter","group":"数字","example":"十个","strokes":"2画","tip":"横和竖在中间相遇。"},
+    {"c":"人","level":"starter","group":"人和身体","example":"大人","strokes":"2画","tip":"两边像站稳的两条腿。"},
+    {"c":"大","level":"starter","group":"人和身体","example":"大小","strokes":"3画","tip":"像一个张开双臂的人。"},
+    {"c":"小","level":"starter","group":"人和身体","example":"小手","strokes":"3画","tip":"中间长，两边短。"},
+    {"c":"口","level":"starter","group":"人和身体","example":"门口","strokes":"3画","tip":"像一个小小的方框。"},
+    {"c":"子","level":"starter","group":"人和身体","example":"孩子","strokes":"3画","tip":"中间的钩弯弯的。"},
+    {"c":"女","level":"starter","group":"人和身体","example":"女孩","strokes":"3画","tip":"几条线在中间相交。"},
+    {"c":"日","level":"starter","group":"自然","example":"日出","strokes":"4画","tip":"长方框里有一条横。"},
+    {"c":"月","level":"starter","group":"自然","example":"月亮","strokes":"4画","tip":"里面两条短横留点空隙。"},
+    {"c":"水","level":"starter","group":"自然","example":"喝水","strokes":"4画","tip":"中间长，两边舒展开。"},
+    {"c":"火","level":"starter","group":"自然","example":"火苗","strokes":"4画","tip":"两边的小笔画像火花。"},
+    {"c":"山","level":"starter","group":"自然","example":"大山","strokes":"3画","tip":"中间的山峰最高。"},
+    {"c":"石","level":"starter","group":"自然","example":"石头","strokes":"5画","tip":"小方框放在右下边。"},
+    {"c":"田","level":"starter","group":"植物粮食","example":"田地","strokes":"5画","tip":"里面分成四个小格子。"},
+    {"c":"木","level":"starter","group":"植物粮食","example":"木头","strokes":"4画","tip":"中间像树干，两边像树枝。"},
+    {"c":"上","level":"starter","group":"方向动作","example":"上面","strokes":"3画","tip":"长横托住上面的线。"},
+    {"c":"下","level":"starter","group":"方向动作","example":"下面","strokes":"3画","tip":"长横下面挂着小笔画。"},
+    {"c":"土","level":"starter","group":"自然","example":"泥土","strokes":"3画","tip":"下面的横比上面长。"},
+    {"c":"天","level":"starter","group":"自然","example":"天空","strokes":"4画","tip":"上面两横，下面舒展开。"},
+    {"c":"六","level":"explore","group":"数字","example":"六个","strokes":"4画","tip":"上面小点，下面两边分开。"},
+    {"c":"七","level":"explore","group":"数字","example":"七个","strokes":"2画","tip":"下面有个弯弯的小钩。"},
+    {"c":"八","level":"explore","group":"数字","example":"八个","strokes":"2画","tip":"两边分开，不碰在一起。"},
+    {"c":"九","level":"explore","group":"数字","example":"九个","strokes":"2画","tip":"右边有个大大的弯钩。"},
+    {"c":"百","level":"explore","group":"数字","example":"一百","strokes":"6画","tip":"长横下面放一个白字。"},
+    {"c":"左","level":"explore","group":"方向动作","example":"左手","strokes":"5画","tip":"下面藏着一个工字。"},
+    {"c":"右","level":"explore","group":"方向动作","example":"右手","strokes":"5画","tip":"下面藏着一个口字。"},
+    {"c":"中","level":"explore","group":"方向动作","example":"中间","strokes":"4画","tip":"一条竖穿过小方框。"},
+    {"c":"入","level":"explore","group":"方向动作","example":"入口","strokes":"2画","tip":"两条线靠在一起。"},
+    {"c":"出","level":"explore","group":"方向动作","example":"出门","strokes":"5画","tip":"上下两个口朝上，中间一条竖。"},
+    {"c":"回","level":"explore","group":"方向动作","example":"回家","strokes":"6画","tip":"大方框里面有个小方框。"},
+    {"c":"目","level":"explore","group":"人和身体","example":"目光","strokes":"5画","tip":"长方框里有两条短横。"},
+    {"c":"耳","level":"explore","group":"人和身体","example":"耳朵","strokes":"6画","tip":"里面短横要留出空隙。"},
+    {"c":"手","level":"explore","group":"人和身体","example":"小手","strokes":"4画","tip":"中间的长钩向下伸。"},
+    {"c":"足","level":"explore","group":"人和身体","example":"足球","strokes":"7画","tip":"上面一个口，下面舒展开。"},
+    {"c":"牙","level":"explore","group":"人和身体","example":"牙齿","strokes":"4画","tip":"右边的长钩向下伸。"},
+    {"c":"心","level":"explore","group":"人和身体","example":"开心","strokes":"4画","tip":"弯钩旁边有小点。"},
+    {"c":"米","level":"explore","group":"植物粮食","example":"大米","strokes":"6画","tip":"几条线向四周散开。"},
+    {"c":"禾","level":"explore","group":"植物粮食","example":"禾苗","strokes":"5画","tip":"木字上面多一小撇。"},
+    {"c":"竹","level":"explore","group":"植物粮食","example":"竹子","strokes":"6画","tip":"左右两边像两棵小竹子。"},
+    {"c":"花","level":"explore","group":"植物粮食","example":"小花","strokes":"7画","tip":"草字头在上面。"},
+    {"c":"草","level":"explore","group":"植物粮食","example":"小草","strokes":"9画","tip":"草字头下面有日和十。"},
+    {"c":"牛","level":"explore","group":"动物","example":"小牛","strokes":"4画","tip":"中间一条竖，上下两条横。"},
+    {"c":"羊","level":"explore","group":"动物","example":"小羊","strokes":"6画","tip":"上面像羊角，中间一条竖。"},
+    {"c":"马","level":"explore","group":"动物","example":"小马","strokes":"3画","tip":"里面的短横不要伸太长。"},
+    {"c":"鸟","level":"explore","group":"动物","example":"小鸟","strokes":"5画","tip":"上面的小点像鸟的眼睛。"},
+    {"c":"虫","level":"explore","group":"动物","example":"小虫","strokes":"6画","tip":"小方框放在上半边。"},
+    {"c":"鱼","level":"explore","group":"动物","example":"小鱼","strokes":"8画","tip":"中间像田，下面一条长横。"},
+    {"c":"白","level":"explore","group":"自然","example":"白云","strokes":"5画","tip":"日字上面多一小撇。"},
+    {"c":"云","level":"explore","group":"自然","example":"白云","strokes":"4画","tip":"上面两条横，下面弯弯的。"},
+    {"c":"雨","level":"explore","group":"自然","example":"下雨","strokes":"8画","tip":"里面的小点像雨滴。"},
+    {"c":"风","level":"explore","group":"自然","example":"大风","strokes":"4画","tip":"外面有个大弯，里面两线相交。"},
+    {"c":"门","level":"explore","group":"身边物品","example":"大门","strokes":"3画","tip":"像一扇敞开的大门。"},
+    {"c":"车","level":"explore","group":"身边物品","example":"汽车","strokes":"4画","tip":"中间的竖稳稳站住。"},
+    {"c":"书","level":"explore","group":"身边物品","example":"看书","strokes":"4画","tip":"右上边有一个小点。"},
+    {"c":"本","level":"explore","group":"身边物品","example":"书本","strokes":"5画","tip":"木字下面多一条短横。"},
   ];
   let selectedWriteId = null;
+  let writingLevel = "starter";
+  let writingDemo = null;
+  let writingVoice = null;
+  let writingGeneration = 0;
+
+  function stopWritingDemo() {
+    writingGeneration++;
+    writingDemo?.destroy();
+    writingVoice?.destroy();
+    writingDemo = null;
+    writingVoice = null;
+  }
+
   function writingCharacters() {
     const characters = new Map(WRITE_CHARS.map(ch => { const item = {...ch,id:`write-char-${ch.c.codePointAt(0).toString(16)}`}; return [item.id,item]; }));
-    Object.values(loadState().customCharacters || {}).forEach(ch=>characters.set(ch.id,ch));
+    Object.values(loadState().customCharacters || {}).forEach(ch=>characters.set(ch.id,{...characters.get(ch.id),...ch}));
     return [...characters.values()];
   }
 
   function renderWrite() {
+    stopWritingDemo();
+    stopSpeechSafe();
+    const token = writingGeneration;
     const el = document.getElementById("write-content");
     const all = writingCharacters();
-    const ch = all.find(it=>it.id===selectedWriteId) || all[0];
+    const classroom = all.filter(ch => getItem(ch.id)?.learned || !ch.level);
+    const selection = all.find(it=>it.id===selectedWriteId);
+    const inLevel = ch => writingLevel === "classroom" ? classroom.includes(ch) : ch.level === writingLevel;
+    if (selection && !inLevel(selection)) writingLevel = selection.level || "classroom";
+    const shown = reviewSession ? [selection || all[0]] : all.filter(inLevel);
+    const ch = shown.find(it=>it.id===selectedWriteId) || shown[0];
+    const tabs = reviewSession ? "" : `<div class="write-library-heading"><h3>选一个喜欢的字</h3><span>60 个生活常用字</span></div><div class="tabs-mini write-levels">${[["starter","简单起步 · 24"],["explore","兴趣拓展 · 36"],["classroom",`课堂与姓名 · ${classroom.length}`]].map(([id,label])=>`<button data-write-level="${id}" class="${writingLevel === id ? "active" : ""}" aria-pressed="${writingLevel === id}">${label}</button>`).join("")}</div>`;
+    const library = reviewSession ? "" : `${tabs}<div class="write-library">${[...new Set(shown.map(w=>w.group || "我的课堂"))].map(group=>`<section class="write-group"><h4>${escapeHtml(group)}</h4><div class="write-list">${shown.filter(w=>(w.group || "我的课堂") === group).map(w=>`<button class="${w.id === ch?.id ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-label="选择汉字 ${escapeHtml(w.c)}" aria-pressed="${w.id === ch?.id}">${escapeHtml(w.c)}</button>`).join("")}</div></section>`).join("") || '<p class="empty">在家长入口记录老师教过的字，或自己的名字，就能在这里找到。</p>'}</div><details class="write-family-note"><summary>家长小提示</summary><p>这里的 60 字是兴趣描写素材，不是入学必会清单。一次选 1 个字，愿意时看一看、描一描，也可以在纸上写。先坐稳、轻握笔，累了就休息。</p></details>`;
+    const bindLibrary = () => {
+      el.querySelectorAll("[data-write-level]").forEach(btn=>btn.onclick=()=>{writingLevel=btn.dataset.writeLevel;selectedWriteId=null;renderWrite();});
+      el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>{selectedWriteId=btn.dataset.writeId;renderWrite();el.scrollIntoView?.({block:"start"});});
+    };
+    if (!ch) {
+      el.innerHTML = `<div class="card practice-card"><h2>汉字描一描</h2>${library}</div>`;
+      bindLibrary(); return;
+    }
     selectedWriteId = ch.id;
-    const shown = reviewSession ? [ch] : all;
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">小手动一动</p><h2>汉字描一描 <span class="heading-flower">✎</span></h2></div><span class="practice-count">描 1 个字就好</span></div><p class="practice-instruction">沿着浅浅的字，用手指或鼠标描一描。</p><div class="tianzige"><div class="char">${escapeHtml(ch.c)}</div><canvas id="write-canvas" width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas></div><div class="stroke-hint"><b>${escapeHtml(ch.c)}</b>　${escapeHtml(ch.strokes || "")}<br>${escapeHtml(ch.tip || "请家长示范，再慢慢描一遍。")}</div><div class="btn-row practice-controls"><button class="btn btn-ghost" id="write-clear">↶ 重新描</button><button class="btn btn-ghost" id="write-listen">◖)) 听一听</button><button class="btn btn-primary" id="write-finish" disabled>描好啦 ✿</button></div><div class="write-list">${shown.map(w=>`<button class="${w.id === ch.id ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-pressed="${w.id === ch.id}">${escapeHtml(w.c)}</button>`).join("")}</div><p class="paper-note">也可以拿出纸和笔，照着写一遍。<button class="text-btn" id="write-paper">我在纸上写好啦 ✓</button></p></div>`;
-    el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>{selectedWriteId=btn.dataset.writeId;renderWrite();});
+    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">小手动一动</p><h2>汉字描一描 <span class="heading-flower">✎</span></h2></div><span class="practice-count">描 1 个字就好</span></div><p class="practice-instruction">先看一笔一笔怎么写，再轮到你描一描。</p><div class="tianzige write-stage"><div class="char" id="write-font-outline">${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas></div><div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-animation-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-ghost" id="write-strokes-next" disabled>下一画</button><button class="text-btn" id="write-strokes-stop" disabled>Ⅱ 暂停</button><button class="btn btn-primary" id="write-self" hidden>✎ 我来描</button></div><div class="stroke-hint"><b>${escapeHtml(ch.c)}</b>　${escapeHtml(ch.strokes || "")}${ch.example ? ` · ${escapeHtml(ch.example)}` : ""}<br>${escapeHtml(ch.tip || "照着字形，慢慢描一遍。")}</div><div class="btn-row practice-controls"><button class="btn btn-ghost" id="write-clear">↶ 重新描</button><button class="btn btn-ghost" id="write-listen">◖)) 听一听</button><button class="btn btn-primary" id="write-finish" disabled>描好啦 ✿</button></div>${library}<p class="paper-note">也可以拿出纸和笔，照着写一遍。<button class="text-btn" id="write-paper">我在纸上写好啦 ✓</button></p></div>`;
+    bindLibrary();
     const canvas = document.getElementById("write-canvas");
     const ctx = canvas.getContext("2d");
     ctx.strokeStyle = "#668753"; ctx.lineWidth = 14; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    let drawing = false;
-    let moved = false;
+    let drawing = false, moved = false, watching = false, demoStatus = "loading";
+    const status = document.getElementById("write-stroke-status");
+    const playButton = document.getElementById("write-strokes-play");
+    const stepButton = document.getElementById("write-strokes-next");
+    const stopButton = document.getElementById("write-strokes-stop");
+    const selfButton = document.getElementById("write-self");
+    const finishButton = document.getElementById("write-finish");
+    const active = () => token === writingGeneration && currentView === "write";
+    const watch = () => {
+      stopSpeechSafe(); drawing = false; watching = true; canvas.hidden = true; selfButton.hidden = false; finishButton.disabled = true;
+    };
+    const trace = () => {
+      writingDemo?.restart(); writingVoice?.stop(); watching = false; canvas.hidden = false; selfButton.hidden = true; finishButton.disabled = !moved;
+      if (demoStatus !== "error") status.textContent = "轮到你啦，沿着浅浅的字描一描。";
+    };
+    const setupDemo = () => {
+      writingDemo?.destroy(); writingVoice?.destroy();
+      document.getElementById("write-font-outline").hidden = false;
+      if (!window.ChenchenWritingStrokes || !window.ChenchenWritingAudio) {
+        demoStatus = "error"; status.textContent = "笔顺暂时没有打开，仍可以照着描一描。"; return;
+      }
+      writingVoice = window.ChenchenWritingAudio.create();
+      const voice = writingVoice;
+      writingDemo = window.ChenchenWritingStrokes.create({
+        target:document.getElementById("write-stroke-layer"), character:ch.c,
+        playStroke:(index,signal)=>voice.playStroke(index,signal),
+        onState(state) {
+          if (!active() || state.status === "destroyed") return;
+          demoStatus = state.status;
+          const busy = state.status === "playing", loading = state.status === "loading";
+          playButton.disabled = busy || loading;
+          playButton.textContent = state.status === "error" ? "↻ 重试笔顺" : state.completed ? "▶ 再看一遍" : "▶ 看笔顺";
+          stepButton.disabled = busy || loading || state.status === "error" || state.completed >= state.total;
+          stopButton.disabled = !busy;
+          if (["ready","playing","paused","complete"].includes(state.status)) document.getElementById("write-font-outline").hidden = true;
+          status.classList.toggle("is-playing",busy);
+          if (busy) status.textContent = `第 ${state.stroke || state.completed + 1} 画 / 共 ${state.total} 画`;
+          else if (state.status === "complete") status.textContent = `共 ${state.total} 画，写好啦！点「我来描」试一试。`;
+          else if (state.status === "paused") status.textContent = `已看到 ${state.completed} / ${state.total} 画。点「下一画」慢慢看。`;
+          else if (state.status === "ready") status.textContent = `共 ${state.total} 画 · 点「看笔顺」，听一笔、看一笔。`;
+          else if (loading) status.textContent = "笔顺准备中…";
+        },
+        onError(code) {
+          if (!active()) return;
+          status.classList.remove("is-playing");
+          status.textContent = code === "stroke-playback-unavailable" ? "声音或笔顺没有播放成功，点「重试笔顺」再试一次。" : "这个字的笔顺暂时没有打开。可以重试，或先照着描一描。";
+          playButton.disabled = false;
+        },
+      });
+    };
+    setupDemo();
+    playButton.onclick = () => {if(demoStatus === "error") {setupDemo();return;} watch();writingDemo?.play();};
+    stepButton.onclick = () => {watch();writingDemo?.next();};
+    stopButton.onclick = () => writingDemo?.stop();
+    selfButton.onclick = trace;
     const position = event => { const r=canvas.getBoundingClientRect(); return [(event.clientX-r.left)*600/r.width,(event.clientY-r.top)*600/r.height]; };
-    canvas.onpointerdown = event => { event.preventDefault(); drawing=true; canvas.setPointerCapture(event.pointerId); ctx.beginPath(); ctx.moveTo(...position(event)); };
-    canvas.onpointermove = event => { if(!drawing)return; event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;document.getElementById("write-finish").disabled=false; };
+    canvas.onpointerdown = event => { if(watching)return;event.preventDefault();drawing=true;canvas.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(...position(event)); };
+    canvas.onpointermove = event => { if(!drawing || watching)return;event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;finishButton.disabled=false; };
     canvas.onpointerup = canvas.onpointercancel = () => { drawing=false; };
-    document.getElementById("write-clear").onclick = () => {ctx.clearRect(0,0,600,600);moved=false;document.getElementById("write-finish").disabled=true;};
-    document.getElementById("write-listen").onclick = () => speakGuide(`${ch.c}。${ch.strokes || ""}。${ch.tip || "请家长示范，再慢慢描一遍。"}。`);
+    document.getElementById("write-clear").onclick = () => {ctx.clearRect(0,0,600,600);moved=false;trace();};
+    document.getElementById("write-listen").onclick = () => {writingDemo?.stop();speakGuide(`${ch.c}。${ch.example || ""}。${ch.strokes || ""}。${ch.tip || "照着字形，慢慢描一遍。"}`);};
     const finish = async () => {
+      writingDemo?.stop();
       const id = reviewSession?.items[reviewSession.index]?.id || ch.id;
       const title = id === "write-basic" ? "常用汉字描红" : `汉字·${ch.c}`;
       if(!await completePractice(id,"remember",{type:"write",title})) navigate("home");
     };
-    document.getElementById("write-finish").onclick = () => {if(moved) finish();};
+    finishButton.onclick = () => {if(moved && !watching) finish();};
     document.getElementById("write-paper").onclick = finish;
     bindSessionExit();
   }

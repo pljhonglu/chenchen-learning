@@ -30,6 +30,8 @@ jobs:
           node --check public/speech.js
           node --check public/english.js
           node --check public/english-audio.js
+          node --check public/writing-audio.js
+          node --check public/writing-strokes.js
           node scripts/test-progress.cjs
           node scripts/test-math.cjs
           node scripts/test-speech.cjs
@@ -37,6 +39,9 @@ jobs:
           node scripts/test-english.cjs
           node scripts/test-english-audio.cjs
           node scripts/test-english-media.cjs
+          node scripts/test-writing-audio.cjs
+          node scripts/test-writing-strokes.cjs
+          node scripts/test-writing-media.cjs
 
   docker:
     needs: test
