@@ -30,6 +30,7 @@ jobs:
           node --check public/speech.js
           node scripts/test-progress.cjs
           node scripts/test-speech.cjs
+          node scripts/test-poem-media.cjs
 
   docker:
     needs: test

@@ -1,0 +1,724 @@
+{
+  "poem-01": {
+    "src": "/audio/poems/poem-01.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "42a646559233c0a779b12e4ef0f04a93f3dd482f304cf12ca7463339bbf01634",
+    "synthesisText": "早发白帝城。\n唐，李白。\n招辞白帝彩云间。\n千里江陵一日环。\n两岸猿声啼不住。\n轻舟已过万虫山。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-1",
+        "index": 0,
+        "character": "朝",
+        "pinyin": "zhāo",
+        "spokenAs": "招"
+      },
+      {
+        "location": "line-2",
+        "index": 6,
+        "character": "还",
+        "pinyin": "huán",
+        "spokenAs": "环"
+      },
+      {
+        "location": "line-4",
+        "index": 5,
+        "character": "重",
+        "pinyin": "chóng",
+        "spokenAs": "虫"
+      }
+    ],
+    "durationSeconds": 14.904,
+    "bytes": 89424,
+    "sha256": "319728a2e22b73a843c298af0cb6e2208e53dd4a1ba080b255c8fb0acb5fd90c",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-02": {
+    "src": "/audio/poems/poem-02.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "9814375033d5e71708e47b0b56795dd69123541135bfb108d2e330f8a5a526c1",
+    "synthesisText": "望洞庭。\n唐，刘禹锡。\n湖光秋月两相河。\n潭面无风镜未摩。\n遥望洞庭山水翠。\n白银盘里一青螺。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-1",
+        "index": 6,
+        "character": "和",
+        "pinyin": "hé",
+        "spokenAs": "河"
+      },
+      {
+        "location": "line-2",
+        "index": 6,
+        "character": "磨",
+        "pinyin": "mó",
+        "spokenAs": "摩"
+      }
+    ],
+    "durationSeconds": 15.216,
+    "bytes": 91296,
+    "sha256": "b1249638ed0419fda2a2496cda7b4398398a3da4d01a38bc5c5287a7ccd26fa1",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-03": {
+    "src": "/audio/poems/poem-03.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "42453bcb5f27130d812e74b2b8de810fcea1e1220e654b3ff90afa40d28d0d96",
+    "synthesisText": "饮湖上初晴后雨。\n宋，苏轼。\n水光潋滟晴方好。\n山色空萌雨亦奇。\n欲把西湖比西子。\n淡妆浓抹总相宜。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-2",
+        "index": 3,
+        "character": "蒙",
+        "pinyin": "méng",
+        "spokenAs": "萌"
+      }
+    ],
+    "durationSeconds": 16.32,
+    "bytes": 97920,
+    "sha256": "8af1f7f4b33ab94d2ae36061914c525cf01661a4aa9f57c9e8272d533bcacc44",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-04": {
+    "src": "/audio/poems/poem-04.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "def67884f4630ff20a304e42b6cbea300907c7bb2ce074ed68d4ae7b2f61890e",
+    "synthesisText": "望天门山。\n唐，李白。\n天门中断楚江开。\n碧水东流至此回。\n两岸青山相对出。\n孤帆一片日边来。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 15.288,
+    "bytes": 91728,
+    "sha256": "55d3f8ec95e218221c55d86c86b2a905e4921c10500414608fd3fc06e53f25ca",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-05": {
+    "src": "/audio/poems/poem-05.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "b9178092f7a8628a757c844655c26dde2083363d4c8e22558d5af771bd51d751",
+    "synthesisText": "夜书所见。\n宋，叶绍翁。\n萧萧梧叶送寒声。\n江上秋风动客情。\n知有儿童窕促织。\n夜深篱落一灯明。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-3",
+        "index": 4,
+        "character": "挑",
+        "pinyin": "tiǎo",
+        "spokenAs": "窕"
+      }
+    ],
+    "durationSeconds": 15.312,
+    "bytes": 91872,
+    "sha256": "ba269eab86e54257a9f80dbed34f358b1572fe231a4ce8c1ae748abd45876f21",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-06": {
+    "src": "/audio/poems/poem-06.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "85a2e7fb933f675c983dda6e8de176062159cdf3ab677eb4ae3bb4d7cbf61a0d",
+    "synthesisText": "赠刘景文。\n宋，苏轼。\n荷尽已无擎雨盖。\n菊残犹有傲霜枝。\n一年好景君须记。\n最是橙黄橘绿时。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 15.192,
+    "bytes": 91152,
+    "sha256": "22339d5698c228751b81c3e5f495f532cab739e3632994ce7ef7db0a718d9fb6",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-07": {
+    "src": "/audio/poems/poem-07.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "03648583a1ed5660f41d219fcfec4a123d5b16086e61f0cd0e3fe7b8b8139c2d",
+    "synthesisText": "山行。\n唐，杜牧。\n远上寒山石径斜。\n白云生处有人家。\n停车坐爱枫林晚。\n霜叶红于二月花。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 14.856,
+    "bytes": 89136,
+    "sha256": "d1d4a22e6bd24306ddb23ba00d98b09958068672a36e1e264e0a79d8caf39295",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-08": {
+    "src": "/audio/poems/poem-08.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "47d28deb606ca9baf1a88fe46878f5da73876de3d8018c1d3b5b2a0bf1157ddd",
+    "synthesisText": "所见。\n清，袁枚。\n牧童骑黄牛。\n歌声振林樾。\n意欲捕鸣蝉。\n忽然闭口立。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 12.504,
+    "bytes": 75024,
+    "sha256": "a846795d86dbb3d11c923f6c17d1c68e330bd5e0399cff6671e0b1c0b72a3f7e",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-09": {
+    "src": "/audio/poems/poem-09.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "6115e8d5a6c33cc3ce54291e2cdb0904bfad9e1f3044405f3b600b520f82e8ed",
+    "synthesisText": "舟夜书所见。\n清，渣慎行。\n月黑见渔灯。\n孤光一点萤。\n微微风簇浪。\n散作满河星。",
+    "pronunciationCorrections": [
+      {
+        "location": "author",
+        "index": 0,
+        "character": "查",
+        "pinyin": "zhā",
+        "spokenAs": "渣"
+      }
+    ],
+    "durationSeconds": 13.584,
+    "bytes": 81504,
+    "sha256": "1cf8574063b4ba17d82a5b31717325c4c901158b2848470348295650211a8f81",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-10": {
+    "src": "/audio/poems/poem-10.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "bb28359faa6b08286020f30b2c8fbf53022fc6395deda8783ba9da7b6eb17e83",
+    "synthesisText": "绝句。\n唐，杜甫。\n两个黄鹂鸣翠柳。\n一航白鹭上青天。\n窗含西岭千秋雪。\n门博东吴万里船。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-2",
+        "index": 1,
+        "character": "行",
+        "pinyin": "háng",
+        "spokenAs": "航"
+      },
+      {
+        "location": "line-4",
+        "index": 1,
+        "character": "泊",
+        "pinyin": "bó",
+        "spokenAs": "博"
+      }
+    ],
+    "durationSeconds": 14.664,
+    "bytes": 87984,
+    "sha256": "367022ed2c40826884b67ab529011e506cf71878170b4fd4d4267601f1f66b41",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-11": {
+    "src": "/audio/poems/poem-11.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "60143c459c49599df8844de5bf0cca50038481bb80a14748df369c190a292158",
+    "synthesisText": "晓出净慈寺送林子方。\n宋，杨万里。\n毕竟西湖六月中。\n风光不与四时同。\n接天莲叶无穷碧。\n映日荷花别样红。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 16.92,
+    "bytes": 101520,
+    "sha256": "95a167d03e91f5201a564296894ce825639cf82246d958815d26aebcd508f6eb",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-12": {
+    "src": "/audio/poems/poem-12.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "715c9d111eb07e188144e5172c466cbd5e79204b08a8c2fc46077ba034369037",
+    "synthesisText": "赋得古原草送别。\n唐，白居易。\n离离原上草。\n一岁一枯荣。\n野火烧不尽。\n春风吹又生。\n远芳侵古道。\n晴翠接荒城。\n又送王孙去。\n萋萋满别情。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 23.16,
+    "bytes": 138960,
+    "sha256": "24340ae7c3a06e447a82670c1221548cf2925beb5522c56f13a7ee6332483061",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-13": {
+    "src": "/audio/poems/poem-13.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "c6fa7aea2e01ca46b7007809585029e6fd6edd41c468871d2462ee06b0a7a667",
+    "synthesisText": "咏柳。\n唐，贺知章。\n碧玉妆成一树高。\n万条垂下绿丝绦。\n不知细叶谁裁出。\n二月春风似剪刀。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 14.88,
+    "bytes": 89280,
+    "sha256": "230150442bb3a012bf0cb5f48822d1f83ee40e27264645b8a8171f94dc661b51",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-14": {
+    "src": "/audio/poems/poem-14.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "908b91b49724d60c9b42611b8d67c7918a2ee91373b60681dc265aa2b9f31288",
+    "synthesisText": "村居。\n清，高鼎。\n草掌莺飞二月天。\n拂堤杨柳醉春烟。\n儿童散学归来早。\n忙趁东风放纸鸢。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-1",
+        "index": 1,
+        "character": "长",
+        "pinyin": "zhǎng",
+        "spokenAs": "掌"
+      }
+    ],
+    "durationSeconds": 14.712,
+    "bytes": 88272,
+    "sha256": "276001085e90e2068f78e05851e5a1039774492c72b3874cc79cd7b642bf05d3",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-15": {
+    "src": "/audio/poems/poem-15.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "654df5e185a109f4ffca35e2996b8e88a9e74eabb7caaa70f94ad6cfa8c9e66a",
+    "synthesisText": "敕勒歌。\n北朝，民歌。\n敕勒川。\n阴山下。\n天似穹庐。\n拢盖四野。\n天苍苍。\n野茫茫。\n风吹草低现牛羊。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-4",
+        "index": 0,
+        "character": "笼",
+        "pinyin": "lǒng",
+        "spokenAs": "拢"
+      },
+      {
+        "location": "line-7",
+        "index": 4,
+        "character": "见",
+        "pinyin": "xiàn",
+        "spokenAs": "现"
+      }
+    ],
+    "durationSeconds": 17.952,
+    "bytes": 107712,
+    "sha256": "f2eb339345d612aaca022be4cb1fb9ee844495bde6c1498a27722d5aa7173b26",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-16": {
+    "src": "/audio/poems/poem-16.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "904c9dffc6710d9e0da79cbcc504f6541c4b395e5752be2af05215a3c31ee335",
+    "synthesisText": "夜宿山寺。\n唐，李白。\n危楼高百尺。\n手可摘星辰。\n不敢高声语。\n恐惊天上人。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 13.2,
+    "bytes": 79200,
+    "sha256": "58ebcc4e5fb93d5a2a683994a045fa6e5b36146d51c0955d66fe973d32c071d5",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-17": {
+    "src": "/audio/poems/poem-17.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "7d97eef3f6565a27a8940496383d67d07be699b31b7d5b92ab06bdb46d954bef",
+    "synthesisText": "江雪。\n唐，柳宗元。\n千山鸟飞绝。\n万径人踪灭。\n孤舟蓑笠翁。\n独钓寒江雪。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 13.056,
+    "bytes": 78336,
+    "sha256": "60e2621a5e56ac6610148fd5059fa1770bb0836b0809b09510aa9f7555127e61",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-18": {
+    "src": "/audio/poems/poem-18.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "6fb2b896434306283d210c75e57f8db7e54b165df4951fb3ea0c253ee1e3e4ed",
+    "synthesisText": "望庐山瀑布。\n唐，李白。\n日照香炉生紫烟。\n遥看瀑布挂前川。\n飞流直下三千尺。\n疑是银河落九天。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 15.576,
+    "bytes": 93456,
+    "sha256": "44d4922bf3367ecd6a88bdae1e227351761cd5a09b73fb1e6ab3d1971b53ca9f",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-19": {
+    "src": "/audio/poems/poem-19.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "245621a1dc25c9ed147d13bbfa70e6d460b52e882a0b6feddbd27bef44611b68",
+    "synthesisText": "登鹳雀楼。\n唐，王之涣。\n白日依山尽。\n黄河入海流。\n欲穷千里目。\n更上一层楼。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 13.296,
+    "bytes": 79776,
+    "sha256": "d78e83a972b06081899ba94174102877287958d37b91618871dd0f51f4ba7629",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-20": {
+    "src": "/audio/poems/poem-20.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "964274c67b7ed1caa2a1edbc59a66969f68673e2c5ed48a20aab967705722add",
+    "synthesisText": "小儿垂钓。\n唐，胡令能。\n蓬头稚子学垂轮。\n侧坐莓苔草映身。\n路人借问遥招手。\n怕得鱼惊不映人。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-1",
+        "index": 6,
+        "character": "纶",
+        "pinyin": "lún",
+        "spokenAs": "轮"
+      },
+      {
+        "location": "line-4",
+        "index": 5,
+        "character": "应",
+        "pinyin": "yìng",
+        "spokenAs": "映"
+      }
+    ],
+    "durationSeconds": 15.408,
+    "bytes": 92448,
+    "sha256": "aebe0bcf4b050b276fc48386871c99da3b3835c21effd882c3af96ecf87d3913",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-21": {
+    "src": "/audio/poems/poem-21.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "34f0b6e174be7e66b47fe3e8f749244304748130bb5aa2ee9a71c86f5ff95d27",
+    "synthesisText": "梅花。\n宋，王安石。\n墙角数枝梅。\n凌寒独自开。\n遥知不是雪。\n未有暗香来。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-4",
+        "index": 0,
+        "character": "为",
+        "pinyin": "wèi",
+        "spokenAs": "未"
+      }
+    ],
+    "durationSeconds": 13.056,
+    "bytes": 78336,
+    "sha256": "0c127f2aeb4394af42a5f156975dc8603b260f17d79606e38ace3900b9b01eb4",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-22": {
+    "src": "/audio/poems/poem-22.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "676a0e21234dc1344d6ed0b58e52ef692fa499e84250fde9ed2cdd42968468f2",
+    "synthesisText": "画鸡。\n明，唐寅。\n头上红关不用裁。\n满身雪白走将来。\n平生不敢轻言语。\n一叫千门万户开。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-1",
+        "index": 3,
+        "character": "冠",
+        "pinyin": "guān",
+        "spokenAs": "关"
+      }
+    ],
+    "durationSeconds": 14.448,
+    "bytes": 86688,
+    "sha256": "444fdedad66a2b461f6627da41a7fc1f483a995e4f54e1ccea8095df54e6eebd",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-23": {
+    "src": "/audio/poems/poem-23.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "f32fb02f513bfb21202fa27be498eff97262a114a024ed682f86e483994879c4",
+    "synthesisText": "小池。\n宋，杨万里。\n泉眼无声惜细流。\n树阴照水爱晴柔。\n小荷才路尖尖角。\n早有蜻蜓立上头。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-3",
+        "index": 3,
+        "character": "露",
+        "pinyin": "lù",
+        "spokenAs": "路"
+      }
+    ],
+    "durationSeconds": 15.192,
+    "bytes": 91152,
+    "sha256": "f873ce3b13041353f77a7767e5f2096dee9f17561e2284c809efb96c0c7624ef",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-24": {
+    "src": "/audio/poems/poem-24.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "eb70e72002fe284c9ba88801406131a9d3dd4f4e3b61cc14b10cee3679d5f0d3",
+    "synthesisText": "池上。\n唐，白居易。\n小娃撑小艇。\n偷采白莲回。\n不解藏踪迹。\n浮萍一道开。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 12.912,
+    "bytes": 77472,
+    "sha256": "8ca700e4ec6e2f028887a8214783bd13b8c057a21edd49ed04f27a1c16c517dc",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-25": {
+    "src": "/audio/poems/poem-25.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "3e3c46361499aa6c2bcc69725cb53e7d5a879a92e616b91657a411aa739e3521",
+    "synthesisText": "寻隐者不遇。\n唐，贾岛。\n松下问童子。\n言师采药去。\n只在此山中。\n云深不知处。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 13.488,
+    "bytes": 80928,
+    "sha256": "8e6b4db851dc87b2c4839e44b12de13671f31622250c60578d40a765bbbbfeb3",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-26": {
+    "src": "/audio/poems/poem-26.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "dc6d3c49c8bacfd3494b26fe982ea3d14b6cb81f86f3793f9128e786c7de9085",
+    "synthesisText": "静夜思。\n唐，李白。\n床前明月光。\n疑是地上霜。\n举头望明月。\n低头思故乡。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 12.72,
+    "bytes": 76320,
+    "sha256": "01c584e876d461a8be7a4790b99d5b0a21e611763f3a07c35ec656d742d54dd0",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-27": {
+    "src": "/audio/poems/poem-27.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "17e8a6d7acb9f769184f9538a74e8555b99961d3a4e948b1e7e837ca9673be58",
+    "synthesisText": "赠汪伦。\n唐，李白。\n李白乘舟将欲行。\n忽闻岸上踏歌声。\n桃花潭水深千尺。\n不及汪伦送我情。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 14.976,
+    "bytes": 89856,
+    "sha256": "8b748e576e59d9d88571ff4973dc78c858af87047ec041bc40c777bdc27d9ef3",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-28": {
+    "src": "/audio/poems/poem-28.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "ecc55db1da1bc0d477366df4db25a3ac09959edfbe6d9b9819e440e5c35326ed",
+    "synthesisText": "春晓。\n唐，孟浩然。\n春眠不觉晓。\n处处闻啼鸟。\n夜来风雨声。\n花落知多少。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 12.864,
+    "bytes": 77184,
+    "sha256": "656d909414793e7e0cd391fe1aca1a4efa877aacf4b711f544789660bc369d13",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-29": {
+    "src": "/audio/poems/poem-29.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "a293e7b85855292fa6e74b0650904f75ef3fd63959d2b03ee5415b1686fd7abf",
+    "synthesisText": "风。\n唐，李峤。\n解落三秋叶。\n能开二月花。\n过江千尺浪。\n入竹万竿斜。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 12.528,
+    "bytes": 75168,
+    "sha256": "945843fe6a8fc851f707ef1f942a3360e26a2a9e0a43f06c7e0575fabd7e21f5",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-30": {
+    "src": "/audio/poems/poem-30.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "b6fbfa005bb9ce68f5af4ef43af615c44e51a0444482cb4d729da767ed0f8e27",
+    "synthesisText": "古朗月行。\n唐，李白。\n小时不识月。\n呼作白玉盘。\n又疑瑶台镜。\n飞在青云端。\n仙人垂两足。\n桂树何团团。\n白兔捣药成。\n问言与谁餐。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 21.912,
+    "bytes": 131472,
+    "sha256": "258bd8b39af63285a2c8994b77bea47d382381bf3e174b3992af9d8243825997",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-31": {
+    "src": "/audio/poems/poem-31.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "386f07c7fe7c3a61cdf5d7115e229096c4586131e550a0caa7e0f76bf7ac4e26",
+    "synthesisText": "悯农（其一）。\n唐，李绅。\n春众一粒粟。\n秋收万颗子。\n四海无闲田。\n农夫犹饿死。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-1",
+        "index": 1,
+        "character": "种",
+        "pinyin": "zhòng",
+        "spokenAs": "众"
+      }
+    ],
+    "durationSeconds": 13.296,
+    "bytes": 79776,
+    "sha256": "00b8daa0f92e238ec991993d2c18a99f3552aa9e1f311327084ba22eff10aeed",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-32": {
+    "src": "/audio/poems/poem-32.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "add9f5eae769d2f66f076687fea274d910fe33e5478d2b46d89d9c6997e2acef",
+    "synthesisText": "悯农（其二）。\n唐，李绅。\n锄禾日当午。\n汗滴禾下土。\n谁知盘中餐。\n粒粒皆辛苦。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 13.44,
+    "bytes": 80640,
+    "sha256": "39deef68cd4b624a4102d189c150ca60b1113c01505b1c34b5f45ca0b3359b65",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-33": {
+    "src": "/audio/poems/poem-33.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "0ac39d8800578c658f73c7494932134b31a2d75dbe2c31144b6d47f05f7fde5f",
+    "synthesisText": "画。\n唐，王维。\n远看山有色。\n近听水无声。\n春去花还在。\n人来鸟不惊。",
+    "pronunciationCorrections": [],
+    "durationSeconds": 12.192,
+    "bytes": 73152,
+    "sha256": "80a8a5f0cb550f16a59d13918024bf9b9ae62bd9d3134d52d952f04cc35b8f6f",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-34": {
+    "src": "/audio/poems/poem-34.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "068087831ced01657948bf17d43b91e76937510b8ccddfd9337060927f7c3b8e",
+    "synthesisText": "江南。\n汉，月府。\n江南可采莲。\n莲叶何田田。\n鱼戏莲叶间。\n鱼戏莲叶东。\n鱼戏莲叶西。\n鱼戏莲叶南。\n鱼戏莲叶北。",
+    "pronunciationCorrections": [
+      {
+        "location": "author",
+        "index": 0,
+        "character": "乐",
+        "pinyin": "yuè",
+        "spokenAs": "月"
+      }
+    ],
+    "durationSeconds": 19.584,
+    "bytes": 117504,
+    "sha256": "09f8ce67b6d680360794ee75f0330a3c9b44cd9c7a9b86330e0b23f245c4664d",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  },
+  "poem-35": {
+    "src": "/audio/poems/poem-35.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "dd3fd360c445d32fe948a614c4da7b4fe6955df984786c8bca70131cf0c1be7a",
+    "synthesisText": "咏鹅。\n唐，骆宾王。\n鹅鹅鹅。\n屈项向天歌。\n白毛浮绿水。\n红掌拨清波。",
+    "pronunciationCorrections": [
+      {
+        "location": "line-2",
+        "index": 0,
+        "character": "曲",
+        "pinyin": "qū",
+        "spokenAs": "屈"
+      }
+    ],
+    "durationSeconds": 12.288,
+    "bytes": 73728,
+    "sha256": "76d6d6f05e102993554ec88519167a5fcefdd20d2068565a336bd7cf343a55d8",
+    "sampleRate": 24000,
+    "bitrate": 48000
+  }
+}

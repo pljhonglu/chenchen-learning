@@ -23,8 +23,9 @@ const progressSchema = `CREATE TABLE IF NOT EXISTS progress (
 )`
 
 type progressStore struct {
-	db   *sql.DB
-	path string
+	db           *sql.DB
+	path         string
+	builtinPoems []classroomPoem
 }
 
 type progress struct {
@@ -88,8 +89,25 @@ func scanProgress(row rowScanner) (progress, error) {
 }
 
 func (s *progressStore) get(ctx context.Context) (progress, error) {
-	return scanProgress(s.db.QueryRowContext(ctx,
+	if len(s.builtinPoems) == 0 {
+		return scanProgress(s.db.QueryRowContext(ctx,
+			"SELECT payload, updated_at FROM progress WHERE id = 1"))
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return progress{}, err
+	}
+	defer tx.Rollback()
+	stored, err := scanProgress(tx.QueryRowContext(ctx,
 		"SELECT payload, updated_at FROM progress WHERE id = 1"))
+	if err != nil {
+		return progress{}, err
+	}
+	stored, err = s.ensureBuiltinPoems(ctx, tx, stored, time.Now())
+	if err != nil {
+		return progress{}, err
+	}
+	return stored, tx.Commit()
 }
 
 func (s *progressStore) put(ctx context.Context, payload json.RawMessage, updatedAt int64) (progress, string, error) {
@@ -101,6 +119,19 @@ func (s *progressStore) put(ctx context.Context, payload json.RawMessage, update
 		return progress{}, "", err
 	}
 	defer tx.Rollback()
+	// Legacy PUT clients do not know about poem-removal tombstones. Retain
+	// those server-side decisions; restoration uses the explicit PATCH flow.
+	if len(s.builtinPoems) > 0 {
+		previous, err := scanProgress(tx.QueryRowContext(ctx,
+			"SELECT payload, updated_at FROM progress WHERE id = 1"))
+		if err != nil {
+			return progress{}, "", err
+		}
+		payload, err = s.retainPoemRemovals(payload, previous)
+		if err != nil {
+			return progress{}, "", err
+		}
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO progress (id, payload, updated_at)
 		VALUES (1, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
@@ -116,6 +147,10 @@ func (s *progressStore) put(ctx context.Context, payload json.RawMessage, update
 	}
 	stored, err := scanProgress(tx.QueryRowContext(ctx,
 		"SELECT payload, updated_at FROM progress WHERE id = 1"))
+	if err != nil {
+		return progress{}, "", err
+	}
+	stored, err = s.ensureBuiltinPoems(ctx, tx, stored, time.Now())
 	if err != nil {
 		return progress{}, "", err
 	}

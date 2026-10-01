@@ -10,16 +10,32 @@
   // ---------- Poems data (loaded from public/data/poems.json) ----------
   let POEMS = [];
   let BUILTIN_POEMS = [];
+  let POEM_ILLUSTRATIONS = {};
   let poemsLoadPromise = null;
+
+  async function loadPoemIllustrations() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    try {
+      const response = await fetch("data/poem-illustrations.json", { cache:"no-cache", signal:controller.signal });
+      if (!response.ok) return {};
+      const data = await response.json();
+      return isRecord(data) ? data : {};
+    } catch (_) { return {}; }
+    finally { clearTimeout(timeout); }
+  }
 
   function ensurePoems() {
     if (!poemsLoadPromise) {
-      poemsLoadPromise = fetch("data/poems.json", { cache: "force-cache" })
-        .then((r) => {
+      poemsLoadPromise = Promise.all([
+        fetch("data/poems.json", { cache: "no-cache" }).then(r => {
           if (!r.ok) throw new Error("poems_load_failed");
           return r.json();
-        })
-        .then((data) => {
+        }),
+        loadPoemIllustrations(),
+      ])
+        .then(([data, illustrations]) => {
+          POEM_ILLUSTRATIONS = illustrations;
           BUILTIN_POEMS = Array.isArray(data) ? data : [];
           POEMS = BUILTIN_POEMS;
           return POEMS;
@@ -38,7 +54,7 @@
 
   // SQLite is the sole persistent source. This object is only the current page's
   // response snapshot; closing/reloading the page always reads the server again.
-  let serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {} };
+  let serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {} };
   let stateReady = false;
   let serverQueue = Promise.resolve();
   let lastServerContact = null;
@@ -79,14 +95,14 @@
 
   function isRecord(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
   function validPayload(value) {
-    return isRecord(value) && isRecord(value.items) && ["activity", "customPoems", "customCharacters"].every(key=>value[key] === undefined || isRecord(value[key]));
+    return isRecord(value) && isRecord(value.items) && ["activity", "customPoems", "customCharacters", "hiddenCourses"].every(key=>value[key] === undefined || isRecord(value[key]));
   }
 
   function acceptServerState(data) {
     const empty = data.found === false && (data.payload === null || data.payload === undefined);
     if (!empty && !validPayload(data.payload)) throw new Error("服务器进度格式不正确");
     const payload = empty ? {} : data.payload;
-    serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, ...payload };
+    serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {}, ...payload };
     stateReady = true;
     lastServerContact = Date.now();
     POEMS = [...BUILTIN_POEMS, ...Object.values(serverState.customPoems)];
@@ -182,6 +198,7 @@
   async function markLearned(id, meta, extraOperations = []) {
     const existing = getItem(id);
     const operations = extraOperations.slice();
+    if (loadState().hiddenCourses[id]) operations.unshift({op:"delete",collection:"hiddenCourses",key:id});
     if (existing && !existing.learned) {
       const value = {learned:true,updatedAt:new Date().toISOString()};
       if (!existing.nextReview) value.nextReview = todayStr();
@@ -196,6 +213,7 @@
   async function removeClassroomItem(id) {
     const state = loadState();
     const operations = [{op:"delete",collection:"items",key:id}];
+    if (BUILTIN_POEMS.some(poem=>poem.id===id)) operations.push({op:"set",collection:"hiddenCourses",key:id,value:{removedAt:new Date().toISOString()}});
     if(state.customPoems[id]) operations.push({op:"delete",collection:"customPoems",key:id});
     if(state.customCharacters[id]) operations.push({op:"delete",collection:"customCharacters",key:id});
     await commitOperations(operations);
@@ -244,7 +262,7 @@
   // ---------- Router ----------
   let currentView = "home";
   let showingCelebration = false;
-  let poemFilter = "learned";
+  let poemFilter = "all";
   let poemQuery = "";
   let selectedPoemId = null;
 
@@ -262,13 +280,16 @@
     if (!play) return;
     const speaking = state === "speaking";
     const paused = state === "paused";
-    play.classList.toggle("is-active", speaking || paused);
-    play.textContent = speaking || paused ? "🔊 朗读中" : "🔊 朗读";
+    const loading = state === "loading";
+    play.classList.toggle("is-active", speaking || paused || loading);
+    play.textContent = loading ? "正在准备声音…" : paused ? "🔊 重新听" : speaking ? "🔊 从头听" : "🔊 听朗读";
+    play.disabled = loading;
+    play.setAttribute("aria-busy", String(loading));
     if (pause) {
       pause.disabled = !(speaking || paused);
       pause.textContent = paused ? "▶️ 继续" : "⏸️ 暂停";
     }
-    if (stop) stop.disabled = !(speaking || paused);
+    if (stop) stop.disabled = !(speaking || paused || loading);
   }
 
   const views = ["home", "poems", "poem-detail", "math", "pinyin", "write"];
@@ -503,18 +524,20 @@
       {id:"pinyin-basic", type:"pinyin", title:"声母韵母认读"},
     ];
     const learned = allLearned();
+    const removedPoems = BUILTIN_POEMS.filter(poem=>loadState().hiddenCourses[poem.id]);
     dialog.innerHTML = `
       <div class="dialog-heading"><div><p class="eyebrow">记录课堂，复习交给小兔</p><h2 id="parent-title">课堂内容管理</h2></div><button class="close-btn" id="close-parent" aria-label="关闭课堂内容管理">×</button></div>
-      <p class="parent-description">把孩子今天在学校学过的内容记下来。小兔按记忆间隔自动安排当天到期内容，家长不用挑选每天复习什么。</p>
+      <p class="parent-description">已有古诗都是课上学过的，已自动安排复习。其他新学的内容可以在这里补充，小兔按记忆间隔挑出当天到期内容。</p>
       <div class="memory-schedule"><span>今天巩固</span><i>→</i><span>1 天</span><i>→</i><span>2 天</span><i>→</i><span>4 天</span><i>→</i><span>7 天</span><i>→</i><span>15 天</span><i>→</i><span>30 天</span></div>
       <p class="form-help">记得时逐步拉开间隔；需要提示或再读时，明天再巩固。同一天多练不会连续跳级。</p>
-      <h3>古诗 · 今天在学校学过</h3>
-      <div class="parent-add"><select id="parent-poem" aria-label="选择学校学过的古诗"><option value="">从已有诗卡中查找…</option>${POEMS.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}${p.author ? " · "+escapeHtml(p.author) : ""}${getItem(p.id)?.learned ? "（已记录）" : ""}</option>`).join("")}</select><button class="btn btn-primary" id="add-class-poem">记录</button></div>
+      <h3>古诗 · 自动安排复习</h3>
+      <p class="form-help">已有诗卡无需逐首加入；新录入的古诗也会直接开始复习。</p>
+      ${removedPoems.length ? `<div class="parent-add"><select id="parent-poem" aria-label="选择要恢复复习的古诗"><option value="">已移除的诗卡…</option>${removedPoems.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`).join("")}</select><button class="btn btn-primary" id="restore-class-poem">恢复复习</button></div>` : ""}
       <details class="classroom-section"><summary>＋ 诗库里没有？新增一首古诗</summary><form id="custom-poem-form" class="classroom-form">
         <div class="form-two"><label>标题 <small>可选</small><input name="title" maxlength="50" placeholder="留空时使用第一句" /></label><label>作者 <small>可选</small><input name="author" maxlength="30" placeholder="如：李白" /></label></div>
         <label>古诗正文 <textarea name="body" rows="5" maxlength="4000" required placeholder="每句一行，例如：&#10;床前明月光，&#10;疑是地上霜。"></textarea></label>
         <label>逐行拼音 <small>可选，不自动猜读音</small><textarea name="pinyin" rows="4" maxlength="4000" placeholder="每字一个音节，以空格隔开；标点不用填写。&#10;chuáng qián míng yuè guāng&#10;yí shì dì shàng shuāng"></textarea></label>
-        <p class="form-help">拼音逐行对应正文。不填的行保留空行，也可以全部留空，仅显示汉字。</p><p class="form-error" id="poem-form-error" role="alert"></p><button class="btn btn-primary" type="submit">新增古诗，记录今天学过</button>
+        <p class="form-help">拼音逐行对应正文。不填的行保留空行，也可以全部留空，仅显示汉字。</p><p class="form-error" id="poem-form-error" role="alert"></p><button class="btn btn-primary" type="submit">保存古诗，自动安排复习</button>
       </form></details>
       <h3>汉字 · 一个字一张复习卡</h3>
       <form id="custom-character-form" class="classroom-form"><div class="form-two"><label>今天学的汉字<input name="character" maxlength="2" required placeholder="如：春" /></label><label>笔画 / 笔顺 <small>可选</small><input name="strokes" maxlength="120" placeholder="如：9 画" /></label></div><label>记忆或书写提示 <small>可选</small><input name="tip" maxlength="160" placeholder="写下老师教过的小提示" /></label><p class="form-error" id="character-form-error" role="alert"></p><button class="btn btn-learn" type="submit">记录这个汉字</button></form>
@@ -526,12 +549,13 @@
     const close = () => {dialog.close(); if(currentView === "home" && !showingCelebration) renderHome();};
     document.getElementById("close-parent").onclick = close;
     document.getElementById("parent-done").onclick = () => {dialog.close();navigate("home");};
-    document.getElementById("add-class-poem").onclick = async (event) => {
+    const restorePoem = document.getElementById("restore-class-poem");
+    if (restorePoem) restorePoem.onclick = async (event) => {
       const poem = POEMS.find(p=>p.id===document.getElementById("parent-poem").value);
-      if (!poem) {toast("先选择一首课上学过的古诗。");return;}
+      if (!poem) {toast("先选择要恢复的诗卡。");return;}
       const button = event.currentTarget;
       button.disabled = true;
-      try {await markLearned(poem.id,{type:"poem",title:poem.title});await openParent();toast("已记录课堂内容，复习会自动安排。");}
+      try {await markLearned(poem.id,{type:"poem",title:poem.title});await openParent();toast("已恢复复习，今天先一起巩固。");}
       catch (_) {button.disabled = false;}
     };
     document.getElementById("custom-poem-form").onsubmit = async event => {
@@ -611,13 +635,22 @@
   }
 
   // ---------- Poems ----------
+  function poemIllustration(poem, detail = false) {
+    const art = POEM_ILLUSTRATIONS[poem.id];
+    if (!art || !/^images\/poems\/[a-zA-Z0-9_-]+\.(png|webp|jpg)$/.test(art.src)) return "";
+    const image = `<img src="${escapeHtml(art.src)}" alt="${escapeHtml(art.alt || poem.title)}" loading="${detail ? "eager" : "lazy"}" decoding="async" />`;
+    return detail
+      ? `<figure class="poem-picture">${image}<figcaption><strong>看图想一想</strong><span>${escapeHtml(art.hint || "看着画面，试着把诗背出来吧。")}</span></figcaption></figure>`
+      : `<span class="poem-thumbnail">${image}</span>`;
+  }
+
   function poemStatus(id) {
     const it = getItem(id);
-    if (!it || !it.learned) return { label: "还没加入", cls: "" };
+    if (!it || !it.learned) return { label: "已暂停复习", cls: "" };
     const today = todayStr();
     if (it.nextReview && it.nextReview <= today)
       return { label: "再想一想", cls: "due" };
-    return { label: "课上学过", cls: "learned" };
+    return { label: "下次 " + (it.nextReview || "稍后"), cls: "learned" };
   }
 
   async function renderPoems() {
@@ -629,7 +662,7 @@
         return;
       }
     }
-    let list = POEMS.slice();
+    let list = POEMS.filter(poem=>!loadState().hiddenCourses[poem.id]);
     if (poemQuery) {
       const q = poemQuery.trim().toLowerCase();
       list = list.filter(
@@ -640,16 +673,12 @@
           p.lines.some((l) => l.text.includes(q))
       );
     }
-    if (poemFilter === "learned") {
-      list = list.filter((p) => getItem(p.id)?.learned);
-    } else if (poemFilter === "due") {
+    if (poemFilter === "due") {
       const today = todayStr();
       list = list.filter((p) => {
         const it = getItem(p.id);
         return it?.learned && it.nextReview <= today;
       });
-    } else if (poemFilter === "new") {
-      list = list.filter((p) => !getItem(p.id)?.learned);
     }
 
     el.innerHTML = `
@@ -662,9 +691,7 @@
           )}" />
           <div class="filter-btns">
             <button data-f="all" class="${poemFilter === "all" ? "active" : ""}">全部诗卡</button>
-            <button data-f="new" class="${poemFilter === "new" ? "active" : ""}">还没学过</button>
-            <button data-f="learned" class="${poemFilter === "learned" ? "active" : ""}">课上学过</button>
-            <button data-f="due" class="${poemFilter === "due" ? "active" : ""}">再想一想</button>
+            <button data-f="due" class="${poemFilter === "due" ? "active" : ""}">今天复习</button>
           </div>
         </div>
         <div class="poem-grid">
@@ -675,6 +702,7 @@
                     const st = poemStatus(p.id);
                     const display = p.titleDisplay || p.title;
                     return `<button type="button" class="poem-card" data-id="${p.id}">
+                      ${poemIllustration(p)}
                       <div class="ptitle">${escapeHtml(display)}${
                       p.subtitle ? `<span style="font-size:0.7em;color:var(--muted)"> · ${p.subtitle}</span>` : ""
                     }</div>
@@ -683,7 +711,7 @@
                     </button>`;
                   })
                   .join("")
-              : `<div class="empty" style="grid-column:1/-1">这里还没有诗卡。请家长添加课上学过的古诗，或点「全部诗卡」看看。</div>`
+              : `<div class="empty" style="grid-column:1/-1">${poemQuery ? "没有找到这首诗，换个词试试吧。" : poemFilter === "due" ? "今天的古诗都复习好啦，也可以点「全部诗卡」看看。" : "这里暂时没有诗卡，可以请家长添加或恢复。"}</div>`
           }
         </div>
       </div>`;
@@ -764,21 +792,22 @@
             ? `<div class="poem-note">${escapeHtml(poem.note)}</div>`
             : ""
         }
-        <div class="poem-body" id="poem-body">${body}</div>
+        <div class="poem-reading${POEM_ILLUSTRATIONS[id] ? " has-picture" : ""}">
+          ${poemIllustration(poem, true)}
+          <div class="poem-body" id="poem-body">${body}</div>
+        </div>
         <div class="recall-tools"><button class="btn btn-ghost" id="hide-poem" aria-pressed="false">藏起汉字，试着背</button><button class="btn btn-ghost" id="hide-pinyin" aria-pressed="false">收起拼音</button></div>
         <div class="speak-bar" role="group" aria-label="朗读控制">
           <button type="button" class="btn btn-speak" id="btn-speak">🔊 朗读</button>
           <button type="button" class="btn btn-speak-secondary" id="btn-speak-pause" disabled>⏸️ 暂停</button>
           <button type="button" class="btn btn-speak-secondary" id="btn-speak-stop" disabled>⏹️ 停止</button>
         </div>
+        <p class="audio-caption" id="audio-caption">${BUILTIN_POEMS.some(p => p.id === id) ? "自然语音 · AI 合成" : "这首新诗还没有配音，可以和爸爸妈妈一起读。"}</p>
         <div class="actions-bar">
           ${
             !enrolled
-              ? `<div class="hint">这首诗课上学过吗？请爸爸妈妈帮忙选进复习。</div>
-                 <div class="btn-row" style="justify-content:center">
-                   <button class="btn btn-learn" id="btn-enroll">＋ 课上学过，加入复习</button>
-                 </div>`
-              : `<div class="hint">试着背一背，再告诉小兔吧</div>
+              ? `<div class="hint">这首诗已暂停复习，可以请家长在课堂管理中恢复。</div>`
+              : `<div class="hint">${isDue ? "试着背一背，再告诉小兔吧" : "下次复习：" + escapeHtml(it.nextReview || "稍后") + "。今天也可以轻松背一背。"}</div>
                  <div class="btn-row" style="justify-content:center">
                    <button class="btn btn-ok" data-r="remember">😊 我记得</button>
                    <button class="btn btn-fuzzy" data-r="fuzzy">🌱 提醒一下</button>
@@ -789,19 +818,6 @@
       </div>`;
 
     document.getElementById("back-poems").onclick = () => navigate("poems");
-    const enroll = document.getElementById("btn-enroll");
-    if (enroll) {
-      enroll.onclick = async () => {
-        enroll.disabled = true;
-        try { await markLearned(id, {
-          type: "poem",
-          title: displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""),
-        });
-        renderPoemDetail(id);
-        toast("已记录今天课堂学过，后续复习自动安排。");
-        } catch (_) { enroll.disabled = false; }
-      };
-    }
     el.querySelectorAll("[data-r]").forEach((b) => {
       b.onclick = async () => {
         const r = b.dataset.r;
@@ -836,7 +852,7 @@
     updateSpeakButtons("idle");
     if (btnSpeak) {
       btnSpeak.onclick = () => {
-        if (!window.ChenchenSpeech || !ChenchenSpeech.supported()) {
+        if (!window.ChenchenSpeech || !ChenchenSpeech.supported(poem)) {
           toast("暂时没有声音，可以看着文字和爸爸妈妈一起读。");
           return;
         }
@@ -846,6 +862,7 @@
         }
         const ok = ChenchenSpeech.speakPoem(
           {
+            id: poem.id,
             title: displayTitle,
             dynasty: poem.dynasty,
             author: poem.author,
@@ -853,12 +870,12 @@
           },
           {
             onState: updateSpeakButtons,
-            onError: () => toast("暂时没有声音，可以看着文字和爸爸妈妈一起读。"),
+            onError: () => toast("朗读音频暂时没有打开，请再点一次；也可以先和爸爸妈妈一起读。"),
             onUnsupported: () =>
-              toast("暂时没有声音，可以看着文字和爸爸妈妈一起读。"),
+              toast("这首诗暂时没有配音，可以和爸爸妈妈一起读。"),
           }
         );
-        if (ok) updateSpeakButtons("speaking");
+        if (ok) updateSpeakButtons(ChenchenSpeech.getStatus());
       };
     }
     if (btnPause) {
@@ -866,11 +883,10 @@
         if (!window.ChenchenSpeech) return;
         if (ChenchenSpeech.getStatus() === "paused") {
           ChenchenSpeech.resume();
-          updateSpeakButtons("speaking");
         } else {
           ChenchenSpeech.pause();
-          updateSpeakButtons("paused");
         }
+        updateSpeakButtons(ChenchenSpeech.getStatus());
       };
     }
     if (btnStop) {

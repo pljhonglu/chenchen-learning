@@ -54,6 +54,10 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer store.db.Close()
+	store.builtinPoems, err = loadClassroomPoems(public)
+	if err != nil {
+		return err
+	}
 	app := &application{store: store, public: public, logger: logger}
 	server := &http.Server{
 		Addr:              net.JoinHostPort(envOr("HOST", "0.0.0.0"), port),

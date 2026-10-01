@@ -12,7 +12,8 @@ globalThis.subject = {
  loadState, getItem, markLearned, removeClassroomItem, reviewPatch, recordPractice,
  todayStr, addDays, dueItems, syncNow, commitOperations, completePractice,
  navigate, bindSessionExit, openReviewItem, startReview, renderHome,
- writingCharacters, openParent, initializePage, customPoemFromForm,
+ writingCharacters, openParent, initializePage, customPoemFromForm, renderPoems, renderPoemDetail,
+ setPoemFilter: value => poemFilter=value,
  setView: value => currentView=value,
  setSession: value => reviewSession=value,
  getSession: () => reviewSession,
@@ -120,6 +121,36 @@ test('server is sole source; GET-only loading and a fresh page read current serv
   e.alterServer(state=>{delete state.items.a;state.items.b=course('b');});await t.syncNow();
   assert.equal(t.getItem('a'),null);assert.ok(t.getItem('b'));assert.ok(e.requests.every(r=>r.method==='GET'));
   const other=environment(e.db());await other.connect();assert.equal(other.subject.getItem('a'),null);assert.ok(other.subject.getItem('b'));
+});
+
+test('classroom poems open directly for review without an enrollment button or unlearned filter',async()=>{
+  const poem={id:'poem-1',title:'静夜思',author:'李白',dynasty:'唐',lines:[{text:'床前明月光',chars:[{c:'床',p:'chuáng'}]}]};
+  const e=environment({items:{[poem.id]:course(poem.id,'poem',{title:poem.title})}}),t=e.subject;
+  t.setPoems([poem]);await e.connect();await t.renderPoems();
+  assert.match(e.element('poems-content').innerHTML,/今天复习/);
+  assert.doesNotMatch(e.element('poems-content').innerHTML,/还没学过|data-f="new"|data-f="learned"/);
+  await t.renderPoemDetail(poem.id);
+  assert.match(e.element('poem-detail-content').innerHTML,/data-r="remember"/);
+  assert.doesNotMatch(e.element('poem-detail-content').innerHTML,/btn-enroll|加入复习|课上学过吗/);
+  assert.ok(e.requests.every(request=>request.method==='GET'),'Rendering must not enroll from a stale browser snapshot');
+  await t.openParent();assert.doesNotMatch(e.element('parent-dialog').innerHTML,/id="add-class-poem"/);
+  assert.match(e.element('parent-dialog').innerHTML,/已有古诗都是课上学过的，已自动安排复习/);
+  await t.recordPractice(poem.id,'poem','remember');
+  t.setPoemFilter('due');await t.renderPoems();assert.doesNotMatch(e.element('poems-content').innerHTML,/class="poem-card"/);
+  assert.match(e.element('poems-content').innerHTML,/今天的古诗都复习好啦/);
+});
+
+test('removing a built-in poem saves a tombstone and the parent can explicitly restore review',async()=>{
+  const poem={id:'poem-1',title:'静夜思',lines:[{text:'床前明月光',chars:[]}]};
+  const e=environment({items:{[poem.id]:course(poem.id)}}),t=e.subject;
+  t.setPoems([poem]);await e.connect();await t.removeClassroomItem(poem.id);
+  assert.ok(t.loadState().hiddenCourses[poem.id]);assert.equal(t.getItem(poem.id),null);
+  await t.renderPoems();assert.doesNotMatch(e.element('poems-content').innerHTML,/class="poem-card"/);
+  await t.openParent();assert.match(e.element('parent-dialog').innerHTML,/恢复复习/);
+  e.element('parent-poem').value=poem.id;
+  await e.element('restore-class-poem').onclick({currentTarget:e.element('restore-class-poem')});
+  assert.equal(t.loadState().hiddenCourses[poem.id],undefined);assert.equal(t.getItem(poem.id).learned,true);
+  assert.equal(t.getItem(poem.id).nextReview,'2026-10-01');
 });
 
 test('local dates and intervals 1, 2, 4, 7, 15, 30; same-day and early practice never advance again',async()=>{

@@ -30,6 +30,9 @@ wait_ready() {
 wait_ready
 curl -fsS "$base/" | grep -q '辰辰'
 curl -fsS "$base/data/poems.json" | python3 -c 'import json,sys; assert len(json.load(sys.stdin)) > 0'
+curl -fsS "$base/data/poem-illustrations.json" | python3 -c 'import json,sys; assert len(json.load(sys.stdin)) == 35'
+curl -fsS "$base/images/poems/poem-01.webp" | python3 -c 'import sys; b=sys.stdin.buffer.read(); assert b[:4] == b"RIFF" and b[8:12] == b"WEBP"'
+curl -fsS "$base/audio/poems/poem-01.mp3" | python3 -c 'import sys; assert len(sys.stdin.buffer.read()) > 4000'
 curl -fsS -X PUT "$base/api/progress" -H 'Content-Type: application/json' \
   --data '{"payload":{"items":{"smoke":{"id":"smoke","learned":true,"title":"容器持久化检查"}}},"clientUpdatedAt":1000}' \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] and d["kept"] == "client"'
@@ -37,7 +40,7 @@ docker restart "$name" >/dev/null
 refresh_address
 wait_ready
 curl -fsS "$base/api/progress" \
-  | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["found"] and d["payload"]["items"]["smoke"]["learned"] and d["updatedAt"] == 1000'
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); items=d["payload"]["items"]; assert d["found"] and items["smoke"]["learned"] and len(items) == 36 and all(items[f"poem-{i:02}"]["learned"] for i in range(1,36)) and d["updatedAt"] >= 1000'
 curl -fsS -X PATCH "$base/api/progress" -H 'Content-Type: application/json' \
   --data '{"operations":[{"op":"merge","collection":"items","key":"smoke","value":{"stage":1,"nextReview":"2026-10-02"}}]}' \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] and d["payload"]["items"]["smoke"]["stage"] == 1 and d["updatedAt"] > 1000'

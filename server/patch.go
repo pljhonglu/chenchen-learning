@@ -124,6 +124,10 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 	if err != nil {
 		return progress{}, err
 	}
+	stored, err = s.ensureBuiltinPoems(ctx, tx, stored, time.Now())
+	if err != nil {
+		return progress{}, err
+	}
 	state := make(map[string]json.RawMessage)
 	if stored.Found {
 		if err := json.Unmarshal(stored.Payload, &state); err != nil || state == nil {
@@ -151,6 +155,17 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 		entries, err := loadCollection(operation.Collection)
 		if err != nil {
 			return progress{}, err
+		}
+		if operation.Collection == "items" && s.isBuiltinPoem(operation.Key) {
+			hidden, err := loadCollection("hiddenCourses")
+			if err != nil {
+				return progress{}, err
+			}
+			if operation.Op == "delete" {
+				hidden[operation.Key], _ = json.Marshal(map[string]any{"removedAt": time.Now().UTC().Format(time.RFC3339Nano)})
+			} else if _, removed := hidden[operation.Key]; removed {
+				return stored, &patchError{http.StatusConflict, "entry_not_found", "poem was removed; restore it before reviewing"}
+			}
 		}
 		switch operation.Op {
 		case "create":
