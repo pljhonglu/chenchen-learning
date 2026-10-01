@@ -121,26 +121,26 @@ function harness(mode = "decomp") {
   function fixedBond({ mode = "decomp", blanks = { whole: false, left: false, right: true } } = {}) {
     subject.setBond({ item: { n: 7, left: 3, right: 4, mode, blanks, answers: { whole: null, left: null, right: null }, status: "open" }, qIndex: 1, activeSlot: ["whole", "left", "right"].find(slot => blanks[slot]), checked: false });
   }
-  function runAuto() {
-    assert.equal(timers.size, 1, "A correct answer should schedule exactly one automatic transition");
-    const [id, timer] = [...timers][0];
-    assert.ok(timer.delay > 0 && timer.delay <= 1500, "Give brief feedback before promptly continuing");
-    timers.delete(id); timer.fn();
-  }
-  return { subject, document, timers, spoken, find, click, fixedBond, runAuto, state: () => subject.state(), score: () => copy(subject.state().mathScore) };
+  return { subject, document, timers, spoken, find, click, fixedBond, state: () => subject.state(), score: () => copy(subject.state().mathScore) };
 }
 
-test("a complete number bond is checked on the final digit and automatically continues once", () => {
+test("a complete number bond is checked on the final digit and waits for manual continuation", () => {
   const h = harness(); h.fixedBond();
   assert.equal(h.document.getElementById("nb-check"), null, "No extra submit button is needed");
   const digit = h.click('[data-n="4"]');
   assert.deepEqual(h.score(), { ok: 1, total: 1 });
   assert.equal(h.state().mathCompleted, 1);
   assert.equal(h.state().bondSheet.checked, true);
-  assert.equal(h.find("#math-next").hidden, true);
+  assert.match(h.find("#math-fb").textContent, /答对/);
+  assert.equal(h.find("#math-next").hidden, false);
+  assert.equal(h.find("#math-next").disabled, false);
+  assert.match(h.find("#math-next").textContent, /下一题/);
+  assert.equal(h.timers.size, 0, "Correct answers must not schedule automatic navigation");
   digit.onclick(); h.subject.checkBondSheet();
   assert.deepEqual(h.score(), { ok: 1, total: 1 }, "Rapid repeated taps must not count twice");
-  h.runAuto();
+  assert.equal(h.state().bondSheet.qIndex, 1, "Keep the completed question visible until Next is clicked");
+  assert.equal(h.state().bondSheet.item.status, "ok");
+  h.click("#math-next");
   assert.equal(h.state().bondSheet.qIndex, 2);
   assert.equal(h.state().bondSheet.checked, false);
   assert.equal(h.timers.size, 0);
@@ -156,7 +156,10 @@ test("two blanks wait for both digits and accept a valid alternative partition i
   h.click('[data-n="7"]');
   assert.equal(h.state().bondSheet.item.status, "ok", "0 + 7 is valid even if the generated partition was 3 + 4");
   assert.deepEqual(h.score(), { ok: 1, total: 1 });
-  h.runAuto();
+  assert.equal(h.state().bondSheet.qIndex, 1);
+  assert.equal(h.timers.size, 0);
+  h.click("#math-next");
+  assert.equal(h.state().bondSheet.qIndex, 2);
 });
 
 test("a wrong number bond shows the correct relationship and waits for manual continuation", () => {
@@ -210,13 +213,19 @@ test("composition also checks its only blank immediately and explains an incorre
   assert.equal(h.state().bondSheet.qIndex, 2);
 });
 
-test("a correct addition or subtraction choice automatically advances without extra clicks", () => {
+test("a correct addition or subtraction choice shows feedback and waits for the Next button", () => {
   const h = harness("addsub"), question = h.state().currentQ;
   const answer = h.click(`[data-v="${question.answer}"]`);
   answer.onclick();
   assert.deepEqual(h.score(), { ok: 1, total: 1 });
-  assert.equal(h.find("#math-next").hidden, true);
-  h.runAuto();
+  assert.match(h.find("#math-fb").textContent, /答对/);
+  assert.equal(h.find("#math-next").hidden, false);
+  assert.equal(h.find("#math-next").disabled, false);
+  assert.match(h.find("#math-next").textContent, /下一题/);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.state().currentQ, question, "Do not replace a correct question without a click");
+  assert.ok(h.document.querySelectorAll(".math-opts button").every(button => button.disabled));
+  h.click("#math-next");
   assert.notEqual(h.state().currentQ, question);
   assert.equal(h.state().mathCompleted, 1);
 });
@@ -234,38 +243,44 @@ test("a wrong arithmetic choice shows the answer and advances only after the chi
   assert.notEqual(h.state().currentQ, question);
 });
 
-test("changing math mode cancels the old transition even if its callback was already queued", () => {
+test("changing math mode after an answer starts a fresh round without automatic navigation", () => {
   const h = harness(); h.fixedBond(); h.click('[data-n="4"]');
-  const stale = [...h.timers.values()][0].fn;
-  h.click('[data-m="addsub"]');
-  const next = h.state().currentQ;
   assert.equal(h.timers.size, 0);
-  stale();
-  assert.equal(h.state().currentQ, next);
+  h.click('[data-m="addsub"]');
+  assert.equal(h.state().mathMode, "addsub");
+  assert.ok(h.state().currentQ);
+  assert.equal(h.timers.size, 0);
   assert.equal(h.state().mathCompleted, 0);
   assert.deepEqual(h.score(), { ok: 0, total: 0 });
+  assert.equal(h.find("#math-next").hidden, true);
 });
 
-test("leaving math cancels automatic navigation and old callbacks cannot affect a new round", () => {
+test("leaving math after an answer keeps the selected page and returning starts a fresh round", () => {
   const h = harness(); h.fixedBond(); h.click('[data-n="4"]');
-  const stale = [...h.timers.values()][0].fn;
   h.subject.showView("home");
   assert.equal(h.timers.size, 0);
-  stale();
   assert.equal(h.state().currentView, "home");
   h.subject.showView("math"); h.subject.renderMath("decomp");
-  const next = h.state().bondSheet;
-  stale();
-  assert.equal(h.state().bondSheet, next);
+  assert.equal(h.state().currentView, "math");
+  assert.equal(h.state().bondSheet.qIndex, 1);
+  assert.equal(h.state().bondSheet.checked, false);
   assert.equal(h.state().mathCompleted, 0);
+  assert.deepEqual(h.score(), { ok: 0, total: 0 });
+  assert.equal(h.find("#math-next").hidden, true);
+  assert.equal(h.timers.size, 0);
 });
 
-test("three correct arithmetic answers automatically reach the finish screen with no fourth question", () => {
+test("every correct arithmetic answer waits for a button, including the third answer before finishing", () => {
   const h = harness("addsub");
   for (let count = 1; count <= 3; count++) {
-    h.click(`[data-v="${h.state().currentQ.answer}"]`);
+    const question = h.state().currentQ;
+    h.click(`[data-v="${question.answer}"]`);
     assert.equal(h.state().mathCompleted, count);
-    h.runAuto();
+    assert.equal(h.state().currentQ, question);
+    assert.equal(h.document.getElementById("finish-math"), null, "Even the last correct answer stays visible until acknowledged");
+    assert.equal(h.timers.size, 0);
+    assert.match(h.find("#math-next").textContent, count === 3 ? /完成啦/ : /下一题/);
+    h.click("#math-next");
   }
   assert.ok(h.find("#finish-math"));
   assert.match(h.find("#math-panel").textContent, /3 道题/);
@@ -276,7 +291,7 @@ test("three correct arithmetic answers automatically reach the finish screen wit
 
 test("a wrong third answer stays visible until manual finish and remains an incorrect attempt", () => {
   const h = harness("addsub");
-  for (let count = 0; count < 2; count++) { h.click(`[data-v="${h.state().currentQ.answer}"]`); h.runAuto(); }
+  for (let count = 0; count < 2; count++) { h.click(`[data-v="${h.state().currentQ.answer}"]`); h.click("#math-next"); }
   const answer = h.state().currentQ.answer;
   h.document.querySelectorAll(".math-opts button").find(button => Number(button.dataset.v) !== answer).click();
   assert.equal(h.document.getElementById("finish-math"), null);
