@@ -544,7 +544,7 @@
     const learned = allLearned();
     const due = dueItems();
     if (!learned.length) { openParent(); return; }
-    if (!due.length) { toast("今天的复习都完成啦，明天再来和小兔见面。"); return; }
+    if (!due.length) { toast("今天到期的内容都复习好啦。"); return; }
     const items = due.slice(0, 3);
     reviewSession = { items, index: 0 };
     openReviewItem(items[0].id, items[0].type);
@@ -564,29 +564,21 @@
       <div class="home-top">
         <section class="daily-review" aria-labelledby="daily-review-title">
           <div class="hero">
-            <div class="hero-copy"><p class="eyebrow"><span></span> 把学过的，再想起来</p><h1 id="daily-review-title">今日复习</h1><p class="hero-description">${learned.length && !due.length ? "今天没有到期复习，安心休息一下吧。" : "和小兔一起，复习课上的小本领。"}</p><button class="btn btn-primary start-btn" id="start-review" ${learned.length && !due.length ? "disabled" : ""}><span aria-hidden="true">▶</span> ${learned.length && !due.length ? "今天复习好啦" : "开始复习"} <span aria-hidden="true">→</span></button><p class="hero-note">${due.length ? `今天有 ${due.length} 项到期 · 一次最多 3 个小练习` : learned.length ? `下次复习：${formatDateCN(nextDate || todayStr())}` : "请家长记录课上学过的内容，复习会自动安排"}</p></div>
+            <div class="hero-copy"><p class="eyebrow"><span></span> 把学过的，再想起来</p><h1 id="daily-review-title">今日复习</h1><p class="hero-description">${learned.length && !due.length ? "今天没有到期内容。" : "和小兔一起，复习课上的小本领。"}</p><button class="btn btn-primary start-btn" id="start-review" ${learned.length && !due.length ? "disabled" : ""}><span aria-hidden="true">▶</span> ${learned.length && !due.length ? "到期复习完成" : "开始复习"} <span aria-hidden="true">→</span></button><p class="hero-note">${due.length ? `今天有 ${due.length} 项到期 · 一次最多 3 个小练习` : learned.length ? `下次复习：${formatDateCN(nextDate || todayStr())}` : "请家长记录课上学过的内容，复习会自动安排"}</p></div>
             <div class="hero-illustration">${rabbitArt()}<span class="art-caption">小兔陪你，一起长大</span></div>
           </div>
-          <div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>今天不用再复习啦</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}</div>
+          <div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>暂无到期内容</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}
+            <button class="today-item today-english" id="home-english-daily" disabled><span class="english-daily-icon" aria-hidden="true">Aa</span><span><strong>复习今日英语</strong><small id="home-english-status">准备今日词卡…</small></span><span class="step-go" aria-hidden="true">→</span></button>
+          </div>
         </section>
         <aside class="growth-card"><div class="growth-heading"><span class="tiny-sprout" aria-hidden="true">♧</span><span>我的小小收获</span></div><h2>${practiced ? "小花正在长大" : "今天也来浇浇水"}</h2><p>${practiced ? `今天完成了 ${practiced} 次练习` : "每认真练习一次，就收获一朵小花"}</p><div class="flower-row" aria-label="今天完成 ${practiced} 次练习">${[0,1,2].map(i => `<span class="flower ${i < practiced ? "bloomed" : ""}" aria-hidden="true">✿<i></i></span>`).join("")}</div><div class="growth-bottom"><span>${Math.min(practiced,3)} / 3 朵小花</span><span>一点点，就是进步</span></div><div class="growth-track"><span style="width:${Math.min(practiced/3,1)*100}%"></span></div><button class="text-btn home-records" id="home-records">练习记录 →</button></aside>
-      </div>
-      <div class="section-heading"><div><h2>自由学习</h2></div><button class="listen-guide" id="home-guide" aria-label="听听怎么玩">◖)) <span>听听怎么玩</span></button></div>
-      <div class="subject-grid">
-        <button class="subject-card subject-poems" data-go="poems"><span class="subject-drawing poem-drawing" aria-hidden="true"><i>诗</i><span>⌁</span></span><span class="subject-text"><strong>读古诗</strong><small>听一听 · 背一背</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-math" data-go="math"><span class="subject-drawing math-drawing" aria-hidden="true"><i>2</i><i>＋</i><i>3</i></span><span class="subject-text"><strong>玩数学</strong><small>数一数 · 想一想</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-pinyin" data-go="pinyin"><span class="subject-drawing pinyin-drawing" aria-hidden="true"><i>a</i><i>o</i><i>e</i></span><span class="subject-text"><strong>读拼音</strong><small>张开嘴 · 读一读</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-write" data-go="write"><span class="subject-drawing write-drawing" aria-hidden="true"><i>大</i><span>✎</span></span><span class="subject-text"><strong>写汉字</strong><small>看一看 · 描一描</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-english" id="home-english-daily" disabled><span class="subject-drawing english-drawing" aria-hidden="true"><i>Aa</i><span>◖))</span></span><span class="subject-text"><strong>复习今日英语</strong><small id="home-english-status">准备今日词卡…</small></span><span class="subject-arrow" aria-hidden="true">↗</span></button>
       </div>`;
     document.getElementById("start-review").onclick = startReview;
     document.getElementById("home-records").onclick = () => navigate("records");
     const dailyEnglish = document.getElementById("home-english-daily");
     dailyEnglish.onclick = startDailyEnglish;
     void updateHomeEnglishDaily(dailyEnglish);
-    document.getElementById("home-guide").onclick = () => speakGuide("小兔会帮你安排今天到期的复习。点开始复习，把课上学过的再想一想。复习完就休息，慢慢来。");
     document.getElementById("home-setup")?.addEventListener("click", openParent);
-    el.querySelectorAll("[data-go]").forEach(btn => btn.onclick = () => navigate(btn.dataset.go));
     el.querySelectorAll("[data-review]").forEach(btn => btn.onclick = () => { reviewSession = {items:[getItem(btn.dataset.review)],index:0}; openReviewItem(btn.dataset.review,btn.dataset.type); });
   }
 

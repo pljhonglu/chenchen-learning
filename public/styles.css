@@ -265,6 +265,16 @@ button[hidden],*[hidden] {
   overflow-wrap:anywhere;
 }
 
+.daily-review .today-english {
+  background:#faf0dc;
+}
+
+.english-daily-icon {
+  flex:0 0 28px;
+  color:#ab8648;
+  font:italic 25px Georgia,serif;
+}
+
 .hero {
   min-height:322px;
   display:flex;
