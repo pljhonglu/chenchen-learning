@@ -108,6 +108,7 @@ function environment(initial = {}) {
     Object.defineProperty(context,name,{get(){throw new Error(`${name} must not be used`);}});
   }
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/writing-vocabulary.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/pinyin-data.js'),'utf8'),context);
   vm.runInContext(instrumented,context,{filename:sourcePath});
   context.subject.setView('poems');context.subject.setPoems([]);
   return {context,subject:context.subject,requests,scrolls,timers,elements,element,db:()=>copy(database),

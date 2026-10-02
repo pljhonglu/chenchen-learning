@@ -303,6 +303,7 @@
 
   function showView(name) {
     if (name !== "write-detail") stopWritingDemo();
+    if (name !== "pinyin") stopPinyinAudio(true);
     if (name !== "english") englishModule?.stop();
     if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
@@ -559,6 +560,7 @@
     if (!stateReady) { toast("先连接服务器，才能管理课堂内容。"); return; }
     if (currentView === "english") englishModule?.pause();
     if (currentView === "write-detail") {writingDemo?.stop();writingVoice?.stop();}
+    if (currentView === "pinyin") stopPinyinAudio();
     await ensurePoems().catch(() => {});
     const dialog = document.getElementById("parent-dialog");
     const scroll = dialog.open ? dialog.scrollTop : 0;
@@ -588,7 +590,7 @@
       <h3>数学与拼音 · 记录已学内容</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" ${getItem(c.id)?.learned ? "disabled" : ""}><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已记录" : "+ 记录"}</span></button>`).join("")}</div>
       <h3>英语 · 程序带着听和说</h3><p class="form-help">39 项课堂词汇与 48 项生活拓展，单词、句子和中文引导都能播放。完成小练习后加入间隔复习；生活拓展不会一次全部加入。家长无需示范发音。</p><button class="btn btn-ghost" id="parent-open-english">打开英语小花园 →</button>
       <h3>课堂记录 <span class="muted">${learned.length} 项</span></h3><div class="parent-enrolled">${learned.length ? learned.map(it=>`<div><span>${escapeHtml(it.title)}<small>${it.nextReview <= todayStr() ? "今天到期" : "下次 "+escapeHtml(it.nextReview)} · 自动安排</small></span><button class="text-btn delete-course" data-remove="${escapeHtml(it.id)}" aria-label="删除课堂内容 ${escapeHtml(it.title)}">删除</button></div>`).join("") : '<p class="muted">还没有课堂记录。先添加今天学过的一两项就好。</p>'}</div>
-      <p class="parent-tip">陪练建议：古诗先回想再听示范；拼音请家长示范发音；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">记录好啦，回小花园</button>`;
+      <p class="parent-tip">陪练建议：古诗先回想再听示范；拼音先听范音再跟读；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">记录好啦，回小花园</button>`;
     if (!dialog.open) dialog.showModal();
     dialog.scrollTop = scroll;
     const close = () => {dialog.close(); if(currentView === "home" && !showingCelebration) renderHome();};
@@ -1302,32 +1304,63 @@
     "a","o","e","i","u","ü","ai","ei","ui","ao","ou","iu",
     "ie","üe","er","an","en","in","un","ün","ang","eng","ing","ong",
   ];
-  // Example syllables use the actual spelling of the familiar word, not a
-  // synthetic pronunciation of an isolated initial or compound final.
-  const PY_SAMPLES = {
-    b: "bā · 八", p: "pá · 爬", m: "mā · 妈妈", f: "fēi · 飞机",
-    d: "dà · 大象", t: "tài · 太阳", n: "niú · 小牛", l: "lǎo · 老虎",
-    g: "gē · 鸽子", k: "kē · 一颗星", h: "huā · 花朵",
-    j: "jī · 小鸡", q: "qì · 气球", x: "xī · 西瓜",
-    zh: "zhī · 蜘蛛", ch: "chī · 吃饭", sh: "shū · 书本", r: "rì · 日出",
-    z: "zì · 写字", c: "cǎo · 小草", s: "sān · 三", y: "yā · 鸭子", w: "wū · 乌龟",
-    a: "ā · 啊", o: "ō · 喔", e: "é · 鹅", i: "yī · 衣服", u: "wū · 乌龟", ü: "yú · 小鱼",
-    ai: "ài · 爱", ei: "fēi · 飞机", ui: "shuǐ · 水", ao: "māo · 小猫", ou: "kǒu · 口",
-    iu: "qiú · 皮球", ie: "yè · 叶子", üe: "yuè · 月亮", er: "ěr · 耳朵",
-    an: "ān · 安静", en: "mén · 门", in: "pīn · 拼音", un: "chūn · 春天",
-    ün: "yún · 白云", ang: "yáng · 小羊", eng: "fēng · 风", ing: "xīng · 星星", ong: "hóng · 红色",
-  };
-
+  const PINYIN_DATA = window.ChenchenPinyinData;
   let pyTab = "initials";
+  let pyVoice = null;
+  let pyAudioRequest = 0;
+  let pyAudioButton = null;
+
+  function stopPinyinAudio(destroy = false) {
+    pyAudioRequest++;
+    pyVoice?.stop();
+    if (destroy) { pyVoice?.destroy(); pyVoice = null; }
+    pyAudioButton?.classList.remove("is-reading");
+    pyAudioButton?.removeAttribute("aria-busy");
+    pyAudioButton = null;
+  }
+
+  async function playPinyin(kind, value, button) {
+    stopSpeechSafe();
+    stopPinyinAudio();
+    const request = pyAudioRequest;
+    const status = document.getElementById("py-audio-status");
+    status.textContent = "";
+    pyAudioButton = button;
+    button.classList.add("is-reading");
+    button.setAttribute("aria-busy", "true");
+    try {
+      pyVoice ||= window.ChenchenPinyinAudio.create();
+      // Start in this click's call stack so phones can unlock media playback.
+      await (kind === "sound" ? pyVoice.playSound(value) : pyVoice.playExample(value));
+    } catch (error) {
+      if (request === pyAudioRequest && currentView === "pinyin" && error.name !== "AbortError") {
+        status.textContent = "声音没播放，再点一下。";
+      }
+    } finally {
+      if (request === pyAudioRequest) {
+        button.classList.remove("is-reading");
+        button.removeAttribute("aria-busy");
+        pyAudioButton = null;
+      }
+    }
+  }
 
   function renderPinyin() {
+    stopPinyinAudio();
     const el = document.getElementById("pinyin-content");
     const list = pyTab === "initials" ? INITIALS : FINALS;
     if (!list.includes(pySelected)) pySelected = list[0];
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">读 3 张就休息</span></div><div class="tabs-mini"><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><span class="big-letter">${escapeHtml(pySelected)}</span><p>${escapeHtml(PY_SAMPLES[pySelected] || "")}</p><button class="btn btn-ghost" id="py-listen">◖)) 听例词</button><button class="btn btn-primary" id="py-read">我读过啦 ✓</button><small>拼音请跟着家长读，例词帮你记一记。</small></div><p class="practice-instruction">点一张卡片，自己读给爸爸妈妈听。</p><div class="pinyin-grid">${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已读过">✓</span>' : ""}</button>`).join("")}</div><div class="recall-footer"><span>已读过 ${pyPracticed.size} 张小卡片</span><button class="btn btn-learn" id="py-finish" ${pyPracticed.size ? "" : "disabled"}>${reviewSession ? "读好啦，继续 →" : "读好啦，收下小花"}</button></div></div>`;
+    const examples = PINYIN_DATA[pyTab].find(item => item.id === pySelected).examples;
+    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">读 3 张就休息</span></div><div class="tabs-mini"><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read">我读过啦 ✓</button></div><div class="pinyin-grid">${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已读过">✓</span>' : ""}</button>`).join("")}</div><div class="recall-footer"><span>已读过 ${pyPracticed.size} 张小卡片</span><button class="btn btn-learn" id="py-finish" ${pyPracticed.size ? "" : "disabled"}>${reviewSession ? "读好啦，继续 →" : "读好啦，收下小花"}</button></div></div>`;
     el.querySelectorAll("[data-pt]").forEach(btn=>btn.onclick=()=>{pyTab=btn.dataset.pt;renderPinyin();});
-    el.querySelectorAll("[data-p]").forEach(btn=>btn.onclick=()=>{pySelected=btn.dataset.p;renderPinyin();});
-    document.getElementById("py-listen").onclick = () => speakGuide((PY_SAMPLES[pySelected] || "").split("·").pop().trim());
+    el.querySelectorAll("[data-p]").forEach(btn=>btn.onclick=()=>{
+      pySelected=btn.dataset.p;
+      renderPinyin();
+      playPinyin("sound",pySelected,document.getElementById("py-listen"));
+      document.getElementById("py-sample").scrollIntoView?.({block:"nearest",behavior:"smooth"});
+    });
+    document.getElementById("py-listen").onclick = event => playPinyin("sound",pySelected,event.currentTarget);
+    el.querySelectorAll("[data-py-example]").forEach(btn=>btn.onclick=()=>playPinyin("example",btn.dataset.pyExample,btn));
     document.getElementById("py-read").onclick = () => {
       pyPracticed.add(pySelected);
       if (pyPracticed.size < 3) pySelected = list.find(p=>!pyPracticed.has(p)) || pySelected;

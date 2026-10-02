@@ -1675,7 +1675,17 @@ button[hidden],*[hidden] {
 }
 
 .big-letter {
-  display:block;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  min-width:150px;
+  margin:0 auto 14px;
+  padding:0 18px;
+  border:0;
+  border-radius:18px;
+  background:transparent;
+  cursor:pointer;
   font-size:88px;
   font-weight:600;
   line-height:1.3;
@@ -1683,21 +1693,60 @@ button[hidden],*[hidden] {
   color:#6c9696;
 }
 
-.pinyin-sample>p {
-  font-size:18px;
-  color:#7e9690;
-  margin:7px 0 19px;
+.pinyin-speaker {
+  font:18px var(--font-sans);
+  color:#789b91;
+}
+
+.pinyin-examples {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  max-width:350px;
+  margin:0 auto;
+}
+
+.pinyin-example {
+  min-height:92px;
+  padding:16px 8px 10px;
+  border:1px solid #d7e1d8;
+  border-radius:16px;
+  background:#fffdf5;
+  color:#50684f;
+  font:36px var(--font-kai);
+  cursor:pointer;
+}
+
+.pinyin-example ruby {
+  ruby-align:center;
+}
+
+.pinyin-example rt {
+  font:15px var(--font-sans);
+  color:#6b8371;
+  line-height:1.7;
+}
+
+.big-letter.is-reading,.pinyin-example.is-reading {
+  background:#f9e8c6;
+  color:#925f2f;
+}
+
+.big-letter:focus-visible,.pinyin-example:focus-visible {
+  outline:3px solid #96ae7d;
+  outline-offset:3px;
+}
+
+.pinyin-audio-status {
+  min-height:24px;
+  margin:5px 0;
+  font-size:12px;
+  color:#976440;
+  line-height:24px;
 }
 
 .pinyin-sample .btn {
   margin:0 4px;
-}
-
-.pinyin-sample small {
-  display:block;
-  font-size:11px;
-  color:#91a29a;
-  margin-top:15px;
 }
 
 .pinyin-grid {
@@ -2943,15 +2992,9 @@ button[hidden],*[hidden] {
   .big-letter {
     font-size:79px;
   }
-  .pinyin-sample>p {
-    font-size:17px;
-  }
   .pinyin-sample .btn {
     font-size:12px;
     padding:12px 14px;
-  }
-  .pinyin-sample small {
-    font-size:10px;
   }
   .recall-footer {
     flex-direction:column;
@@ -3130,7 +3173,6 @@ button[hidden],*[hidden] {
   .actions-bar .btn {
     padding: 12px 8px;
   }
-  .pinyin-sample small,
   .paper-note {
     font-size: 12px;
   }
