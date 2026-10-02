@@ -3328,3 +3328,35 @@ button[hidden],*[hidden] {
     font-size: 16px;
   }
 }
+
+/* Consistent confirmation language across subjects; no score inflation. */
+.home-records { margin-top:16px; color:#526e45; }
+.learning-assessment { width:100%; max-width:530px; margin:20px auto 4px; text-align:center; }
+.assessment-title { margin:0 0 12px; color:#718068; font-size:14px; }
+.assessment-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.assessment-option { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; min-height:76px; padding:11px 6px; border:1px solid; border-radius:15px; font:600 15px var(--font-sans); cursor:pointer; }
+.assessment-option>span { font-size:24px; line-height:1; }
+.assessment-independent { color:#476b40; background:#edf4e6; border-color:#bfd1b2; }
+.assessment-supported { color:#886027; background:#fcf0d9; border-color:#e8d4a7; }
+.assessment-again { color:#586e87; background:#eaf1f6; border-color:#c6d5e1; }
+.assessment-option:focus-visible { outline:3px solid #87a274; outline-offset:3px; }
+.assessment-error { min-height:18px; margin:8px 0 0; font-size:12px; color:#a9684f; }
+.assessment-badge { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border:1px solid; border-radius:999px; font-weight:600; }
+.write-assessment,.pinyin-assessment { max-width:530px; margin:24px auto; text-align:center; }
+.assessment-prompt { color:#73826a; margin:24px 0 15px; }
+.assessment-pinyin { display:block; color:#6c9696; font:600 88px Georgia,"Times New Roman",serif; }
+.write-practice.is-assessing .write-pronounce,
+.write-practice.is-assessing .write-stage,
+.write-practice.is-assessing .write-words,
+.write-practice.is-assessing .write-word-cue,
+.write-practice.is-assessing .write-stroke-status,
+.write-practice.is-assessing .write-main-controls,
+.write-practice.is-assessing .write-paper-confirm,
+.pinyin-practice.is-assessing .pinyin-sample,
+.pinyin-practice.is-assessing .pinyin-grid,
+.pinyin-practice.is-assessing .tabs-mini,
+.pinyin-practice.is-assessing .recall-footer { display:none; }
+@media(max-width:420px) {
+  .assessment-options { gap:6px; }
+  .assessment-option { font-size:13px; padding:11px 4px; min-height:78px; }
+}

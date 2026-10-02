@@ -59,7 +59,7 @@ function environment(initial = {}) {
     static now() { return now; }
   }
   // Only the documented API contract is modeled: atomic entry operations,
-  // merge cannot recreate deletions, deleting a course cascades its activity.
+  // merge cannot recreate deletions; deleting a course preserves its history.
   function serverResponse(request) {
     if (request.method==='GET') return {status:200,data:{found:true,payload:copy(database),updatedAt:database.updatedAt||0}};
     assert.equal(request.method,'PATCH','Never PUT a whole stale browser snapshot');
@@ -77,9 +77,6 @@ function environment(initial = {}) {
       } else if(operation.op==='set') entries[operation.key]=copy(operation.value);
       else if(operation.op==='delete') {
         delete entries[operation.key];
-        if(operation.collection==='items') {
-          for(const [key,event] of Object.entries(next.activity)) if(event.id===operation.key) delete next.activity[key];
-        }
       } else assert.fail(`Unknown operation ${operation.op}`);
     }
     next.updatedAt=Math.max(now,(database.updatedAt||0)+1);database=next;
@@ -109,6 +106,7 @@ function environment(initial = {}) {
   }
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/writing-vocabulary.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/pinyin-data.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/learning-model.js'),'utf8'),context);
   vm.runInContext(instrumented,context,{filename:sourcePath});
   context.subject.setView('poems');context.subject.setPoems([]);
   return {context,subject:context.subject,requests,scrolls,timers,elements,element,db:()=>copy(database),
@@ -184,7 +182,10 @@ test('classroom poems open directly for review without an enrollment button or u
   assert.match(e.element('poems-content').innerHTML,/今天复习/);
   assert.doesNotMatch(e.element('poems-content').innerHTML,/还没学过|data-f="new"|data-f="learned"/);
   t.setView('poem-detail');await t.renderPoemDetail(poem.id);
-  assert.match(e.element('poem-detail-content').innerHTML,/data-r="remember"/);
+  assert.match(e.element('poem-detail-content').innerHTML,/id="poem-check-independent"/);
+  assert.match(e.element('poem-detail-content').innerHTML,/id="poem-check-supported"/);
+  assert.match(e.element('poem-detail-content').innerHTML,/id="poem-check-again"/);
+  assert.doesNotMatch(e.element('poem-detail-content').innerHTML,/我记得|提醒一下|一起再读/);
   assert.doesNotMatch(e.element('poem-detail-content').innerHTML,/btn-enroll|加入复习|课上学过吗/);
   assert.ok(e.requests.every(request=>request.method==='GET'),'Rendering must not enroll from a stale browser snapshot');
   await t.openParent();assert.doesNotMatch(e.element('parent-dialog').innerHTML,/id="add-class-poem"/);
@@ -404,11 +405,12 @@ test('a lost completion acknowledgement can be retried without a second flower o
 
 test('remote deletion conflicts cannot recreate a course or award a flower',async()=>{
   const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;await e.connect();
-  t.setSession({items:[item],index:0});e.alterServer(state=>{delete state.items[item.id];});await t.completePractice(item.id,'remember',item);
+  const classroomCheck={...item,requireClassroom:true};
+  t.setSession({items:[item],index:0});e.alterServer(state=>{delete state.items[item.id];});await t.completePractice(item.id,'remember',classroomCheck);
   assert.equal(t.getItem(item.id),null);assert.equal(e.db().items[item.id],undefined);assert.equal(Object.keys(e.db().activity).length,0);
   assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
   // Retrying after the 409 refresh must not degrade into activity-only success.
-  await t.completePractice(item.id,'remember',item);assert.equal(Object.keys(e.db().activity).length,0);
+  await t.completePractice(item.id,'remember',classroomCheck);assert.equal(Object.keys(e.db().activity).length,0);
   assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
 });
 
@@ -429,7 +431,10 @@ test('custom course enrollment persists together with content and routes to the 
   await fresh.element('write-finish').onclick();
   assert.equal(fresh.element('write-paper-confirm').hidden,false);
   assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-01','Opening paper confirmation must not save progress');
-  await fresh.element('write-paper').onclick();assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-02');
+  await fresh.element('write-paper').onclick();
+  assert.equal(fresh.element('write-assessment').hidden,false);
+  assert.equal(Object.keys(fresh.subject.loadState().activity).length,0,'Writing participation must await parent assessment');
+  await fresh.element('write-check-independent').onclick();assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-02');
   assert.equal(fresh.subject.getItem('write-basic'),null);assert.equal(fresh.subject.getItem(poem.id).nextReview,'2026-10-01');
 });
 
@@ -517,20 +522,25 @@ test('free writing returns to the library only after saving the selected charact
   t.navigate('write');t.openWriteCharacter('write-char-6728');
   e.element('write-finish').onclick();assert.equal(e.element('write-paper-confirm').hidden,false);
   assert.equal(Object.keys(t.loadState().activity).length,0,'Opening paper confirmation is not completion');
-  e.hold(true);const saving=e.element('write-paper').onclick(),request=await e.nextRequest();
+  e.element('write-paper').onclick();assert.equal(e.element('write-assessment').hidden,false);
+  assert.equal(Object.keys(t.loadState().activity).length,0,'Confirming practice is not a mastery check');
+  e.hold(true);const saving=e.element('write-check-supported').onclick(),request=await e.nextRequest();
   assert.equal(t.getView(),'write-detail');assert.equal(Object.keys(t.loadState().activity).length,0);
   request.reply();await saving;
   assert.equal(t.getView(),'write');assert.equal(t.getSession(),null);
   const activities=Object.values(t.loadState().activity);
   assert.equal(activities.length,1);assert.equal(activities[0].id,'write-char-6728');
-  assert.deepEqual(e.db().items,{},'Free writing must not automatically enroll the character');
+  assert.equal(activities[0].result,'supported');assert.equal(activities[0].source,'parent');
+  assert.equal(activities[0].skill,'hanzi-writing');assert.equal(activities[0].details.afterPractice,true);
+  assert.equal(activities[0].details.method,'paper');
+  assert.deepEqual(Object.keys(e.db().items),['write-char-6728'],'Only the confirmed character joins review');
 });
 
 test('a delayed writing save cannot navigate away from another character opened meanwhile',async()=>{
   const e=environment(),t=e.subject;await e.connect();
   t.navigate('write');t.openWriteCharacter('write-char-6728');
-  e.element('write-finish').onclick();e.hold(true);
-  const saving=e.element('write-paper').onclick(),request=await e.nextRequest();
+  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
+  const saving=e.element('write-check-independent').onclick(),request=await e.nextRequest();
   e.element('write-back').onclick();assert.equal(t.getView(),'write');
   t.openWriteCharacter('write-char-6c34');
   assert.equal(t.getView(),'write-detail');assert.equal(t.getWritingId(),'write-char-6c34');
@@ -543,12 +553,12 @@ test('a delayed writing save cannot navigate away from another character opened 
   assert.equal(t.getSession(),null);assert.equal(e.requests.filter(request=>request.method==='PATCH').length,1);
 });
 
-test('course deletion removes custom data and 120 history entries without exceeding PATCH limits',async()=>{
+test('course deletion removes custom data while retaining all 120 history entries',async()=>{
   const id='custom-char-ming',activity=Object.fromEntries(Array.from({length:120},(_,i)=>[`event-${i}`,{day:'2026-09-30',id,type:'write'}]));
   activity.unrelated={day:'2026-09-30',id:'other',type:'poem'};
   const e=environment({items:{[id]:course(id,'write'),other:course('other')},activity,customCharacters:{[id]:{id,c:'明'}}}),t=e.subject;
   await e.connect();await t.removeClassroomItem(id);assert.equal(t.getItem(id),null);assert.equal(t.loadState().customCharacters[id],undefined);
-  assert.equal(Object.values(t.loadState().activity).filter(event=>event.id===id).length,0);assert.ok(t.getItem('other'));assert.ok(t.loadState().activity.unrelated);
+  assert.equal(Object.values(t.loadState().activity).filter(event=>event.id===id).length,120);assert.ok(t.getItem('other'));assert.ok(t.loadState().activity.unrelated);
   assert.ok(e.requests.find(r=>r.method==='PATCH').body.operations.length<=100);await t.syncNow();assert.equal(t.getItem(id),null);
 });
 
@@ -658,6 +668,190 @@ test('English saved completion advances the shared review once without writing p
   const stale=opened[1].onDone;t.navigate('home');await flush();stale();
   assert.equal(t.getSession(),null);assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
   await t.removeClassroomItem(word.id);assert.ok(t.loadState().hiddenCourses[word.id]);
+});
+
+test('poem confirmation records each shared rating with its own skill and parent source',async()=>{
+  for(const result of ['independent','supported','again']) {
+    const item=course('poem-01','poem',{stage:2,title:'静夜思'}),e=environment({items:{[item.id]:item}}),t=e.subject;
+    t.setPoems(samplePoems());await e.connect();t.openPoemFromList(item.id);await flush();
+    await e.element(`poem-check-${result}`).onclick();
+    const event=Object.values(t.loadState().activity)[0];
+    assert.equal(event.result,result);assert.equal(event.source,'parent');assert.equal(event.skill,'poem-recitation');
+    assert.equal(event.title,'静夜思');assert.equal(event.details.observedExposure,false);
+    assert.equal(t.getItem(item.id).stage,result==='independent'?3:0);
+    assert.equal(Object.values(t.loadState().activity).length,1);
+  }
+});
+
+test('listening to a poem first records rehearsal and cannot extend its recall interval',async()=>{
+  const item=course('poem-01','poem',{stage:2}),e=environment({items:{[item.id]:item}}),t=e.subject;
+  t.setPoems(samplePoems());await e.connect();const media=poemMediaProbe(e);t.openPoemFromList(item.id);await flush();
+  e.element('btn-speak').onclick();media.recordings[0].emit('playing');media.recordings[0].emit('ended');
+  await e.element('poem-check-independent').onclick();
+  const event=Object.values(t.loadState().activity)[0];
+  assert.equal(event.result,'independent');assert.equal(event.details.observedExposure,true);
+  assert.equal(t.getItem(item.id).stage,0);assert.equal(t.getItem(item.id).nextReview,'2026-10-02');
+});
+
+test('scheduled writing starts with recall, while returning to the model records fresh rehearsal',async()=>{
+  for(const rehearsed of [false,true]) {
+    const item=course('write-char-6728','write',{stage:2}),e=environment({items:{[item.id]:item}}),t=e.subject;
+    await e.connect();writingMediaProbe(e);t.setSession({items:[item],index:0});t.openReviewItem(item.id,'write');await flush();
+    assert.equal(e.element('write-assessment').hidden,false);
+    assert.equal(Object.values(t.loadState().activity).length,0);
+    await e.element('write-check-prompt').onclick();
+    if(rehearsed) {
+      e.element('write-check-back').onclick();
+      assert.equal(e.element('write-assessment').hidden,true);
+      e.element('write-finish').onclick();e.element('write-paper').onclick();
+    }
+    await e.element('write-check-independent').onclick();
+    const event=Object.values(t.loadState().activity)[0];
+    assert.equal(event.result,'independent');assert.equal(event.skill,'hanzi-writing');
+    assert.equal(event.details.afterPractice,rehearsed);assert.equal(event.details.method,'paper');
+    assert.equal(t.getItem(item.id).stage,rehearsed?0:3,'The dictation sound is a task prompt; showing the model is rehearsal');
+  }
+});
+
+test('an uncertain writing save locks the original choice and retries without duplicate evidence',async()=>{
+  const e=environment(),t=e.subject;await e.connect();t.navigate('write');t.openWriteCharacter('write-char-6728');
+  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
+  const save=e.element('write-check-supported').onclick(),first=await e.nextRequest();
+  assert.ok(['independent','supported','again'].every(result=>e.element(`write-check-${result}`).disabled));
+  first.commitThenLoseResponse();await save;
+  assert.equal(Object.values(t.loadState().activity).length,0);assert.equal(Object.values(e.db().activity).length,1);
+  assert.equal(e.element('write-check-supported').disabled,false);assert.match(e.element('write-check-supported').textContent,/重试保存/);
+  assert.equal(e.element('write-check-independent').disabled,true);assert.equal(e.element('write-check-again').disabled,true);
+  const before=e.requests.length;
+  await t.completePractice('write-char-6728','remember',{type:'write',title:'木',enroll:true});
+  assert.equal(e.requests.length,before,'A changed rating cannot create another uncertain save');
+  const retry=e.element('write-check-supported').onclick(),second=await e.nextRequest();
+  assert.deepEqual(second.body.operations,first.body.operations);second.reply();await retry;
+  assert.equal(Object.values(t.loadState().activity).length,1);assert.equal(Object.values(t.loadState().activity)[0].result,'supported');
+  assert.equal(t.getView(),'write');
+});
+
+test('confirmed practice stores explicit skill evidence and enrolls only the practiced content',async()=>{
+  const e=environment(),t=e.subject;await e.connect();
+  await t.recordPractice('write-char-6728','write','supported',undefined,{
+    type:'write',title:'木',skill:'hanzi-writing',source:'parent',enroll:true,details:{afterPractice:true,method:'paper'},
+  });
+  const events=Object.values(t.loadState().activity);
+  assert.equal(events.length,1);
+  assert.equal(events[0].schemaVersion,2);assert.equal(events[0].result,'supported');
+  assert.equal(events[0].skill,'hanzi-writing');assert.equal(events[0].source,'parent');
+  assert.equal(events[0].title,'木');assert.equal(events[0].details.afterPractice,true);
+  assert.equal(events[0].day,'2026-10-01');assert.ok(Number.isFinite(Date.parse(events[0].at)));
+  assert.deepEqual(Object.keys(t.loadState().items),['write-char-6728']);
+  assert.equal(t.getItem('write-char-6728').learned,true);
+  assert.equal(t.getItem('write-char-6728').nextReview,'2026-10-02');
+  assert.equal(t.getItem('write-char-6728').lastAssessment.result,'supported');
+});
+
+test('one pinyin save records each confirmed sound and retires the old all-sounds task atomically',async()=>{
+  const old=course('pinyin-basic','pinyin'),e=environment({items:{[old.id]:old}}),t=e.subject;await e.connect();
+  const meta={type:'pinyin',enroll:true,retirePinyinGroup:true,entries:[
+    {id:'pinyin-b',type:'pinyin',title:'b',skill:'pinyin-reading',result:'independent',source:'parent',details:{observedExposure:false}},
+    {id:'pinyin-v',type:'pinyin',title:'ü',skill:'pinyin-reading',result:'again',source:'parent',details:{observedExposure:true}},
+  ]};
+  await t.recordPractice('pinyin-basic','pinyin','independent',undefined,meta);
+  const events=Object.values(t.loadState().activity);
+  assert.equal(events.length,2);assert.deepEqual(events.map(event=>event.id),['pinyin-b','pinyin-v']);
+  assert.deepEqual(events.map(event=>event.result),['independent','again']);
+  assert.ok(events.every(event=>event.schemaVersion===2&&event.skill==='pinyin-reading'&&event.source==='parent'));
+  assert.equal(t.getItem(old.id).learned,false);assert.equal(t.getItem(old.id).replacedBy,'individual-pinyin');
+  assert.equal(t.getItem('pinyin-b').stage,1);assert.equal(t.getItem('pinyin-v').stage,0);
+  assert.equal(t.getItem('pinyin-v').nextReview,'2026-10-02');
+  assert.equal(e.requests.filter(request=>request.method==='PATCH').length,1);
+});
+
+test('retry after a lost response preserves complete evidence and scheduling operations across midnight',async()=>{
+  const e=environment(),t=e.subject;await e.connect();e.hold(true);
+  const meta={type:'write',title:'木',skill:'hanzi-writing',source:'parent',enroll:true,details:{method:'paper',afterPractice:true}};
+  const attempt={activityId:'stable-check',at:'2026-09-30T17:30:00.000Z'};
+  const firstSave=t.recordPractice('write-char-6728','write','independent',attempt,meta),first=await e.nextRequest();
+  const rejection=assert.rejects(firstSave,/network|response|未能|保存|连接/i);
+  first.commitThenLoseResponse();await rejection;
+  assert.equal(Object.values(e.db().activity).length,1);assert.equal(Object.values(t.loadState().activity).length,0);
+  e.at('2026-10-02');meta.title='changed';meta.details.method='changed';
+  const retry=t.recordPractice('write-char-6728','write','independent',attempt,meta),second=await e.nextRequest();
+  assert.deepEqual(second.body.operations,first.body.operations,'Retries must retain the original event and review date');
+  second.reply();await retry;
+  const event=Object.values(t.loadState().activity)[0];
+  assert.equal(event.title,'木');assert.equal(event.details.method,'paper');assert.equal(event.day,'2026-10-01');
+  assert.equal(t.getItem('write-char-6728').stage,0);assert.equal(t.getItem('write-char-6728').nextReview,'2026-10-02');
+  assert.equal(Object.values(t.loadState().activity).length,1);
+});
+
+test('leaving a failed confirmation starts a new attempt when the same content is opened again',async()=>{
+  const e=environment(),t=e.subject;await e.connect();t.navigate('write');t.openWriteCharacter('write-char-6728');
+  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
+  const firstSave=e.element('write-check-independent').onclick(),first=await e.nextRequest();first.fail();await firstSave;
+  const firstEvent=first.body.operations.find(op=>op.collection==='activity');
+  t.navigate('write');t.openWriteCharacter('write-char-6728');
+  e.element('write-finish').onclick();e.element('write-paper').onclick();
+  assert.equal(e.element('write-check-again').disabled,false,'The previous failure must not lock a fresh page');
+  const nextSave=e.element('write-check-again').onclick(),second=await e.nextRequest();
+  const nextEvent=second.body.operations.find(op=>op.collection==='activity');
+  assert.notEqual(nextEvent.key,firstEvent.key);assert.equal(nextEvent.value.result,'again');
+  second.reply();await nextSave;
+  assert.equal(Object.values(t.loadState().activity).length,1);
+  assert.equal(Object.values(t.loadState().activity)[0].result,'again');
+});
+
+test('a previous-page writing save may finish but cannot navigate or unlock a new same-content save',async()=>{
+  const e=environment(),t=e.subject;await e.connect();t.navigate('write');t.openWriteCharacter('write-char-6728');
+  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
+  const firstSave=e.element('write-check-independent').onclick(),first=await e.nextRequest();
+  t.navigate('write');
+  // A browser creates fresh controls on innerHTML replacement. Other DOM stubs
+  // deliberately stay minimal; replace this page's assessment nodes explicitly.
+  for(const result of ['independent','supported','again','error'])e.elements.delete(`write-check-${result}`);
+  t.openWriteCharacter('write-char-6728');e.element('write-finish').onclick();e.element('write-paper').onclick();
+  const newSave=e.element('write-check-supported').onclick();
+  assert.ok(['independent','supported','again'].every(result=>e.element(`write-check-${result}`).disabled));
+  first.reply();await firstSave;
+  assert.equal(t.getView(),'write-detail','The old completion must not close the new page of the same character');
+  const second=await e.nextRequest();
+  assert.ok(['independent','supported','again'].every(result=>e.element(`write-check-${result}`).disabled),'The old callback must not unlock a new in-flight confirmation');
+  const before=e.requests.length;
+  await t.completePractice('write-char-6728','forgot',{type:'write',enroll:true});
+  assert.equal(e.requests.length,before,'The active attempt lock must remain owned by the new save');
+  second.reply();await newSave;
+  const events=Object.values(t.loadState().activity);
+  assert.equal(events.length,2);assert.deepEqual(events.map(event=>event.result),['independent','supported']);
+});
+
+test('legacy all-character review migrates to the actual practiced character and keeps prior history',async()=>{
+  const item=course('write-basic','write',{title:'常用汉字描红'});
+  const previous={day:'2026-09-30',id:item.id,type:'write'};
+  const e=environment({items:{[item.id]:item},activity:{legacy:previous}}),t=e.subject;
+  await e.connect();writingMediaProbe(e);t.setSession({items:[item],index:0});t.openReviewItem(item.id,'write');await flush();
+  const actual=t.writingCharacters().find(character=>character.id===t.getWritingId());
+  assert.ok(actual,'The legacy group must resolve to a concrete character');
+  assert.notEqual(actual.id,item.id);assert.equal(e.element('write-assessment').hidden,false);
+  await e.element('write-check-supported').onclick();
+  assert.equal(t.getSession(),null);assert.equal(t.getView(),'home');
+  assert.equal(t.getItem(item.id).learned,false);assert.equal(t.getItem(actual.id).learned,true);
+  const activities=Object.values(t.loadState().activity),event=activities.find(event=>event.schemaVersion===2);
+  assert.equal(activities.length,2);assert.deepEqual(copy(t.loadState().activity.legacy),previous);
+  assert.equal(event.id,actual.id);assert.equal(event.title,`汉字·${actual.c}`);
+  assert.equal(event.details.character,actual.c);assert.equal(event.result,'supported');assert.equal(event.skill,'hanzi-writing');
+  const saves=e.requests.filter(request=>request.method==='PATCH');
+  assert.equal(saves.length,1,'The individual record, enrollment and old group retirement must be atomic');
+});
+
+test('a custom character without pronunciation opens its visible model before a writing check',async()=>{
+  const id='custom-char-da',character={id,c:'龘',strokes:'48画',tip:'老师教的字'};
+  const item=course(id,'write',{stage:2,title:'汉字·龘'}),e=environment({items:{[id]:item},customCharacters:{[id]:character}}),t=e.subject;
+  await e.connect();writingMediaProbe(e);t.setSession({items:[item],index:0});t.openReviewItem(id,'write');await flush();
+  assert.notEqual(e.element('write-assessment').hidden,false,'Without a spoken prompt, hiding the model would hide which character to write');
+  assert.match(e.element('write-detail-content').innerHTML,/龘 字描红画布/);
+  e.element('write-finish').onclick();e.element('write-paper').onclick();
+  assert.equal(e.element('write-assessment').hidden,false);assert.equal(e.element('write-check-prompt').hidden,true);
+  await e.element('write-check-independent').onclick();
+  const event=Object.values(t.loadState().activity)[0];
+  assert.equal(event.details.afterPractice,true);assert.equal(t.getItem(id).stage,0);
 });
 
 async function main(){

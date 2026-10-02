@@ -122,7 +122,7 @@ func TestInvalidProgressRequestsDoNotOverwriteData(t *testing.T) {
 
 func TestRequestLimitIncludesChunkedBodiesAndWhitespace(t *testing.T) {
 	app := testApp(t)
-	body := `{"payload":{"items":{}}}` + strings.Repeat(" ", maxProgressBytes)
+	body := `{"payload":{"items":{}}}` + strings.Repeat(" ", maxProgressRequestBytes)
 	req := httptest.NewRequest(http.MethodPut, "/api/progress", strings.NewReader(body))
 	req.ContentLength = -1
 	req.TransferEncoding = []string{"chunked"}

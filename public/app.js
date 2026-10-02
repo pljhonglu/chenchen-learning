@@ -3,6 +3,38 @@
   "use strict";
 
   const INTERVALS = [1, 2, 4, 7, 15, 30]; // days
+  const Learning = window.ChenchenLearning;
+  const REVIEW_RESULT = {independent:"remember",supported:"fuzzy",again:"forgot",practice:"fuzzy"};
+  const ASSESSMENT_RESULT = {remember:"independent",fuzzy:"supported",forgot:"again"};
+
+  function assessmentButtons(prefix, title) {
+    return `<div class="learning-assessment" role="group" aria-label="${escapeHtml(title)}"><p class="assessment-title">${escapeHtml(title)}</p><div class="assessment-options">${Learning.RATINGS.map(r=>`<button type="button" class="assessment-option assessment-${r.id}" id="${prefix}-${r.id}" data-assessment="${r.id}"><span aria-hidden="true">${r.icon}</span>${r.label}</button>`).join("")}</div><p class="assessment-error" id="${prefix}-error" role="alert"></p></div>`;
+  }
+
+  function assessmentBadge(result) {
+    const rating = Learning.RATINGS.find(r=>r.id===result);
+    return rating ? `<span class="assessment-badge assessment-${rating.id}"><span aria-hidden="true">${rating.icon}</span> ${rating.label}</span>` : "";
+  }
+
+  function bindAssessment(prefix, id, onChoose) {
+    const buttons = Learning.RATINGS.map(r=>document.getElementById(`${prefix}-${r.id}`));
+    const error = document.getElementById(`${prefix}-error`);
+    const updateRetry = () => {
+      const pending = pendingPracticeAttempt?.id===id && pendingPracticeAttempt.operations ? pendingPracticeAttempt : null;
+      buttons.forEach((button,index)=>{
+        const chosen = ASSESSMENT_RESULT[pending?.result] === Learning.RATINGS[index].id;
+        button.disabled = !!pending && !chosen;
+        if (pending && chosen) button.textContent = `重试保存 · ${Learning.RATINGS[index].label}`;
+      });
+      error.textContent = pending ? "还没保存成功，请重试。" : "";
+    };
+    buttons.forEach((button,index)=>button.onclick=async()=>{
+      buttons.forEach(b=>b.disabled=true);
+      try { await onChoose(Learning.RATINGS[index].id); }
+      finally { updateRetry(); }
+    });
+    updateRetry();
+  }
   // Same-origin /api/* (Docker SQLite). Override only if API is on another host.
   const API_BASE = "";
 
@@ -261,6 +293,7 @@
 
   // ---------- Router ----------
   let currentView = "home";
+  let practiceGeneration = 0;
   let showingCelebration = false;
   let poemFilter = "all";
   let poemQuery = "";
@@ -268,6 +301,7 @@
   let poemListScroll = 0;
   let poemDetailGeneration = 0;
   let englishModule = null;
+  let recordsModule = null;
 
   function getEnglishModule() {
     if (!englishModule) englishModule = window.ChenchenEnglish.create({
@@ -299,12 +333,22 @@
     play.setAttribute("aria-busy", String(loading));
   }
 
-  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "write-detail", "english"];
+  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "write-detail", "english", "records"];
+
+  function resetPracticeAttempt() {
+    // A new page is a new attempt. An older request may still save, but its
+    // response must never update or lock the next page's controls.
+    practiceGeneration++;
+    pendingPracticeAttempt = null;
+    completingPractice = null;
+  }
 
   function showView(name) {
+    resetPracticeAttempt();
     if (name !== "write-detail") stopWritingDemo();
     if (name !== "pinyin") stopPinyinAudio(true);
     if (name !== "english") englishModule?.stop();
+    if (name !== "records") recordsModule?.stop();
     if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
     document.querySelectorAll(".view").forEach((el) => {
@@ -320,6 +364,7 @@
         write: "write",
         "write-detail": "write",
         english: "english",
+        records: "home",
       };
       btn.classList.toggle("active", btn.dataset.nav === map[name]);
       if (btn.dataset.nav === map[name]) btn.setAttribute("aria-current", "page");
@@ -351,6 +396,8 @@
   let reviewSession = null;
   let pySelected = "a";
   let pyPracticed = new Set();
+  let pyAssessments = new Map();
+  let pyExposures = new Set();
 
   function rabbitArt() {
     return `<svg class="rabbit-art" viewBox="0 0 420 310" aria-hidden="true">
@@ -392,9 +439,9 @@
     });
   }
 
-  async function recordPractice(id, type, result, attempt) {
+  async function recordPractice(id, type, result, attempt, meta = {}) {
     const activityId = attempt?.activityId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const operations = [{op:"set",collection:"activity",key:activityId,value:{day:todayStr(),id,type}}];
+    if (attempt?.operations) return commitOperations(attempt.operations);
     const item = getItem(id);
     if ((reviewSession || attempt?.requireClassroom) && !item?.learned) {
       const error = new Error("这项课堂内容已经删除");
@@ -402,11 +449,32 @@
       toast("这项课堂内容已经删除，请回到小花园。");
       throw error;
     }
-    // Free browsing before a scheduled day never advances the memory interval.
-    if (item?.learned) {
-      const value = item.nextReview <= todayStr() ? reviewPatch(item,result) : {};
-      operations.unshift({op:"merge",collection:"items",key:id,value});
+    const at = attempt?.at || new Date().toISOString();
+    const entries = meta.entries || [{id,type,title:meta.title || item?.title || id,skill:meta.skill || "general",
+      result:ASSESSMENT_RESULT[result] || result,source:meta.source || "parent",details:meta.details || {}}];
+    const operations = [];
+    for (const [index, entry] of entries.entries()) {
+      const existing = getItem(entry.id);
+      const event = Learning.createActivity({...entry,day:todayStr(),at});
+      operations.push({op:"set",collection:"activity",key:meta.entries ? `${activityId}-${index}` : activityId,value:event});
+      const rehearsed = [event.details.afterPractice,event.details.observedExposure,event.details.exposureFirst].some(value=>value===true);
+      const reviewResult = event.result === "independent" && rehearsed ? "fuzzy" : REVIEW_RESULT[event.result] || "fuzzy";
+      const sameDayChecked = Object.values(loadState().activity).some(a=>a.schemaVersion===2 && a.day===todayStr() && a.id===entry.id && a.skill===entry.skill && ["independent","supported","again"].includes(a.result));
+      const previous = existing || newClassroomItem(entry.id,{type:entry.type,title:entry.title});
+      const lastAssessment = {result:event.result,source:event.source,skill:event.skill,at};
+      if (existing?.learned) {
+        const value = !sameDayChecked && existing.nextReview <= todayStr() ? reviewPatch(existing,reviewResult) : {};
+        operations.unshift({op:"merge",collection:"items",key:entry.id,value:{...value,lastAssessment}});
+      } else if (meta.enroll && !existing) {
+        operations.unshift({op:"create",collection:"items",key:entry.id,value:{...previous,...reviewPatch(previous,reviewResult),lastAssessment}});
+      }
     }
+    // Legacy whole-subject tasks become the specific content actually checked.
+    const retiredGroup = meta.retirePinyinGroup ? "pinyin-basic" : meta.retireWritingGroup ? "write-basic" : null;
+    if (retiredGroup && getItem(retiredGroup)?.learned) {
+      operations.push({op:"merge",collection:"items",key:retiredGroup,value:{learned:false,replacedBy:retiredGroup === "pinyin-basic" ? "individual-pinyin" : "individual-characters",updatedAt:at}});
+    }
+    if (attempt) attempt.operations = operations;
     await commitOperations(operations);
   }
 
@@ -420,28 +488,33 @@
     if (btn) btn.onclick = () => { reviewSession = null; showView("home"); renderHome(); };
   }
 
-  let completingPractice = false;
+  let completingPractice = null;
   let pendingPracticeAttempt = null;
   async function completePractice(id, result, meta) {
     if (reviewSession && reviewSession.items[reviewSession.index]?.id !== id) return true;
     if (completingPractice) return true;
-    completingPractice = true;
-    const sessionAtStart = reviewSession;
-    const viewAtStart = currentView;
-    if (!pendingPracticeAttempt || pendingPracticeAttempt.id !== id || pendingPracticeAttempt.result !== result) {
-      pendingPracticeAttempt = {id,result,activityId:`${Date.now()}-${Math.random().toString(36).slice(2,10)}`,requireClassroom:!!getItem(id)?.learned || !!meta.requireClassroom};
-    }
-    const attemptAtStart = pendingPracticeAttempt;
-    try {
-      await recordPractice(id, meta.type, result, attemptAtStart);
-    } catch (error) {
-      completingPractice = false;
-      if (error.status === 409 && reviewSession === sessionAtStart && currentView === viewAtStart) navigate("home");
+    if (pendingPracticeAttempt?.id === id && pendingPracticeAttempt.operations && pendingPracticeAttempt.result !== result) {
+      toast("上一次还没保存成功，请先重试原来的选项。");
       return true;
     }
-    completingPractice = false;
+    const sessionAtStart = reviewSession;
+    const viewAtStart = currentView;
+    const generationAtStart = practiceGeneration;
+    if (!pendingPracticeAttempt || pendingPracticeAttempt.id !== id || pendingPracticeAttempt.result !== result) {
+      pendingPracticeAttempt = {id,result,activityId:`${Date.now()}-${Math.random().toString(36).slice(2,10)}`,at:new Date().toISOString(),requireClassroom:!!getItem(id)?.learned || !!meta.requireClassroom};
+    }
+    const attemptAtStart = pendingPracticeAttempt;
+    completingPractice = attemptAtStart;
+    try {
+      await recordPractice(id, meta.type, result, attemptAtStart, meta);
+    } catch (error) {
+      if (completingPractice === attemptAtStart) completingPractice = null;
+      if (error.status === 409 && practiceGeneration === generationAtStart && reviewSession === sessionAtStart && currentView === viewAtStart) navigate("home");
+      return true;
+    }
+    if (completingPractice === attemptAtStart) completingPractice = null;
     if (pendingPracticeAttempt === attemptAtStart) pendingPracticeAttempt = null;
-    if (reviewSession !== sessionAtStart || currentView !== viewAtStart) return true;
+    if (practiceGeneration !== generationAtStart || reviewSession !== sessionAtStart || currentView !== viewAtStart) return true;
     return advanceReviewItem(id);
   }
 
@@ -493,7 +566,7 @@
           <div class="hero-copy"><p class="eyebrow"><span></span> 把学过的，再想起来</p><h1>每天一点点，<br>记忆开出小花。</h1><p class="hero-description">${learned.length && !due.length ? "今天没有到期复习，安心休息一下吧。" : "和小兔一起，复习课上的小本领。"}</p><button class="btn btn-primary start-btn" id="start-review" ${learned.length && !due.length ? "disabled" : ""}><span aria-hidden="true">▶</span> ${learned.length && !due.length ? "今天复习好啦" : "开始复习"} <span aria-hidden="true">→</span></button><p class="hero-note">${due.length ? `今天有 ${due.length} 项到期 · 一次最多 3 个小练习` : learned.length ? `下次复习：${formatDateCN(nextDate || todayStr())}` : "请家长记录课上学过的内容，复习会自动安排"}</p></div>
           <div class="hero-illustration">${rabbitArt()}<span class="art-caption">小兔陪你，一起长大</span></div>
         </section>
-        <aside class="growth-card"><div class="growth-heading"><span class="tiny-sprout" aria-hidden="true">♧</span><span>我的小小收获</span></div><h2>${practiced ? "小花正在长大" : "今天也来浇浇水"}</h2><p>${practiced ? `今天完成了 ${practiced} 次练习` : "每认真练习一次，就收获一朵小花"}</p><div class="flower-row" aria-label="今天完成 ${practiced} 次练习">${[0,1,2].map(i => `<span class="flower ${i < practiced ? "bloomed" : ""}" aria-hidden="true">✿<i></i></span>`).join("")}</div><div class="growth-bottom"><span>${Math.min(practiced,3)} / 3 朵小花</span><span>一点点，就是进步</span></div><div class="growth-track"><span style="width:${Math.min(practiced/3,1)*100}%"></span></div></aside>
+        <aside class="growth-card"><div class="growth-heading"><span class="tiny-sprout" aria-hidden="true">♧</span><span>我的小小收获</span></div><h2>${practiced ? "小花正在长大" : "今天也来浇浇水"}</h2><p>${practiced ? `今天完成了 ${practiced} 次练习` : "每认真练习一次，就收获一朵小花"}</p><div class="flower-row" aria-label="今天完成 ${practiced} 次练习">${[0,1,2].map(i => `<span class="flower ${i < practiced ? "bloomed" : ""}" aria-hidden="true">✿<i></i></span>`).join("")}</div><div class="growth-bottom"><span>${Math.min(practiced,3)} / 3 朵小花</span><span>一点点，就是进步</span></div><div class="growth-track"><span style="width:${Math.min(practiced/3,1)*100}%"></span></div><button class="text-btn home-records" id="home-records">练习记录 →</button></aside>
       </div>
       <div class="section-heading"><div><h2>我的小本领</h2><p>也可以自由看一看，课后复习由小兔安排</p></div><button class="listen-guide" id="home-guide" aria-label="听听怎么玩">◖)) <span>听听怎么玩</span></button></div>
       <div class="subject-grid">
@@ -505,6 +578,7 @@
       </div>
       <section class="today-card"><div class="today-intro"><span class="today-tag">TODAY'S LITTLE STEPS</span><h2>今天，和它们见个面</h2><p>${due.length ? "小兔按记忆间隔，找到了今天的复习内容" : learned.length ? "今天没有到期内容，休息也是成长" : "请爸爸妈妈把课上学过的内容记下来"}</p></div><div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>今天不用再复习啦</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}</div></section>`;
     document.getElementById("start-review").onclick = startReview;
+    document.getElementById("home-records").onclick = () => navigate("records");
     const dailyEnglish = document.getElementById("home-english-daily");
     dailyEnglish.onclick = startDailyEnglish;
     void updateHomeEnglishDaily(dailyEnglish);
@@ -567,7 +641,6 @@
     const courses = [
       {id:"math-addsub-10", type:"math", title:"10以内加减法"},
       {id:"math-decomp-10", type:"decomp", title:"10以内分解组合"},
-      {id:"pinyin-basic", type:"pinyin", title:"声母韵母认读"},
     ];
     const learned = allLearned();
     const removedPoems = BUILTIN_POEMS.filter(poem=>loadState().hiddenCourses[poem.id]);
@@ -575,7 +648,7 @@
       <div class="dialog-heading"><div><p class="eyebrow">记录课堂，复习交给小兔</p><h2 id="parent-title">课堂内容管理</h2></div><button class="close-btn" id="close-parent" aria-label="关闭课堂内容管理">×</button></div>
       <p class="parent-description">已有古诗都是课上学过的，已自动安排复习。其他新学的内容可以在这里补充，小兔按记忆间隔挑出当天到期内容。</p>
       <div class="memory-schedule"><span>今天巩固</span><i>→</i><span>1 天</span><i>→</i><span>2 天</span><i>→</i><span>4 天</span><i>→</i><span>7 天</span><i>→</i><span>15 天</span><i>→</i><span>30 天</span></div>
-      <p class="form-help">记得时逐步拉开间隔；需要提示或再读时，明天再巩固。同一天多练不会连续跳级。</p>
+      <p class="form-help">自己完成时逐步拉开间隔；提示后完成或还要练习时，明天再巩固。同一天多练不会连续跳级。</p>
       <h3>古诗 · 自动安排复习</h3>
       <p class="form-help">已有诗卡无需逐首加入；新录入的古诗也会直接开始复习。</p>
       ${removedPoems.length ? `<div class="parent-add"><select id="parent-poem" aria-label="选择要恢复复习的古诗"><option value="">已移除的诗卡…</option>${removedPoems.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`).join("")}</select><button class="btn btn-primary" id="restore-class-poem">恢复复习</button></div>` : ""}
@@ -587,7 +660,7 @@
       </form></details>
       <h3>汉字 · 一个字一张复习卡</h3>
       <form id="custom-character-form" class="classroom-form"><div class="form-two"><label>今天学的汉字<input name="character" maxlength="2" required placeholder="如：春" /></label><label>笔画 / 笔顺 <small>可选</small><input name="strokes" maxlength="120" placeholder="如：9 画" /></label></div><label>记忆或书写提示 <small>可选</small><input name="tip" maxlength="160" placeholder="写下老师教过的小提示" /></label><p class="form-error" id="character-form-error" role="alert"></p><button class="btn btn-learn" type="submit">记录这个汉字</button></form>
-      <h3>数学与拼音 · 记录已学内容</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" ${getItem(c.id)?.learned ? "disabled" : ""}><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已记录" : "+ 记录"}</span></button>`).join("")}</div>
+      <h3>数学 · 记录已学内容</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" ${getItem(c.id)?.learned ? "disabled" : ""}><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已记录" : "+ 记录"}</span></button>`).join("")}</div>
       <h3>英语 · 程序带着听和说</h3><p class="form-help">39 项课堂词汇与 48 项生活拓展，单词、句子和中文引导都能播放。完成小练习后加入间隔复习；生活拓展不会一次全部加入。家长无需示范发音。</p><button class="btn btn-ghost" id="parent-open-english">打开英语小花园 →</button>
       <h3>课堂记录 <span class="muted">${learned.length} 项</span></h3><div class="parent-enrolled">${learned.length ? learned.map(it=>`<div><span>${escapeHtml(it.title)}<small>${it.nextReview <= todayStr() ? "今天到期" : "下次 "+escapeHtml(it.nextReview)} · 自动安排</small></span><button class="text-btn delete-course" data-remove="${escapeHtml(it.id)}" aria-label="删除课堂内容 ${escapeHtml(it.title)}">删除</button></div>`).join("") : '<p class="muted">还没有课堂记录。先添加今天学过的一两项就好。</p>'}</div>
       <p class="parent-tip">陪练建议：古诗先回想再听示范；拼音先听范音再跟读；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">记录好啦，回小花园</button>`;
@@ -676,6 +749,13 @@
     } else if (type === "pinyin") {
       showView("pinyin");
       pyPracticed = new Set();
+      pyAssessments = new Map();
+      pyExposures = new Set();
+      const symbol = id.startsWith("pinyin-") ? id.slice(7).replace(/v/g,"ü") : "";
+      if (INITIALS.includes(symbol) || FINALS.includes(symbol)) {
+        pySelected = symbol;
+        pyTab = INITIALS.includes(symbol) ? "initials" : "finals";
+      }
       renderPinyin();
     } else if (type === "write") {
       selectedWriteId = id;
@@ -830,6 +910,7 @@
 
     const it = getItem(id);
     const enrolled = !!it?.learned;
+    let poemExposure = false;
 
     el.innerHTML = `
       ${sessionBanner()}<div class="poem-detail card">
@@ -854,32 +935,17 @@
         <div class="speak-bar">
           <button type="button" class="btn btn-speak" id="btn-speak">▶ 朗读</button>
         </div>
-        ${enrolled ? `<div class="actions-bar">
-                 <div class="btn-row" style="justify-content:center">
-                   <button class="btn btn-ok" data-r="remember">😊 我记得</button>
-                   <button class="btn btn-fuzzy" data-r="fuzzy">🌱 提醒一下</button>
-                   <button class="btn btn-forget" data-r="forgot">🐰 一起再读</button>
-                 </div>
-        </div>` : ""}
+        ${enrolled ? `<div class="actions-bar">${assessmentButtons("poem-check","家长确认 · 背诵")}</div>` : ""}
       </div>`;
 
     document.getElementById("back-poems").onclick = () => navigate("poems");
-    el.querySelectorAll("[data-r]").forEach((b) => {
-      b.onclick = async () => {
-        const r = b.dataset.r;
-        if (await completePractice(id, r, {
-          type: "poem", title: displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""), requireClassroom: enrolled,
-        })) return;
-        if (!active()) return;
-        const msg =
-          r === "remember"
-            ? "你把它想起来啦！送你一朵小花。"
-            : r === "fuzzy"
-            ? "有一点提示也很棒，我们下次再读。"
-            : "没关系，一起读一遍，明天再见。";
-        toast(msg);
-        renderPoemDetail(id);
-      };
+    if (enrolled) bindAssessment("poem-check",id,async result => {
+      const r = REVIEW_RESULT[result];
+      if (await completePractice(id,r,{type:"poem",title:displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""),requireClassroom:enrolled,
+        source:"parent",skill:"poem-recitation",details:{observedExposure:poemExposure}})) return;
+      if (!active()) return;
+      toast("记下来啦，每一次练习都有收获。");
+      renderPoemDetail(id);
     });
 
     bindSessionExit();
@@ -887,6 +953,7 @@
     updateSpeakButton("idle");
     if (btnSpeak) {
       btnSpeak.onclick = () => {
+        poemExposure = true;
         if (!window.ChenchenSpeech || !ChenchenSpeech.supported(poem)) {
           toast("暂时无法播放朗读。");
           return;
@@ -1173,6 +1240,7 @@
 
   let mathCompleted = 0;
   function renderMath(forceMode) {
+    resetPracticeAttempt();
     stopSpeechSafe();
     if (forceMode) mathMode = forceMode;
     mathScore = { ok: 0, total: 0 };
@@ -1223,12 +1291,14 @@
   function renderMathFinish() {
     stopSpeechSafe();
     const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
-    const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法"};
+    const result = mathScore.ok >= MATH_ROUND_SIZE ? "independent" : mathScore.ok > 0 ? "supported" : "again";
+    const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法",
+      enroll:true,source:"automatic",skill:"math-solving",details:{correct:mathScore.ok,total:MATH_ROUND_SIZE,mode:mathMode}};
     const panel = document.getElementById("math-panel");
-    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${MATH_ROUND_SIZE} 道题，真棒！</h3><p>今天的小数字，下次再来见面。</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "收下小花，继续 →" : "收下小花，休息一下"}</button></div>`;
+    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${MATH_ROUND_SIZE} 道题，真棒！</h3><p>${assessmentBadge(result)}</p><p>首次答对 ${mathScore.ok} / ${MATH_ROUND_SIZE} 题</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "收下小花，继续 →" : "收下小花，休息一下"}</button></div>`;
     document.querySelector("#math-content .practice-controls").hidden = true;
     document.getElementById("finish-math").onclick = async () => {
-      const advanced = await completePractice(id, mathScore.ok >= MATH_ROUND_SIZE ? "remember" : "fuzzy", meta);
+      const advanced = await completePractice(id, REVIEW_RESULT[result], meta);
       if (!advanced) navigate("home");
     };
   }
@@ -1320,10 +1390,11 @@
   }
 
   async function playPinyin(kind, value, button) {
+    pyExposures.add(kind === "sound" ? value : pySelected);
     stopSpeechSafe();
     stopPinyinAudio();
     const request = pyAudioRequest;
-    const status = document.getElementById("py-audio-status");
+    const status = document.getElementById("py-assessment")?.hidden === false ? document.getElementById("py-check-error") : document.getElementById("py-audio-status");
     status.textContent = "";
     pyAudioButton = button;
     button.classList.add("is-reading");
@@ -1345,13 +1416,26 @@
     }
   }
 
+  function pinyinId(symbol) { return `pinyin-${symbol.replace(/ü/g,"v")}`; }
+
   function renderPinyin() {
     stopPinyinAudio();
+    const generation = practiceGeneration;
     const el = document.getElementById("pinyin-content");
     const list = pyTab === "initials" ? INITIALS : FINALS;
     if (!list.includes(pySelected)) pySelected = list[0];
+    const targetId = reviewSession?.items[reviewSession.index]?.type === "pinyin" ? reviewSession.items[reviewSession.index].id : null;
+    const target = [...INITIALS,...FINALS].find(symbol=>pinyinId(symbol)===targetId);
+    const canFinish = pyPracticed.size && (!target || pyPracticed.has(target));
     const examples = PINYIN_DATA[pyTab].find(item => item.id === pySelected).examples;
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">读 3 张就休息</span></div><div class="tabs-mini"><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read">我读过啦 ✓</button></div><div class="pinyin-grid">${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已读过">✓</span>' : ""}</button>`).join("")}</div><div class="recall-footer"><span>已读过 ${pyPracticed.size} 张小卡片</span><button class="btn btn-learn" id="py-finish" ${pyPracticed.size ? "" : "disabled"}>${reviewSession ? "读好啦，继续 →" : "读好啦，收下小花"}</button></div></div>`;
+    el.innerHTML = `${sessionBanner()}<div class="card practice-card pinyin-practice"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">${target ? "先试着自己读" : "读 3 张就休息"}</span></div><div class="tabs-mini"><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read">练好啦 ✓</button></div><div class="pinyin-assessment" id="py-assessment" hidden><span class="assessment-pinyin">${escapeHtml(pySelected)}</span>${assessmentButtons("py-check","家长确认 · 能自己读吗？")}<button class="text-btn" id="py-check-hint">◖)) 听提示</button><button class="text-btn" id="py-check-back">回去练一练</button></div><div class="pinyin-grid">${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div><div class="recall-footer"><span>已练习 ${pyPracticed.size} 张小卡片</span><button class="btn btn-learn" id="py-finish" ${canFinish ? "" : "disabled"}>${reviewSession ? "读好啦，继续 →" : "读好啦，收下小花"}</button></div></div>`;
+    let afterPractice = true;
+    const beginCheck = rehearsed => {
+      stopPinyinAudio();
+      afterPractice = rehearsed;
+      document.getElementById("py-assessment").hidden = false;
+      el.querySelector(".pinyin-practice").classList.add("is-assessing");
+    };
     el.querySelectorAll("[data-pt]").forEach(btn=>btn.onclick=()=>{pyTab=btn.dataset.pt;renderPinyin();});
     el.querySelectorAll("[data-p]").forEach(btn=>btn.onclick=()=>{
       pySelected=btn.dataset.p;
@@ -1361,16 +1445,36 @@
     });
     document.getElementById("py-listen").onclick = event => playPinyin("sound",pySelected,event.currentTarget);
     el.querySelectorAll("[data-py-example]").forEach(btn=>btn.onclick=()=>playPinyin("example",btn.dataset.pyExample,btn));
-    document.getElementById("py-read").onclick = () => {
+    document.getElementById("py-read").onclick = () => beginCheck(true);
+    document.getElementById("py-check-hint").onclick = event => {afterPractice=true;return playPinyin("sound",pySelected,event.currentTarget);};
+    document.getElementById("py-check-back").onclick = () => {
+      stopPinyinAudio();
+      document.getElementById("py-assessment").hidden = true;
+      el.querySelector(".pinyin-practice").classList.remove("is-assessing");
+    };
+    el.querySelectorAll("[data-assessment]").forEach(button=>button.onclick=()=>{
+      stopPinyinAudio();
+      // Keep the first check in this round, even if the child practises again.
+      if (!pyAssessments.has(pySelected)) pyAssessments.set(pySelected,{result:button.dataset.assessment,afterPractice:afterPractice || pyExposures.has(pySelected)});
       pyPracticed.add(pySelected);
-      if (pyPracticed.size < 3) pySelected = list.find(p=>!pyPracticed.has(p)) || pySelected;
+      if (!target && pyPracticed.size < 3) pySelected = list.find(p=>!pyPracticed.has(p)) || pySelected;
       renderPinyin();
-      toast(pyPracticed.size >= 3 ? "读了 3 张卡片啦，收下小花休息吧！" : "读得很认真！试试下一张。");
-    };
+      toast(target || pyPracticed.size >= 3 ? "练习好啦，收下小花休息吧！" : "记下来啦，试试下一张。");
+    });
     document.getElementById("py-finish").onclick = async () => {
-      if(!pyPracticed.size) return;
-      if(!await completePractice("pinyin-basic","remember",{type:"pinyin",title:"声母韵母认读"})) navigate("home");
+      if(!canFinish) return;
+      const entries = Array.from(pyAssessments,([symbol,check])=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`,skill:"pinyin-reading",source:"parent",result:check.result,details:{symbol,afterPractice:check.afterPractice}}));
+      const result = entries.some(e=>e.result==="again") ? "forgot" : entries.some(e=>e.result==="supported") ? "fuzzy" : "remember";
+      const button = document.getElementById("py-finish");
+      button.disabled=true;
+      const advanced = await completePractice(targetId || "pinyin-basic",result,{type:"pinyin",title:"声母韵母认读",entries,enroll:true,retirePinyinGroup:true});
+      if (!advanced) navigate("home");
+      else if (generation === practiceGeneration && currentView === "pinyin" && pendingPracticeAttempt) {
+        el.querySelectorAll("button").forEach(b=>b.disabled=true);
+        button.disabled=false;button.textContent="重试保存";
+      }
     };
+    if (target === pySelected && !pyPracticed.has(target)) beginCheck(false);
     bindSessionExit();
   }
 
@@ -1590,7 +1694,7 @@
     const ch = all.find(it=>it.id===selectedWriteId) || all[0];
     selectedWriteId = ch.id;
     const words = ch.words || [];
-    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">听一听，描一描</p><h2>汉字描一描</h2></div><span class="practice-count">今天描 1 个就好</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字${escapeHtml(ch.c)}的读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div class="char" id="write-font-outline" hidden>${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" hidden width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas><button id="write-clear" class="write-erase" hidden aria-label="擦掉，重新描">↶ 擦掉</button></div>${words.length ? `<div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p>` : ""}<div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-primary" id="write-finish">写好啦 ✓</button></div><div class="write-paper-confirm" id="write-paper-confirm" hidden><p>已经在纸上写过这个字了吗？</p><div class="btn-row"><button class="btn btn-primary" id="write-paper">在纸上写好啦 ✓</button><button class="text-btn" id="write-keep-drawing">我再描一描</button></div></div></div>`;
+    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">听一听，描一描</p><h2>汉字描一描</h2></div><span class="practice-count">今天描 1 个就好</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字${escapeHtml(ch.c)}的读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div class="char" id="write-font-outline" hidden>${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" hidden width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas><button id="write-clear" class="write-erase" hidden aria-label="擦掉，重新描">↶ 擦掉</button></div>${words.length ? `<div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p>` : ""}<div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-primary" id="write-finish">写好啦 ✓</button></div><div class="write-paper-confirm" id="write-paper-confirm" hidden><p>已经在纸上写过这个字了吗？</p><div class="btn-row"><button class="btn btn-primary" id="write-paper">在纸上写好啦 ✓</button><button class="text-btn" id="write-keep-drawing">我再描一描</button></div></div><div class="write-assessment" id="write-assessment" hidden><p class="assessment-prompt">不看范字，试着在纸上写一写</p><button class="btn btn-ghost" id="write-check-prompt">◖)) 听字音</button>${assessmentButtons("write-check","家长确认 · 独立书写")}<button class="text-btn" id="write-check-back">回去练一练</button></div></div>`;
     document.getElementById("write-back").onclick = returnToWriteLibrary;
     const canvas = document.getElementById("write-canvas");
     const ctx = canvas.getContext("2d");
@@ -1682,14 +1786,15 @@
       if (watching) {writingDemo?.stop();trace();}
       stopReading();
       const request = readingRequest;
+      const readStatus = document.getElementById("write-assessment").hidden === false ? document.getElementById("write-check-error") : status;
       button.classList.add("is-reading");
-      status.textContent = `听一听：${text}`;
+      readStatus.textContent = readStatus === status ? `听一听：${text}` : "";
       try {
         if (!voice?.playReading) throw new Error("Reading unavailable");
         await voice.playReading(id);
-        if (active() && request === readingRequest) status.textContent = "跟着读一读，再描一描。";
+        if (active() && request === readingRequest) readStatus.textContent = readStatus === status ? "跟着读一读，再描一描。" : "";
       } catch (error) {
-        if (active() && request === readingRequest) status.textContent = error.name === "AbortError" ? "点拼音或词语，听一听。" : "声音没有打开，再点一下试试。";
+        if (active() && request === readingRequest) readStatus.textContent = error.name === "AbortError" ? "" : "声音没有打开，再点一下试试。";
       } finally { if (active() && request === readingRequest) button.classList.remove("is-reading"); }
     };
     pronounceButton.onclick = () => {if(ch.pinyin) return read(`char-${ch.c.codePointAt(0).toString(16)}`,ch.c,pronounceButton);};
@@ -1702,20 +1807,43 @@
     canvas.onpointermove = event => { if(!drawing || watching || glyphMode === "loading")return;event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;eraseButton.hidden=false; };
     canvas.onpointerup = canvas.onpointercancel = () => { drawing=false; };
     eraseButton.onclick = () => {ctx.clearRect(0,0,600,600);moved=false;trace();paperConfirm.hidden=true;};
-    const finish = async () => {
+    let writingAfterPractice = true;
+    let writingMethod = "trace";
+    const beginWritingCheck = (method, afterPractice = true) => {
+      writingDemo?.stop(); stopReading();
+      writingMethod = method;
+      writingAfterPractice = afterPractice;
+      paperConfirm.hidden = true;
+      document.getElementById("write-assessment").hidden = false;
+      el.querySelector(".write-practice").classList.add("is-assessing");
+      document.getElementById("write-check-prompt").hidden = !ch.pinyin;
+    };
+    const finish = async result => {
       writingDemo?.stop(); stopReading();
       const id = reviewSession?.items[reviewSession.index]?.id || ch.id;
-      const title = id === "write-basic" ? "常用汉字描红" : `汉字·${ch.c}`;
-      if(!await completePractice(id,"remember",{type:"write",title}) && active()) returnToWriteLibrary();
+      const entry = {id:ch.id,type:"write",title:`汉字·${ch.c}`,source:"parent",skill:"hanzi-writing",result,details:{character:ch.c,method:writingMethod,afterPractice:writingAfterPractice}};
+      const meta = {...entry,enroll:true};
+      if (id === "write-basic") {meta.entries=[entry];meta.retireWritingGroup=true;}
+      if(!await completePractice(id,REVIEW_RESULT[result],meta) && active()) returnToWriteLibrary();
     };
     finishButton.onclick = () => {
       if (watching) return;
-      if (moved) return finish();
+      if (moved) return beginWritingCheck("trace");
       paperConfirm.hidden = false;
       paperConfirm.scrollIntoView?.({block:"nearest"});
     };
     document.getElementById("write-keep-drawing").onclick = () => {paperConfirm.hidden=true;};
-    document.getElementById("write-paper").onclick = () => {if(!paperConfirm.hidden) return finish();};
+    document.getElementById("write-paper").onclick = () => {if(!paperConfirm.hidden) beginWritingCheck("paper");};
+    document.getElementById("write-check-back").onclick = () => {
+      stopReading();
+      writingAfterPractice = true;
+      document.getElementById("write-assessment").hidden = true;
+      el.querySelector(".write-practice").classList.remove("is-assessing");
+    };
+    document.getElementById("write-check-prompt").onclick = () => read(`char-${ch.c.codePointAt(0).toString(16)}`,ch.c,document.getElementById("write-check-prompt"));
+    bindAssessment("write-check",reviewSession?.items[reviewSession.index]?.id || ch.id,finish);
+    if (ch.pinyin && reviewSession?.items[reviewSession.index]?.type === "write") beginWritingCheck("paper",false);
+
     bindSessionExit();
   }
 
@@ -1748,9 +1876,16 @@
     if (v === "home") renderHome();
     if (v === "poems") renderPoems({restoreScroll:restorePoemScroll});
     if (v === "math") renderMath();
-    if (v === "pinyin") {pyPracticed = new Set();renderPinyin();}
+    if (v === "pinyin") {pyPracticed = new Set();pyAssessments = new Map();pyExposures = new Set();renderPinyin();}
     if (v === "write") renderWrite();
     if (v === "english") getEnglishModule().open();
+    if (v === "records") {
+      recordsModule ||= window.ChenchenLearningRecords.create({root:document.getElementById("records-content"),loadState:async()=>{
+        if (!await syncNow()) throw new Error("Records could not be refreshed");
+        return loadState();
+      },todayStr,onBack:()=>navigate("home")});
+      recordsModule.open();
+    }
   }
   function bindNav() {
     document.querySelectorAll(".nav button").forEach(btn=>btn.onclick=()=>navigate(btn.dataset.nav));

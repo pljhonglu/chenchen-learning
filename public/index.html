@@ -9,6 +9,7 @@
   <title>辰辰的复习小花园</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="english.css" />
+  <link rel="stylesheet" href="learning-records.css" />
 </head>
 <body>
   <div class="app">
@@ -33,11 +34,14 @@
       <section class="view" data-view="write" id="write-content" aria-label="汉字字库"></section>
       <section class="view" data-view="write-detail" id="write-detail-content" aria-label="汉字读写练习"></section>
       <section class="view" data-view="english" id="english-content" aria-label="英语小花园"></section>
+      <section class="view" data-view="records" id="records-content" aria-label="练习记录"></section>
     </main>
     <footer class="footer"><span aria-hidden="true">❀</span> 慢慢来，每一次想起来，都是小小的成长。</footer>
   </div>
   <dialog id="parent-dialog" class="parent-dialog" aria-labelledby="parent-title"></dialog>
   <div id="live-status" class="sr-only" aria-live="polite"></div>
+  <script src="learning-model.js"></script>
+  <script src="learning-records.js"></script>
   <script src="speech.js"></script>
   <script src="english-audio.js"></script>
   <script src="english.js"></script>

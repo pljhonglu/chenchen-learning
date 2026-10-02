@@ -35,6 +35,8 @@ jobs:
           node --check public/writing-strokes.js
           node --check public/pinyin-data.js
           node --check public/pinyin-audio.js
+          node --check public/learning-model.js
+          node --check public/learning-records.js
           node scripts/test-progress.cjs
           node scripts/test-math.cjs
           node scripts/test-speech.cjs
@@ -49,6 +51,8 @@ jobs:
           node scripts/test-pinyin-audio.cjs
           node scripts/test-pinyin-sounds.cjs
           node scripts/test-pinyin-examples.cjs
+          node scripts/test-learning-model.cjs
+          node scripts/test-learning-records.cjs
 
   docker:
     needs: test

@@ -14,7 +14,8 @@ const instrumented = source.replace(/\}\)\(\);\s*$/, `
 globalThis.subject = {
   renderMath, renderBondPanel, checkBondSheet, showView,
   state: () => ({ mathMode, mathCompleted, mathScore, bondSheet, currentQ, currentView }),
-  setBond: value => { bondSheet = value; renderBondPanel(); }
+  setBond: value => { bondSheet = value; renderBondPanel(); },
+  prime: state => { acceptServerState({found:true,payload:state}); POEMS=[]; BUILTIN_POEMS=[]; poemsLoadPromise=Promise.resolve([]); }
 };
 })();`);
 assert.notEqual(instrumented, source, "App must still be an IIFE for in-memory exports");
@@ -95,12 +96,13 @@ function makeDOM() {
     return el;
   }
   const body = element("body");
-  body.innerHTML = '<main><section class="view" data-view="math"><div id="math-content"></div></section><section class="view" data-view="home"></section><div id="live-status"></div></main>';
+  body.innerHTML = '<main><section class="view" data-view="math"><div id="math-content"></div></section><section class="view" data-view="home"><div id="home-content"></div></section><div id="live-status"></div><div id="sync-status"></div><div id="toast"></div></main>';
   return { body, getElementById: id => body.querySelector("#" + id), querySelector: selector => body.querySelector(selector), querySelectorAll: selector => body.querySelectorAll(selector), createElement: tag => element(tag), addEventListener() {} };
 }
 
-function harness(mode = "decomp") {
-  const document = makeDOM(), timers = new Map(), spoken = [];
+function harness(mode = "decomp", options = {}) {
+  const document = makeDOM(), timers = new Map(), spoken = [], requests = [];
+  const database = {items:{},activity:{},customPoems:{},customCharacters:{},hiddenCourses:{}};
   const speech = { supported: () => true, stop() {}, speakPoem(poem) { spoken.push(poem.lines.join("")); } };
   let timerId = 0, randomSeed = 12345;
   const math = Object.create(Math);
@@ -111,17 +113,30 @@ function harness(mode = "decomp") {
     ChenchenSpeech: speech,
     setTimeout(fn, delay) { const id = ++timerId; timers.set(id, { fn, delay }); return id; },
     clearTimeout(id) { timers.delete(id); },
-    fetch() { throw new Error("Math question interaction must not make a network request"); },
+    fetch: async (url, settings={}) => {
+      assert.equal(options.persistence,true,"Math question interaction must not make a network request");
+      assert.equal(url,"/api/progress");
+      const request={method:settings.method||"GET",body:settings.body?JSON.parse(settings.body):null};requests.push(request);
+      if(options.failFirst&&requests.length===1) throw new Error("Offline");
+      for(const op of request.body?.operations||[]) {
+        if(op.op==="set"||op.op==="create") database[op.collection][op.key]=copy(op.value);
+        else if(op.op==="merge") Object.assign(database[op.collection][op.key],copy(op.value));
+        else assert.fail(`Unexpected operation ${op.op}`);
+      }
+      return {ok:true,status:200,json:async()=>({ok:true,found:true,payload:copy(database)})};
+    },
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,"../public/learning-model.js"),"utf8"), context);
   vm.runInNewContext(instrumented, context, { filename: sourcePath });
   const subject = context.subject;
+  if(options.persistence) subject.prime(database);
   subject.showView("math"); subject.renderMath(mode);
   const find = selector => { const result = document.querySelector(selector); assert.ok(result, `Missing element: ${selector}`); return result; };
   const click = selector => { const target = find(selector); assert.equal(target.disabled, false, `${selector} should be enabled`); target.click(); return target; };
   function fixedBond({ n = 7, left = 3, right = n - left, mode = "decomp", blanks = { whole: false, left: false, right: true } } = {}) {
     subject.setBond({ item: { n, left, right, mode, blanks, answers: { whole: null, left: null, right: null }, status: "open" }, qIndex: 1, activeSlot: ["whole", "left", "right"].find(slot => blanks[slot]), checked: false });
   }
-  return { subject, document, timers, spoken, find, click, fixedBond, state: () => subject.state(), score: () => copy(subject.state().mathScore) };
+  return { subject, document, timers, spoken, requests, find, click, fixedBond, db:()=>copy(database), state: () => subject.state(), score: () => copy(subject.state().mathScore) };
 }
 
 // The correction must be inside the diagram or equation, beside the actual
@@ -390,6 +405,61 @@ test("a wrong fifth answer stays visible until manual finish and remains an inco
   h.click("#math-next");
   assert.ok(h.find("#finish-math"));
   assert.deepEqual(h.score(), { ok: 4, total: 5 });
+});
+
+test("five-question arithmetic results share the three ratings and record their actual score", async () => {
+  for(const [correct,result,label] of [[5,"independent","自己完成"],[2,"supported","提示后完成"],[0,"again","还要练习"]]) {
+    const h=harness("addsub",{persistence:true});
+    for(let index=0;index<5;index++) {
+      const question=h.state().currentQ;
+      const option=h.document.querySelectorAll(".math-opts button").find(button=>index<correct?Number(button.dataset.v)===question.answer:Number(button.dataset.v)!==question.answer);
+      option.click();h.click("#math-next");
+    }
+    assert.equal(h.requests.length,0,"Answering and viewing the summary does not save early");
+    assert.match(h.find("#math-panel").textContent,new RegExp(label));
+    assert.match(h.find("#math-panel").textContent,new RegExp(`首次答对 ${correct} / 5 题`));
+    await h.find("#finish-math").onclick();
+    const events=Object.values(h.db().activity);
+    assert.equal(events.length,1);assert.equal(events[0].schemaVersion,2);
+    assert.equal(events[0].id,"math-addsub-10");assert.equal(events[0].type,"math");
+    assert.equal(events[0].source,"automatic");assert.equal(events[0].skill,"math-solving");
+    assert.equal(events[0].result,result);assert.equal(events[0].details.correct,correct);assert.equal(events[0].details.total,5);
+    assert.equal(h.db().items["math-addsub-10"].learned,true);
+  }
+});
+
+test("number-bond completion stores the same automatic evidence under its own content id", async () => {
+  const h=harness("decomp",{persistence:true});
+  for(let index=0;index<5;index++) {
+    const item=h.state().bondSheet.item;
+    for(const slot of ["whole","left","right"].filter(slot=>item.blanks[slot])) {
+      h.click(`[data-n="${slot==="whole"?item.n:item[slot]}"]`);
+    }
+    h.click("#math-next");
+  }
+  await h.find("#finish-math").onclick();
+  const event=Object.values(h.db().activity)[0];
+  assert.equal(event.id,"math-decomp-10");assert.equal(event.type,"decomp");
+  assert.equal(event.skill,"math-solving");assert.equal(event.source,"automatic");
+  assert.equal(event.result,"independent");assert.deepEqual(event.details,{correct:5,total:5,mode:"decomp"});
+  assert.equal(h.db().items["math-decomp-10"].learned,true);
+});
+
+test("starting a fresh math round after a failed save permits a different automatic result", async () => {
+  const h=harness("addsub",{persistence:true,failFirst:true});
+  for(let index=0;index<5;index++) {h.click(`[data-v="${h.state().currentQ.answer}"]`);h.click("#math-next");}
+  await h.find("#finish-math").onclick();
+  assert.equal(Object.values(h.db().activity).length,0);
+  const oldEvent=h.requests[0].body.operations.find(op=>op.collection==="activity");
+  h.click('[data-m="addsub"]');
+  for(let index=0;index<5;index++) {
+    const answer=h.state().currentQ.answer;
+    h.document.querySelectorAll(".math-opts button").find(button=>Number(button.dataset.v)!==answer).click();h.click("#math-next");
+  }
+  await h.find("#finish-math").onclick();
+  const newEvent=h.requests[1].body.operations.find(op=>op.collection==="activity");
+  assert.notEqual(newEvent.key,oldEvent.key);assert.equal(newEvent.value.result,"again");
+  assert.equal(Object.values(h.db().activity).length,1);
 });
 
 test("number-bond rounds also finish only after five questions and a final manual tap", () => {

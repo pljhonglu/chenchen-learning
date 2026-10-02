@@ -13,7 +13,8 @@ import (
 	"time"
 )
 
-const maxProgressBytes = 500_000
+const maxProgressBytes = 5 * 1024 * 1024
+const maxProgressRequestBytes = maxProgressBytes + 64*1024 // JSON envelope and operation names.
 
 type application struct {
 	store  *progressStore
@@ -97,7 +98,7 @@ func readProgressBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 			return nil, false
 		}
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxProgressBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, maxProgressRequestBytes)
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -123,6 +124,10 @@ func (app *application) putProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload := envelope["payload"]
+	if len(payload) > maxProgressBytes {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "payload too large"})
+		return
+	}
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &object); err != nil || object == nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "payload.items required"})
@@ -142,6 +147,11 @@ func (app *application) putProgress(w http.ResponseWriter, r *http.Request) {
 	}
 	stored, kept, err := app.store.put(r.Context(), payload, clientUpdatedAt)
 	if err != nil {
+		var limit *patchError
+		if errors.As(err, &limit) {
+			writeJSON(w, limit.status, map[string]string{"error": limit.code})
+			return
+		}
 		app.storageError(w, err)
 		return
 	}

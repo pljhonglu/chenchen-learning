@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -164,7 +165,7 @@ func (s *progressStore) ensureBuiltinPoems(ctx context.Context, tx *sql.Tx, stor
 		return progress{}, err
 	}
 	if len(payload) > maxProgressBytes {
-		return progress{}, errors.New("poem enrollment exceeds progress storage limit")
+		return progress{}, &patchError{http.StatusRequestEntityTooLarge, "payload too large", "poem enrollment exceeds progress storage limit"}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO progress (id, payload, updated_at)
 		VALUES (1, ?, ?)

@@ -9,6 +9,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 const source = fs.readFileSync(path.join(__dirname, "../public/english.js"), "utf8");
+const learningSource = fs.readFileSync(path.join(__dirname, "../public/learning-model.js"), "utf8");
 const curriculum = JSON.parse(fs.readFileSync(path.join(__dirname, "../public/data/english.json"), "utf8"));
 const copy = value => JSON.parse(JSON.stringify(value));
 const emptyState = () => ({ items: {}, activity: {}, hiddenCourses: {} });
@@ -83,6 +84,7 @@ function harness(options = {}) {
     AbortController, setTimeout, clearTimeout,
     fetch: async url => ({ ok: true, json: async () => url.endsWith("english.json") ? copy(curriculum) : {} })
   };
+  vm.runInNewContext(learningSource, context, { filename: "learning-model.js" });
   vm.runInNewContext(source, context, { filename: "english.js" });
   const app = context.ChenchenEnglish.create(hooks);
   function button(id) { const result = root.querySelector("#" + id); assert.ok(result, `Missing button: ${id}`); return result; }
@@ -101,8 +103,8 @@ function harness(options = {}) {
     await selected.onclick();
     if (audio.pending) await audio.complete();
   }
-  async function reachRecall(id = "english-cat", wrong = false) {
-    await app.open({ itemId: id });
+  async function reachRecall(id = "english-cat", wrong = false, alreadyStarted = false) {
+    if (!alreadyStarted) await app.open({ itemId: id });
     await audio.complete();
     // Newly introduced extension cards start with a model before the listening task.
     if (!root.querySelectorAll("[data-english-choice]").length) { click("english-next"); await audio.complete(); }
@@ -154,6 +156,7 @@ test("English opens the complete unified library without starting audio or a dai
   assert.equal(h.root.querySelectorAll("[data-english-mode]").length, 0);
   assert.equal(h.root.querySelector("#english-daily"), null);
   assert.equal(h.root.querySelector("#english-picture"), null);
+  assert.equal(h.root.querySelector("#english-report"), null, "Records have one shared homepage entry");
   assert.equal(h.plays.length, 0);
   assert.equal(h.syncs.length, 0);
   assert.equal(h.commits.length, 0);
@@ -306,6 +309,14 @@ test("new extension exposure is kept separate from independent listening, and sp
   assert.equal(value.englishListening.independent, false);
   assert.equal(value.englishSpeaking.status, "listened");
   assert.equal(value.englishSpeaking.assessed, false);
+  const activity = h.commits[0].find(op => op.collection === "activity").value;
+  assert.equal(activity.skill, "english-listening");
+  assert.equal(activity.result, "supported");
+  assert.equal(activity.source, "automatic");
+  assert.equal(activity.details.exposureFirst, true);
+  assert.equal(activity.details.speaking, "listened");
+  assert.equal(activity.details.speakingAssessed, false);
+  assert.equal(h.root.querySelector("#english-finish-report"), null);
   assert.deepEqual(h.reviews, [{ id: "english-water", result: "fuzzy" }]);
   h.leave();
 });
@@ -320,6 +331,11 @@ test("a wrong first choice stays supported even after a correct answer and confi
   assert.equal(value.englishListening.independent, false);
   assert.equal(value.englishSpeaking.status, "attempted");
   assert.equal(value.englishSpeaking.assessed, false);
+  const activity = h.commits[0].find(op => op.collection === "activity").value;
+  assert.equal(activity.result, "supported");
+  assert.equal(activity.details.attempts, 2);
+  assert.equal(activity.details.firstTryCorrect, false);
+  assert.equal(activity.details.assisted, true);
   assert.deepEqual(h.reviews, [{ id: "english-cat", result: "fuzzy" }]);
   h.leave();
 });
@@ -402,5 +418,79 @@ test("a deleted-on-another-device conflict does not celebrate or allow a blind s
   assert.equal(h.button("english-next").disabled, true);
   assert.match(h.button("english-save-error").textContent, /另一台设备移除/);
   assert.doesNotMatch(h.root.innerHTML, /英语小花开啦/);
+  h.leave();
+});
+
+test("automatic English feedback uses the same completion labels as other subjects", async () => {
+  const h = harness();
+  await h.app.open({ itemId: "english-cat" });
+  await h.audio.complete();
+  await h.answer("english-cat");
+  assert.match(h.button("english-feedback").textContent, /^自己完成 ✓/);
+  await h.app.open({ itemId: "english-cat" });
+  await h.audio.complete();
+  await h.answer("english-cat", true);
+  await h.answer("english-cat");
+  assert.match(h.button("english-feedback").textContent, /^提示后完成 ✓/);
+  h.leave();
+});
+
+test("a word heard on its detail card is fresh exposure even when playback is interrupted", async () => {
+  const h = harness();
+  await h.app.open();
+  await h.clickData("data-english-card", "english-cat");
+  assert.equal(h.audio.pending, true);
+  await h.click("english-single");
+  await h.reachRecall("english-cat", false, true);
+  await h.click("english-next");
+  const activity = h.commits[0].find(op => op.collection === "activity").value;
+  assert.equal(activity.result, "supported");
+  assert.equal(activity.details.observedExposure, true);
+  assert.equal(activity.details.exposureFirst, true);
+  assert.equal(activity.details.firstTryCorrect, true);
+  assert.deepEqual(h.reviews, [{ id: "english-cat", result: "fuzzy" }]);
+  h.leave();
+});
+
+test("detail exposure survives a synchronization retry but is not carried into another direct review", async () => {
+  let online = false;
+  const h = harness({sync:() => online});
+  await h.app.open();
+  await h.clickData("data-english-card", "english-cat");
+  await h.click("english-single");
+  assert.ok(h.root.querySelector("#english-reconnect"));
+  online = true;
+  await h.click("english-reconnect");
+  await h.reachRecall("english-cat", false, true);
+  await h.click("english-next");
+  const first = h.commits[0].find(op => op.collection === "activity");
+  assert.equal(first.value.details.observedExposure, true);
+  await h.reachRecall();
+  await h.click("english-next");
+  const second = h.commits[1].find(op => op.collection === "activity");
+  assert.notEqual(first.key, second.key, "Each completion appends its own history event");
+  assert.equal(second.value.result, "independent");
+  assert.equal(second.value.details.observedExposure, false);
+  h.leave();
+});
+
+test("speaking participation and hints remain separate from independently completed listening", async () => {
+  const h = harness();
+  await h.reachRecall();
+  const hint = h.click("english-word-hint");
+  await h.audio.complete(); await hint;
+  await h.click("english-next");
+  const activity = h.commits[0].find(op => op.collection === "activity").value;
+  assert.equal(activity.id, "english-cat");
+  assert.equal(activity.title, "cat · 猫");
+  assert.equal(activity.day, today);
+  assert.ok(Number.isFinite(Date.parse(activity.at)));
+  assert.equal(activity.skill, "english-listening");
+  assert.equal(activity.result, "independent");
+  assert.equal(activity.details.speaking, "attempted");
+  assert.equal(activity.details.usedHint, true);
+  assert.equal(activity.details.speakingAssessed, false);
+  assert.equal(activity.details.sentencePracticed, true);
+  assert.deepEqual(h.reviews, [{ id: "english-cat", result: "remember" }]);
   h.leave();
 });
