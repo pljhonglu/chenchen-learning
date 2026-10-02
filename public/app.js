@@ -396,7 +396,6 @@
   let reviewSession = null;
   let pySelected = "a";
   let pyPracticed = new Set();
-  let pyAssessments = new Map();
   let pyExposures = new Set();
 
   function rabbitArt() {
@@ -743,7 +742,6 @@
     } else if (type === "pinyin") {
       showView("pinyin");
       pyPracticed = new Set();
-      pyAssessments = new Map();
       pyExposures = new Set();
       const symbol = id.startsWith("pinyin-") ? id.slice(7).replace(/v/g,"ü") : "";
       if (INITIALS.includes(symbol) || FINALS.includes(symbol)) {
@@ -980,7 +978,6 @@
   let mathScore = { ok: 0, total: 0 };
   let currentQ = null;
   let mathQuestionAnswered = false;
-  let mathExplanation = "";
 
   function randInt(a, b) {
     return a + Math.floor(Math.random() * (b - a + 1));
@@ -1193,7 +1190,6 @@
       const answerRight = item.n - answerLeft;
       item.solution = {whole:item.n,left:answerLeft,right:answerRight};
       renderBondPanel();
-      mathExplanation = `正确答案：${item.n} 等于 ${answerLeft} 加 ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。看懂了，再点下一题。`;
       document.getElementById("math-fb").textContent = `正确答案：${item.n} = ${answerLeft} + ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。`;
     }
     finishMathQuestion(good);
@@ -1244,16 +1240,9 @@
     el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / ${MATH_ROUND_SIZE} 题</span></div>
       ${reviewSession ? "" : `<div class="tabs-mini"><button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button><button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button></div>`}
       <p class="practice-instruction">做 ${MATH_ROUND_SIZE} 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
-      <div class="btn-row practice-controls"><button class="btn btn-ghost" id="math-read">◖)) 听题目</button><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div></div>`;
+      <div class="btn-row practice-controls"><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div></div>`;
     el.querySelectorAll("[data-m]").forEach(btn=>btn.onclick=()=>renderMath(btn.dataset.m));
     document.getElementById("math-next").onclick = advanceMathQuestion;
-    document.getElementById("math-read").onclick = () => {
-      if (mathExplanation) speakGuide(mathExplanation);
-      else if (mathMode === "decomp") {
-        const it = bondSheet.item;
-        speakGuide(it.mode === "decomp" ? `把 ${it.n} 分成两部分，点空格，再点数字。` : "两部分合起来是多少？点空格，再点数字。");
-      } else speakGuide(`${currentQ.meta.a} ${currentQ.meta.op === "+" ? "加" : "减"} ${currentQ.meta.b} 等于几？点一点击答案。`);
-    };
     nextMathQ();
     bindSessionExit();
   }
@@ -1277,9 +1266,6 @@
       next.disabled = false;
       next.textContent = (correct ? "" : "我看懂了，") + (mathCompleted >= MATH_ROUND_SIZE ? "完成啦 ✿" : "下一题 →");
     }
-    if (!correct) {
-      document.getElementById("math-read").textContent = "◖)) 听答案";
-    }
   }
 
   function renderMathFinish() {
@@ -1300,11 +1286,8 @@
   function nextMathQ() {
     stopSpeechSafe();
     mathQuestionAnswered = false;
-    mathExplanation = "";
     const next = document.getElementById("math-next");
     if (next) { next.disabled = true; next.hidden = true; }
-    const read = document.getElementById("math-read");
-    if (read) read.textContent = "◖)) 听题目";
     if (mathMode === "decomp") {
       bondSheet = genBondSheet();
       renderBondPanel();
@@ -1351,7 +1334,6 @@
           btn.innerHTML = `<span>${v}</span><span class="math-option-mark" aria-hidden="true">×</span>`;
           btn.setAttribute("aria-label", `${v}，这次不对`);
           fb.innerHTML = `${mathVerdictHtml(false)}<span class="sr-only">正确答案是 ${currentQ.answer}：${a} ${op} ${b} = ${currentQ.answer}。看懂了，再点下一题。</span>`;
-          mathExplanation = `正确答案是 ${currentQ.answer}。${a} ${op === "+" ? "加" : "减"} ${b} 等于 ${currentQ.answer}。看懂了，再点下一题。`;
         }
         fb.className = "feedback math-feedback-visual";
         finishMathQuestion(correct);
@@ -1420,18 +1402,18 @@
     if (!list.includes(pySelected)) pySelected = list[0];
     const targetId = reviewSession?.items[reviewSession.index]?.type === "pinyin" ? reviewSession.items[reviewSession.index].id : null;
     const target = [...INITIALS,...FINALS].find(symbol=>pinyinId(symbol)===targetId);
-    const canFinish = pyPracticed.size && (!target || pyPracticed.has(target));
     const examples = PINYIN_DATA[pyTab].find(item => item.id === pySelected).examples;
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card pinyin-practice"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">${target ? "先试着自己读" : "读 3 张就休息"}</span></div><div class="tabs-mini"><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read">练好啦 ✓</button></div><div class="pinyin-assessment" id="py-assessment" hidden><span class="assessment-pinyin">${escapeHtml(pySelected)}</span>${assessmentButtons("py-check","家长确认 · 能自己读吗？")}<button class="text-btn" id="py-check-hint">◖)) 听提示</button><button class="text-btn" id="py-check-back">回去练一练</button></div><div class="pinyin-grid">${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div><div class="recall-footer"><span>已练习 ${pyPracticed.size} 张小卡片</span><button class="btn btn-learn" id="py-finish" ${canFinish ? "" : "disabled"}>${reviewSession ? "读好啦，继续 →" : "读好啦，收下小花"}</button></div></div>`;
-    let afterPractice = true;
+    el.innerHTML = `${sessionBanner()}<div class="card practice-card pinyin-practice"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">${target ? "先试着自己读" : `已记录 ${pyPracticed.size} / 3`}</span></div><div class="tabs-mini" ${target ? "hidden" : ""}><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read">确认练习</button></div><div class="pinyin-assessment" id="py-assessment" hidden><span class="assessment-pinyin">${escapeHtml(pySelected)}</span>${assessmentButtons("py-check","家长确认 · 能自己读吗？")}<button class="text-btn" id="py-check-hint">◖)) 听提示</button><button class="text-btn" id="py-check-back">回去练一练</button></div><div class="pinyin-grid" ${target ? "hidden" : ""}>${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div></div>`;
+    let afterPractice = true, saving = false;
     const beginCheck = rehearsed => {
       stopPinyinAudio();
       afterPractice = rehearsed;
       document.getElementById("py-assessment").hidden = false;
       el.querySelector(".pinyin-practice").classList.add("is-assessing");
     };
-    el.querySelectorAll("[data-pt]").forEach(btn=>btn.onclick=()=>{pyTab=btn.dataset.pt;renderPinyin();});
+    el.querySelectorAll("[data-pt]").forEach(btn=>btn.onclick=()=>{if(target) return;pyTab=btn.dataset.pt;renderPinyin();});
     el.querySelectorAll("[data-p]").forEach(btn=>btn.onclick=()=>{
+      if (target) return;
       pySelected=btn.dataset.p;
       renderPinyin();
       playPinyin("sound",pySelected,document.getElementById("py-listen"));
@@ -1446,28 +1428,25 @@
       document.getElementById("py-assessment").hidden = true;
       el.querySelector(".pinyin-practice").classList.remove("is-assessing");
     };
-    el.querySelectorAll("[data-assessment]").forEach(button=>button.onclick=()=>{
+    bindAssessment("py-check",targetId || pinyinId(pySelected),async result => {
+      if (saving) return;
+      saving = true;
       stopPinyinAudio();
-      // Keep the first check in this round, even if the child practises again.
-      if (!pyAssessments.has(pySelected)) pyAssessments.set(pySelected,{result:button.dataset.assessment,afterPractice:afterPractice || pyExposures.has(pySelected)});
-      pyPracticed.add(pySelected);
-      if (!target && pyPracticed.size < 3) pySelected = list.find(p=>!pyPracticed.has(p)) || pySelected;
-      renderPinyin();
-      toast(target || pyPracticed.size >= 3 ? "练习好啦，收下小花休息吧！" : "记下来啦，试试下一张。");
+      const symbol = pySelected;
+      const entry = {id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`,skill:"pinyin-reading",source:"parent",result,
+        details:{symbol,afterPractice:afterPractice || pyExposures.has(symbol)}};
+      el.querySelectorAll("button").forEach(button=>button.disabled=true);
+      document.getElementById("py-check-error").textContent = "正在保存…";
+      try {
+        const advanced = await completePractice(targetId || entry.id,REVIEW_RESULT[result],{type:"pinyin",entries:[entry],enroll:true,retirePinyinGroup:true});
+        if (advanced || generation !== practiceGeneration || currentView !== "pinyin") return;
+        pyPracticed.add(symbol);
+        if (pyPracticed.size >= 3) {navigate("home");return;}
+        pySelected = list.find(p=>!pyPracticed.has(p)) || symbol;
+        renderPinyin();
+        toast("已记录，试试下一张。");
+      } finally { saving = false; }
     });
-    document.getElementById("py-finish").onclick = async () => {
-      if(!canFinish) return;
-      const entries = Array.from(pyAssessments,([symbol,check])=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`,skill:"pinyin-reading",source:"parent",result:check.result,details:{symbol,afterPractice:check.afterPractice}}));
-      const result = entries.some(e=>e.result==="again") ? "forgot" : entries.some(e=>e.result==="supported") ? "fuzzy" : "remember";
-      const button = document.getElementById("py-finish");
-      button.disabled=true;
-      const advanced = await completePractice(targetId || "pinyin-basic",result,{type:"pinyin",title:"声母韵母认读",entries,enroll:true,retirePinyinGroup:true});
-      if (!advanced) navigate("home");
-      else if (generation === practiceGeneration && currentView === "pinyin" && pendingPracticeAttempt) {
-        el.querySelectorAll("button").forEach(b=>b.disabled=true);
-        button.disabled=false;button.textContent="重试保存";
-      }
-    };
     if (target === pySelected && !pyPracticed.has(target)) beginCheck(false);
     bindSessionExit();
   }
@@ -1870,7 +1849,7 @@
     if (v === "home") renderHome();
     if (v === "poems") renderPoems({restoreScroll:restorePoemScroll});
     if (v === "math") renderMath();
-    if (v === "pinyin") {pyPracticed = new Set();pyAssessments = new Map();pyExposures = new Set();renderPinyin();}
+    if (v === "pinyin") {pyPracticed = new Set();pyExposures = new Set();renderPinyin();}
     if (v === "write") renderWrite();
     if (v === "english") getEnglishModule().open();
     if (v === "records") {

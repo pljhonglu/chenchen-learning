@@ -217,9 +217,7 @@ test("a wrong number bond shows the correct relationship and waits for manual co
   assert.equal(h.timers.size, 0, "An incorrect answer must never auto-advance");
   assert.equal(h.find("#math-next").hidden, false);
   assert.match(h.find("#math-next").textContent, /看懂/);
-  assert.match(h.find("#math-read").textContent, /听答案/);
-  h.click("#math-read");
-  assert.match(h.spoken.at(-1), /7 等于 3 加 4/);
+  assert.equal(h.document.getElementById("math-read"), null, "Correction is visible in the diagram without a separate audio control");
   digit.onclick(); h.subject.checkBondSheet();
   assert.deepEqual(h.score(), { ok: 0, total: 1 });
   assert.equal(h.document.querySelectorAll(".nb-box").length, 0);
@@ -227,9 +225,8 @@ test("a wrong number bond shows the correct relationship and waits for manual co
   assert.equal(h.state().bondSheet.qIndex, 2);
   assert.equal(h.find("#math-next").hidden, true);
   assert.equal(h.document.querySelectorAll(".math-answer-result").length, 0, "Do not carry the previous diagram's correction into the next question");
-  assert.match(h.find("#math-read").textContent, /听题目/);
-  h.click("#math-read");
-  assert.doesNotMatch(h.spoken.at(-1), /正确答案/, "The next question must not read the previous correction");
+  assert.equal(h.document.getElementById("math-read"), null);
+  assert.equal(h.spoken.length, 0, "Question changes must not depend on device speech");
 });
 
 test("wrong two-part answers get a valid correction that preserves a usable first part", () => {
@@ -264,16 +261,42 @@ test("composition also checks its only blank immediately and explains an incorre
   assert.equal(h.state().bondSheet.qIndex, 2);
 });
 
-test("an unusable first part preserves a valid alternative second part in the diagram and audio", () => {
+test("an unusable first part preserves a valid alternative second part directly in the diagram", () => {
   const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
   h.click('[data-n="9"]'); h.click('[data-n="2"]');
   assertVisualAnswer(h, { slot: "left", expected: 5, attempted: 9 });
   assertVisualAnswer(h, { slot: "right", expected: 2 });
   assert.match(h.find("#math-fb").textContent, /7\s*=\s*5\s*\+\s*2/);
-  h.click("#math-read");
-  assert.match(h.spoken.at(-1), /7 等于 5 加 2/);
   assert.deepEqual(h.score(), { ok: 0, total: 1 });
   assert.equal(h.timers.size, 0);
+});
+
+test("every math mode uses visual questions and corrections without an inactive audio control", () => {
+  for (const mode of ["decomp", "compose", "addsub"]) {
+    const h = harness(mode === "addsub" ? "addsub" : "decomp");
+    const assertNoAudioControl = () => {
+      assert.equal(h.document.getElementById("math-read"), null);
+      assert.doesNotMatch(h.find("#math-content").textContent, /听题目|听答案/);
+      assert.equal(h.spoken.length, 0, "Solving math must not require system speech");
+    };
+    assertNoAudioControl();
+    if (mode === "addsub") {
+      const answer = h.state().currentQ.answer;
+      const wrong = h.document.querySelectorAll(".math-opts button").find(button => Number(button.dataset.v) !== answer);
+      wrong.click();
+      assertVisualAnswer(h, { expected: answer, attempted: Number(wrong.dataset.v) });
+    } else {
+      const whole = mode === "compose";
+      h.fixedBond({ mode, blanks: { whole, left: false, right: !whole } });
+      h.click(`[data-n="${whole ? 8 : 5}"]`);
+      assertVisualAnswer(h, { slot: whole ? "whole" : "right", expected: whole ? 7 : 4, attempted: whole ? 8 : 5 });
+    }
+    assertNoAudioControl();
+    assert.equal(h.find("#math-next").hidden, false);
+    h.click("#math-next");
+    assertNoAudioControl();
+    assert.equal(h.find("#math-next").hidden, true);
+  }
 });
 
 test("two unusable parts receive a complete valid correction with both attempts crossed out", () => {

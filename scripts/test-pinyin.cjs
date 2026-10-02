@@ -155,7 +155,7 @@ test("opening pinyin is silent and the large pinyin button starts only its sound
   const h = harness();
   assert.equal(h.recordings.length, 0);
   assert.equal(h.subject.getSelected(), "b");
-  assert.equal(h.get("py-finish").disabled, true);
+  assert.equal(h.get("pinyin-content").querySelector("#py-finish"), null);
   const button = h.get("py-listen"), result = h.click(button);
   assert.equal(h.audio().attempts[0].src, "/audio/pinyin/sound-b.mp3");
   assert.equal(button.classList.contains("is-reading"), true);
@@ -301,157 +301,182 @@ test("a missing audio module offers the same retry and can recover without reren
   assert.equal(h.get("py-audio-status").textContent, "");
 });
 
-test("only explicit parent confirmation marks a sound and final completion saves the confirmed evidence", async () => {
+test("each parent confirmation saves that sound immediately and survives leaving after one card", async () => {
   const h = harness();
-  await h.click(h.get("py-finish"));
-  assert.equal(h.requests.length, 0);
+  assert.equal(h.get("pinyin-content").querySelector("#py-finish"), null);
+  assert.ok(h.get("pinyin-content").innerHTML.includes('id="py-read">确认练习</button>'));
   const playback = h.click(h.get("py-listen"));
   h.click(h.get("py-read")); await playback;
   assert.equal(h.audio().paused, true);
-  assert.equal(h.get("py-assessment").hidden,false);
+  assert.equal(h.get("py-assessment").hidden, false);
   assert.deepEqual(copy(h.subject.getPracticed()), []);
-  assert.equal(h.get("py-finish").disabled,true);
-  assert.equal(h.requests.length,0,"Opening confirmation must not record a result");
-  h.click(h.get("py-check-supported"));
+  assert.equal(h.requests.length, 0, "Opening confirmation must not record a result");
+  await h.click(h.get("py-check-supported"));
   assert.deepEqual(copy(h.subject.getPracticed()), ["b"]);
-  assert.equal(h.get("py-finish").disabled, false);
-  assert.equal(h.requests.length, 0);
-  await h.click(h.get("py-finish")); await flush();
-  assert.equal(h.requests.length, 1);
+  assert.equal(h.subject.getSelected(), "p");
+  assert.equal(h.requests.length, 1, "Confirmation itself persists the completed sound");
   assert.equal(h.requests[0].method, "PATCH");
-  assert.equal(h.subject.getView(), "home");
+  assert.equal(h.subject.getView(), "pinyin");
   const activity = Object.values(h.db().activity);
   assert.equal(activity.length, 1);
   assert.equal(activity[0].id, "pinyin-b");
-  assert.equal(activity[0].result,"supported");
-  assert.equal(activity[0].source,"parent");assert.equal(activity[0].skill,"pinyin-reading");
-  assert.equal(activity[0].details.afterPractice,true);
-  assert.deepEqual(Object.keys(h.db().items),["pinyin-b"],"Only confirmed sounds join review");
+  assert.equal(activity[0].result, "supported");
+  assert.equal(activity[0].source, "parent"); assert.equal(activity[0].skill, "pinyin-reading");
+  assert.equal(activity[0].details.afterPractice, true);
+  assert.deepEqual(Object.keys(h.db().items), ["pinyin-b"], "Only confirmed sounds join review");
+  h.subject.navigate("write");
+  assert.equal(Object.values(h.db().activity).length, 1, "Leaving after one card must not discard a confirmed result");
 });
 
-test("failed completion stays on pinyin and retries the same activity without duplication", async () => {
-  const h = harness(); h.click(h.get("py-read"));h.click(h.get("py-check-independent")); h.failSave();
-  await h.click(h.get("py-finish"));
-  assert.equal(h.subject.getView(), "pinyin");
-  assert.equal(Object.keys(h.db().activity).length, 0);
-  assert.ok(h.get("pinyin-content").querySelectorAll("button").filter(button=>button.id!=="py-finish").every(button=>button.disabled),"A failed batch save freezes its original confirmation draft");
-  assert.equal(h.get("py-finish").disabled,false);
-  await h.click(h.get("py-finish")); await flush();
+test("three distinct confirmed sounds finish free practice without a separate completion button", async () => {
+  const h = harness();
+  for (const [symbol, result] of [["b", "independent"], ["p", "supported"], ["m", "again"]]) {
+    assert.equal(h.subject.getSelected(), symbol);
+    assert.equal(h.get("pinyin-content").querySelector("#py-finish"), null);
+    h.click(h.get("py-read"));
+    await h.click(h.get(`py-check-${result}`));
+  }
   assert.equal(h.subject.getView(), "home");
-  assert.equal(Object.keys(h.db().activity).length, 1);
-  assert.deepEqual(h.requests[0].body.operations,h.requests[1].body.operations);
+  assert.deepEqual(Object.values(h.db().activity).map(event => [event.id, event.result]), [
+    ["pinyin-b", "independent"], ["pinyin-p", "supported"], ["pinyin-m", "again"],
+  ]);
+  assert.equal(h.requests.length, 3);
 });
 
-test("scheduled pinyin completion advances review once and stops any ongoing sound", async () => {
+test("failed immediate confirmation stays on the sound and retries its original activity without duplication", async () => {
+  const h = harness(); h.click(h.get("py-read")); h.failSave();
+  await h.click(h.get("py-check-independent"));
+  assert.equal(h.subject.getView(), "pinyin");
+  assert.equal(h.subject.getSelected(), "b");
+  assert.deepEqual(copy(h.subject.getPracticed()), [], "A failed save cannot look completed");
+  assert.equal(Object.keys(h.db().activity).length, 0);
+  assert.ok(h.get("pinyin-content").querySelectorAll("button").filter(button => button.id !== "py-check-independent").every(button => button.disabled), "A failed confirmation freezes every control except its original retry");
+  assert.equal(h.get("py-check-independent").disabled, false);
+  assert.match(h.get("py-check-independent").textContent, /重试保存/);
+  await h.click(h.get("py-check-independent")); await flush();
+  assert.equal(h.subject.getView(), "pinyin");
+  assert.equal(h.subject.getSelected(), "p");
+  assert.deepEqual(copy(h.subject.getPracticed()), ["b"]);
+  assert.equal(Object.keys(h.db().activity).length, 1);
+  assert.deepEqual(h.requests[0].body.operations, h.requests[1].body.operations);
+});
+
+test("a legacy scheduled pinyin group saves one actual sound, retires the group and advances once", async () => {
   const item = { id: "pinyin-basic", title: "声母韵母认读", type: "pinyin", learned: true, stage: 0, nextReview: "2020-01-01" };
   const h = harness({ items: { [item.id]: item } });
   h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(item.id, item.type);
-  h.click(h.get("py-read"));
-  h.click(h.get("py-check-independent"));
   const sound = h.click(h.get("py-listen"));
-  await h.click(h.get("py-finish")); await sound;
+  h.click(h.get("py-read")); await sound;
+  await h.click(h.get("py-check-independent"));
   assert.equal(h.subject.getSession(), null);
   assert.equal(h.subject.getView(), "home");
   assert.equal(h.audio().paused, true);
   assert.equal(h.db().items[item.id].learned, false);
-  assert.equal(h.db().items["pinyin-b"].learned,true);
-  assert.equal(h.db().items["pinyin-b"].stage,0,"A just-rehearsed sound must not lengthen its interval");
+  assert.equal(h.db().items["pinyin-b"].learned, true);
+  assert.equal(h.db().items["pinyin-b"].stage, 0, "A just-rehearsed sound must not lengthen its interval");
   assert.equal(Object.keys(h.db().activity).length, 1);
+  assert.equal(Object.values(h.db().activity)[0].id, "pinyin-b");
   assert.equal(h.requests.length, 1);
 });
 
 test("an individual umlaut sound opens a silent recall check and saves under its stable v spelling", async () => {
-  for(const [id,symbol] of [["pinyin-v","ü"],["pinyin-vn","ün"]]) {
-    const item={id,title:`拼音·${symbol}`,type:"pinyin",learned:true,stage:2,nextReview:"2020-01-01"};
-    const h=harness({items:{[id]:item}});
-    h.subject.setSession({items:[item],index:0});h.subject.openReviewItem(id,"pinyin");
-    assert.equal(h.subject.getSelected(),symbol);assert.equal(h.get("py-assessment").hidden,false);
-    assert.equal(h.allAttempts().length,0,"Review must let the child recall before hearing a model");
-    assert.equal(h.get("py-finish").disabled,true);
-    h.click(h.get("py-check-independent"));
-    await h.click(h.get("py-finish"));
-    const event=Object.values(h.db().activity)[0];
-    assert.equal(event.id,id);assert.equal(event.result,"independent");assert.equal(event.details.symbol,symbol);
-    assert.equal(event.details.afterPractice,false);assert.equal(h.db().items[id].stage,3);
-    assert.equal(h.subject.getSession(),null);
+  for (const [id, symbol] of [["pinyin-v", "ü"], ["pinyin-vn", "ün"]]) {
+    const item = { id, title: `拼音·${symbol}`, type: "pinyin", learned: true, stage: 2, nextReview: "2020-01-01" };
+    const h = harness({ items: { [id]: item } });
+    h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(id, "pinyin");
+    assert.equal(h.subject.getSelected(), symbol); assert.equal(h.get("py-assessment").hidden, false);
+    assert.equal(h.allAttempts().length, 0, "Review must let the child recall before hearing a model");
+    assert.equal(h.get("pinyin-content").querySelector("#py-finish"), null);
+    await h.click(h.get("py-check-independent"));
+    const event = Object.values(h.db().activity)[0];
+    assert.equal(event.id, id); assert.equal(event.result, "independent"); assert.equal(event.details.symbol, symbol);
+    assert.equal(event.details.afterPractice, false); assert.equal(h.db().items[id].stage, 3);
+    assert.equal(h.subject.getSession(), null);
   }
 });
 
 test("a hint during scheduled recall is recorded and does not increase the memorized interval", async () => {
-  const item={id:"pinyin-b",title:"拼音·b",type:"pinyin",learned:true,stage:2,nextReview:"2020-01-01"};
-  const h=harness({items:{[item.id]:item}});
-  h.subject.setSession({items:[item],index:0});h.subject.openReviewItem(item.id,"pinyin");
-  const sound=h.click(h.get("py-check-hint"));h.audio().emit("ended");await sound;
-  h.click(h.get("py-check-independent"));await h.click(h.get("py-finish"));
-  const event=Object.values(h.db().activity)[0];
-  assert.equal(event.result,"independent");assert.equal(event.details.afterPractice,true);
-  assert.equal(h.db().items[item.id].stage,0,"Hearing the model must schedule another near-term check");
+  const item = { id: "pinyin-b", title: "拼音·b", type: "pinyin", learned: true, stage: 2, nextReview: "2020-01-01" };
+  const h = harness({ items: { [item.id]: item } });
+  h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(item.id, "pinyin");
+  const sound = h.click(h.get("py-check-hint")); h.audio().emit("ended"); await sound;
+  await h.click(h.get("py-check-independent"));
+  const event = Object.values(h.db().activity)[0];
+  assert.equal(event.result, "independent"); assert.equal(event.details.afterPractice, true);
+  assert.equal(h.db().items[item.id].stage, 0, "Hearing the model must schedule another near-term check");
 });
 
-test("review cannot finish by checking another sound and returning must retain any target exposure", async () => {
-  const item={id:"pinyin-b",title:"拼音·b",type:"pinyin",learned:true,stage:2,nextReview:"2020-01-01"};
-  const h=harness({items:{[item.id]:item}});
-  h.subject.setSession({items:[item],index:0});h.subject.openReviewItem(item.id,"pinyin");
-  h.click(h.select('[data-p="m"]'));h.click(h.get("py-read"));h.click(h.get("py-check-supported"));
-  assert.equal(h.get("py-finish").disabled,true);
-  await h.click(h.get("py-finish"));assert.equal(h.requests.length,0);
-  assert.equal(h.subject.getSession().index,0);
-  h.click(h.select('[data-p="b"]'));
-  const heardTarget=h.allAttempts().some(attempt=>attempt.src==="/audio/pinyin/sound-b.mp3");
-  h.click(h.get("py-check-independent"));await h.click(h.get("py-finish"));
-  const events=Object.values(h.db().activity),target=events.find(event=>event.id===item.id);
-  assert.equal(events.length,2);assert.equal(target.details.afterPractice,heardTarget);
-  assert.equal(h.subject.getSession(),null);
+test("a scheduled sound stays on its target even after returning to practice", async () => {
+  const item = { id: "pinyin-b", title: "拼音·b", type: "pinyin", learned: true, stage: 2, nextReview: "2020-01-01" };
+  const h = harness({ items: { [item.id]: item } });
+  h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(item.id, "pinyin");
+  assert.equal(h.select(".pinyin-grid").hidden, true, "Scheduled recall must not expose a switch to an unrelated sound");
+  assert.equal(h.select(".tabs-mini").hidden, true);
+  h.click(h.select('[data-p="m"]')); h.click(h.select('[data-pt="finals"]'));
+  assert.equal(h.subject.getSelected(), "b", "Even stale card handlers cannot replace the scheduled target");
+  h.click(h.get("py-check-back"));
+  assert.equal(h.get("py-assessment").hidden, true);
+  assert.equal(h.select(".pinyin-grid").hidden, true);
+  assert.equal(h.select(".tabs-mini").hidden, true);
+  const sound = h.click(h.get("py-listen")); h.audio().emit("ended"); await sound;
+  h.click(h.get("py-read")); await h.click(h.get("py-check-independent"));
+  const events = Object.values(h.db().activity);
+  assert.equal(events.length, 1); assert.equal(events[0].id, item.id); assert.equal(events[0].details.afterPractice, true);
+  assert.equal(h.subject.getSession(), null);
 });
 
-test("repeated rehearsal keeps the first confirmation and abandoning draft checks saves nothing", async () => {
-  const h=harness();
-  h.click(h.get("py-read"));h.click(h.get("py-check-again"));
-  h.click(h.select('[data-p="b"]'));h.click(h.get("py-read"));h.click(h.get("py-check-independent"));
-  await h.click(h.get("py-finish"));
-  const event=Object.values(h.db().activity)[0];assert.equal(event.result,"again");
-  assert.equal(Object.values(h.db().activity).length,1);
-  const other=harness();other.click(other.get("py-read"));other.click(other.get("py-check-independent"));
-  other.subject.navigate("write");
-  assert.equal(other.requests.length,0);assert.deepEqual(other.db().activity,{});
+test("repeated confirmations retain their evidence while abandoning an unconfirmed card records nothing", async () => {
+  const h = harness();
+  h.click(h.get("py-read")); await h.click(h.get("py-check-again"));
+  h.click(h.select('[data-p="b"]')); h.click(h.get("py-read")); await h.click(h.get("py-check-independent"));
+  const events = Object.values(h.db().activity);
+  assert.deepEqual(events.map(event => event.result), ["again", "independent"]);
+  assert.ok(events.every(event => event.id === "pinyin-b"));
+  assert.deepEqual(copy(h.subject.getPracticed()), ["b"], "Repeating one sound must not count as three different cards");
+  const other = harness(); other.click(other.get("py-read")); other.subject.navigate("write");
+  assert.equal(other.requests.length, 0); assert.deepEqual(other.db().activity, {});
 });
 
 test("leaving failed pinyin practice permits a new result for the same sound on a fresh page", async () => {
-  const h=harness();h.click(h.get("py-read"));h.click(h.get("py-check-independent"));h.failSave();
-  await h.click(h.get("py-finish"));
-  const oldEvent=h.requests[0].body.operations.find(op=>op.collection==="activity");
-  h.subject.navigate("write");h.subject.navigate("pinyin");h.click(h.select('[data-p="b"]'));
-  assert.equal(h.get("py-check-again").disabled,false);
-  h.click(h.get("py-read"));h.click(h.get("py-check-again"));await h.click(h.get("py-finish"));
-  const newEvent=h.requests[1].body.operations.find(op=>op.collection==="activity");
-  assert.notEqual(newEvent.key,oldEvent.key);assert.equal(newEvent.value.id,"pinyin-b");assert.equal(newEvent.value.result,"again");
-  assert.equal(Object.values(h.db().activity).length,1);
+  const h = harness(); h.click(h.get("py-read")); h.failSave();
+  await h.click(h.get("py-check-independent"));
+  const oldEvent = h.requests[0].body.operations.find(op => op.collection === "activity");
+  h.subject.navigate("write"); h.subject.navigate("pinyin"); h.click(h.select('[data-p="b"]'));
+  assert.equal(h.get("py-check-again").disabled, false);
+  h.click(h.get("py-read")); await h.click(h.get("py-check-again"));
+  const newEvent = h.requests[1].body.operations.find(op => op.collection === "activity");
+  assert.notEqual(newEvent.key, oldEvent.key); assert.equal(newEvent.value.id, "pinyin-b"); assert.equal(newEvent.value.result, "again");
+  assert.equal(Object.values(h.db().activity).length, 1);
 });
 
 test("an old pinyin save cannot navigate away from or unlock another round saving the same sound", async () => {
-  const h=harness();h.click(h.get("py-read"));h.click(h.get("py-check-independent"));h.holdSaves(true);
-  const firstSave=h.click(h.get("py-finish")),first=await h.nextSave();
-  h.subject.navigate("write");h.subject.navigate("pinyin");h.click(h.select('[data-p="b"]'));
-  h.click(h.get("py-read"));h.click(h.get("py-check-supported"));
-  const newSave=h.click(h.get("py-finish")),newFinish=h.get("py-finish");
-  assert.equal(newFinish.disabled,true);
-  first.release();await firstSave;
-  const second=await h.nextSave();
-  assert.equal(h.subject.getView(),"pinyin");assert.equal(h.get("py-finish"),newFinish);
-  assert.equal(newFinish.disabled,true,"The old callback must not turn a new in-flight button into Retry");
-  assert.equal(h.get("py-check-again").disabled,false,"The old callback must not disable controls in the new round");
-  second.release();await newSave;
-  assert.equal(h.subject.getView(),"home");
-  assert.deepEqual(Object.values(h.db().activity).map(event=>event.result),["independent","supported"]);
+  const h = harness(); h.click(h.get("py-read")); h.holdSaves(true);
+  const firstSave = h.click(h.get("py-check-independent")), first = await h.nextSave();
+  assert.equal(h.get("py-check-independent").disabled, true);
+  assert.equal(h.get("py-check-back").disabled, true);
+  assert.deepEqual(copy(h.subject.getPracticed()), [], "An in-flight save has not completed the card");
+  h.subject.navigate("write"); h.subject.navigate("pinyin"); h.click(h.select('[data-p="b"]'));
+  h.click(h.get("py-read"));
+  const newSave = h.click(h.get("py-check-supported")), newChoice = h.get("py-check-supported");
+  assert.equal(newChoice.disabled, true);
+  first.release(); await firstSave;
+  const second = await h.nextSave();
+  assert.equal(h.subject.getView(), "pinyin"); assert.equal(h.get("py-check-supported"), newChoice);
+  assert.equal(h.subject.getSelected(), "b");
+  assert.equal(newChoice.disabled, true, "The old callback must not unlock a new in-flight choice");
+  assert.equal(h.get("py-check-again").disabled, true);
+  second.release(); await newSave;
+  assert.equal(h.subject.getView(), "pinyin"); assert.equal(h.subject.getSelected(), "p");
+  assert.deepEqual(Object.values(h.db().activity).map(event => event.result), ["independent", "supported"]);
 });
 
 test("an old pinyin failure cannot freeze a newly reopened practice page", async () => {
-  const h=harness();h.click(h.get("py-read"));h.click(h.get("py-check-independent"));h.holdSaves(true);
-  const save=h.click(h.get("py-finish")),first=await h.nextSave();
-  h.subject.navigate("write");h.subject.navigate("pinyin");
-  const current=h.get("pinyin-content").innerHTML;
-  first.fail();await save;
-  assert.equal(h.subject.getView(),"pinyin");assert.equal(h.get("pinyin-content").innerHTML,current);
-  assert.equal(h.get("py-listen").disabled,false);assert.equal(h.get("py-check-independent").disabled,false);
-  assert.equal(Object.values(h.db().activity).length,0);
+  const h = harness(); h.click(h.get("py-read")); h.holdSaves(true);
+  const save = h.click(h.get("py-check-independent")), first = await h.nextSave();
+  h.subject.navigate("write"); h.subject.navigate("pinyin");
+  const current = h.get("pinyin-content").innerHTML;
+  first.fail(); await save;
+  assert.equal(h.subject.getView(), "pinyin"); assert.equal(h.get("pinyin-content").innerHTML, current);
+  assert.equal(h.get("py-listen").disabled, false); assert.equal(h.get("py-check-independent").disabled, false);
+  assert.equal(Object.values(h.db().activity).length, 0);
 });
