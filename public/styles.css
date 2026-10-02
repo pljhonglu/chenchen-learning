@@ -234,6 +234,35 @@ button[hidden],*[hidden] {
   display:grid;
   grid-template-columns:minmax(0,2.3fr) minmax(240px,1fr);
   gap:20px;
+  align-items:start;
+}
+
+.daily-review {
+  min-width:0;
+  background:#edf1df;
+  border:1px solid #e7ebd6;
+  border-radius:28px;
+  overflow:hidden;
+}
+
+.daily-review .hero {
+  min-height:250px;
+  background:transparent;
+  border:0;
+  border-radius:0;
+}
+
+.daily-review .today-items {
+  padding:0 28px 24px;
+}
+
+.daily-review .today-item {
+  background:#fffef9b3;
+}
+
+.daily-review .today-item>span:nth-child(2) {
+  min-width:0;
+  overflow-wrap:anywhere;
 }
 
 .hero {
@@ -736,33 +765,6 @@ button[hidden],*[hidden] {
   font-size:42px;
   color:#b6a279;
   transform:rotate(-18deg);
-}
-
-.today-card {
-  display:grid;
-  grid-template-columns:1fr 1.4fr;
-  gap:30px;
-  border:1px solid #e5e5d8;
-  border-radius:25px;
-  background:#fafaf3;
-  margin-top:27px;
-  padding:27px 31px;
-}
-
-.today-tag {
-  font-size:9px;
-  letter-spacing:1.6px;
-  color:#a2aa94;
-}
-
-.today-intro h2 {
-  font-size:18px;
-  margin:9px 0 5px;
-}
-
-.today-intro p {
-  font-size:11px;
-  color:#969b86;
 }
 
 .today-items {
@@ -2480,17 +2482,6 @@ button[hidden],*[hidden] {
   .subject-text small {
     font-size:11px;
   }
-  .today-card {
-    grid-template-columns:1fr;
-    gap:17px;
-    padding:25px;
-  }
-  .today-tag {
-    font-size:9px;
-  }
-  .today-intro h2 {
-    margin-top:6px;
-  }
   .pinyin-grid {
     grid-template-columns:repeat(6,1fr);
   }
@@ -2574,6 +2565,18 @@ button[hidden],*[hidden] {
   }
   .home-top {
     gap:13px;
+  }
+  .daily-review {
+    border-radius:24px;
+  }
+  .daily-review .hero {
+    min-height:282px;
+  }
+  .daily-review .hero-illustration {
+    bottom:24px;
+  }
+  .daily-review .today-items {
+    padding:0 18px 18px;
   }
   .hero {
     min-height:361px;
@@ -2742,18 +2745,6 @@ button[hidden],*[hidden] {
   .subject-arrow {
     right:12px;
     bottom:17px;
-  }
-  .today-card {
-    padding:22px 19px;
-    margin-top:20px;
-    border-radius:21px;
-    gap:16px;
-  }
-  .today-intro h2 {
-    font-size:17px;
-  }
-  .today-intro p {
-    font-size:10px;
   }
   .today-item {
     padding:12px;
