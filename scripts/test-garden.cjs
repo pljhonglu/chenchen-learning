@@ -97,7 +97,7 @@ async function checkPendingWater() {
   snapshot.garden.watering[waterId] = { id: waterId, day: "2026-10-01", total: 1 };
   request.resolve({ ok: true, payload: snapshot });
   await retry;
-  assert.match(root.innerHTML, /水壶空啦，今天先休息/);
+  assert.match(root.innerHTML, /水滴用完啦，今天先休息/);
   assert.doesNotMatch(root.innerHTML, /正在浇水|重试这次浇水/);
 
   // Another device may use the third allowance between render and submit.

@@ -39,6 +39,7 @@ jobs:
           node --check public/learning-records.js
           node --check public/study-groups.js
           node --check public/garden.js
+          node --check public/garden-scene.js
           node scripts/test-progress.cjs
           node scripts/test-math.cjs
           node scripts/test-speech.cjs
