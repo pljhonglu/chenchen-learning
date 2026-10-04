@@ -1,6 +1,6 @@
 # 古诗自然朗读
 
-35 首古诗的朗读文件已存放在 `public/audio/poems/`，随网站一起发布。
+36 首古诗词的朗读文件已存放在 `public/audio/poems/`，随网站一起发布。
 播放器使用 HTML Audio，按诗歌 ID 播放对应 MP3；打开页面时不调用外部语音服务，
 也不依赖手机或电脑安装的系统中文声音。页面只显示一个朗读按钮，点击播放，再点暂停，再点从原位置继续；离开详情或切换诗歌时自动停止。
 加载失败、浏览器禁止播放或加载超过 20 秒时，会回到空闲并通知页面显示提示，
@@ -56,3 +56,9 @@ node scripts/test-speech.cjs
 
 技术资料：[edge-tts 官方项目与自定义 SSML 限制](https://github.com/rany2/edge-tts#custom-ssml)、
 [Microsoft SSML 发音控制文档](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-synthesis-markup-pronunciation)。
+
+## 《水调歌头·明月几时有》
+
+`poem-36` 为苏轼的完整词正文，共 95 字、19 个短句；不将题前小序混入正文。正文核对[青岛科技大学教务处原文](https://jw.qust.edu.cn/info/1163/4463.htm)，保留“何似在人间”“何事长向别时圆”等原句。
+
+“调”标为 diào、“阙”为 què、“胜”为 shèng、“绮”为 qǐ；“不应有恨”的“应”为 yīng，两处“长”为 cháng。“胜”按[教育部公布的《普通话异读词审音表》](https://www.moe.gov.cn/jyb_sjzl/ziliao/A19/201001/W020190416497956176438.pdf)统读 shèng。朗读输入采用对应同音替换帮助校音，网页保留原字和逐字拼音；生成与校验沿用现有脚本，不更改前 35 首音频。

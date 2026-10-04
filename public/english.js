@@ -7,29 +7,30 @@
     for (let i = copy.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [copy[i], copy[j]] = [copy[j], copy[i]]; }
     return copy;
   };
-  function selectDaily(items, state, today, limit = 3) {
-    const practiced = new Set(Object.values(state.activity || {}).filter(a => a.type === "english" && a.day === today).map(a => a.id));
-    const remaining = Math.max(0, limit - practiced.size);
-    const active = items.filter(item => !state.hiddenCourses?.[item.id] && !practiced.has(item.id));
-    const due = active.filter(item => state.items[item.id]?.learned && state.items[item.id].nextReview <= today)
-      .sort((a, b) => state.items[a.id].nextReview.localeCompare(state.items[b.id].nextReview));
-    const unseen = active.filter(item => item.source === "classroom" && !state.items[item.id]);
-    // Leave room to revisit classroom vocabulary that has not been checked yet.
-    const selected = due.slice(0, unseen.length ? Math.max(0, remaining - 1) : remaining);
-    selected.push(...unseen.slice(0, remaining - selected.length));
-    selected.push(...due.filter(item => !selected.includes(item)).slice(0, remaining - selected.length));
-    return selected;
-  }
   function create(hooks) {
     const root = () => document.getElementById("english-content");
-    let data, illustrations = {}, loading, generation = 0, round = null, theme = "all", libraryScroll = 0, themeScroll = 0, lastAudio = [], audioError = "", saving = false, detailItemId = null, detailExposed = false;
+    let data, illustrations = {}, loading, generation = 0, round = null, theme = "all", libraryScroll = 0, themeScroll = 0, lastAudio = [], audioError = "", saving = false, detailItemId = null;
+    let exposureDay = "";
+    const dailyExposures = new Set();
+    function exposure(id, remember = false) {
+      const day = hooks.todayStr();
+      if (day !== exposureDay) { exposureDay = day; dailyExposures.clear(); }
+      if (remember) dailyExposures.add(id);
+      return dailyExposures.has(id);
+    }
     const ratingLabel = id => global.ChenchenLearning.RATINGS.find(rating => rating.id === id).label;
     const listeningResult = result => result.firstTryCorrect === true && !result.assisted && !result.exposureFirst ? "independent" : "supported";
     const audio = global.ChenchenEnglishAudio.create({
       onState(state) {
         // A model heard on the word card is fresh exposure, including a clip
         // interrupted by the child starting its practice before it has ended.
-        if (state === "speaking" && detailItemId && lastAudio.some(key => key.startsWith(detailItemId + "-"))) detailExposed = true;
+        if (state === "speaking") {
+          if (detailItemId && lastAudio.some(key => key.startsWith(detailItemId + "-"))) exposure(detailItemId,true);
+          // A listening question's prompt is valid test evidence, not teaching.
+          // Subsequent models/hints matter to later groups, while this item's
+          // first-answer evidence stays frozen in round.result.
+          if (round && stage() !== "listen" && lastAudio.some(key => key.startsWith(current().id + "-"))) exposure(current().id,true);
+        }
         const el = root()?.querySelector("#english-audio-state");
         if (el) el.textContent = ({loading:"声音准备中…",speaking:"正在播放 · 听一听",paused:"声音已暂停",idle:"点小喇叭，随时再听",error:"声音暂时没有播放成功"})[state] || "";
         const pause = root()?.querySelector("#english-pause");
@@ -85,7 +86,7 @@
       await loading;
       await audio.preload();
     }
-    function stop() { generation++; detailItemId = null; detailExposed = false; audio.stop(); round = null; saving = false; }
+    function stop() { generation++; detailItemId = null; audio.stop(); round = null; saving = false; }
     function art(item, small = false) {
       const entry = illustrations[item.id];
       if (entry?.kind === "color" && /^#[a-f\d]{6}$/i.test(entry.color)) return `<span class="english-art english-color" role="img" aria-label="${escape(item.meaning)}"><i style="--paint:${entry.color}"></i></span>`;
@@ -124,10 +125,11 @@
     }
     function returnToLibrary() { renderHome(); scrollTo(libraryScroll); }
     function renderHome() {
-      round = null; detailItemId = null; detailExposed = false; audio.stop(); generation++; audioError = "";
+      round = null; detailItemId = null; audio.stop(); generation++; audioError = "";
       const items = data.items.filter(item => theme === "all" || item.theme === theme);
       const themes = data.themes.filter(t => data.items.some(i => i.theme === t.id));
-      root().innerHTML = `<div class="english-library"><div class="english-library-heading"><h1>英语词卡 <span class="english-library-count">${data.items.length} 张</span></h1></div><div class="english-themes" aria-label="选择英语主题"><button data-english-theme="all" class="${theme === "all" ? "active" : ""}" aria-pressed="${theme === "all"}">全部</button>${themes.map(t => `<button data-english-theme="${escape(t.id)}" class="${theme === t.id ? "active" : ""}" aria-pressed="${theme === t.id}">${escape(t.title)}</button>`).join("")}</div><div class="english-word-grid">${items.map(card).join("")}</div></div>`;
+      root().innerHTML = `<div class="english-library">${hooks.groupStartHtml()}<div class="english-library-heading"><h1>英语词卡 <span class="english-library-count">${data.items.length} 张</span></h1></div><div class="english-themes" aria-label="选择英语主题"><button data-english-theme="all" class="${theme === "all" ? "active" : ""}" aria-pressed="${theme === "all"}">全部</button>${themes.map(t => `<button data-english-theme="${escape(t.id)}" class="${theme === t.id ? "active" : ""}" aria-pressed="${theme === t.id}">${escape(t.title)}</button>`).join("")}</div><div class="english-word-grid">${items.map(card).join("")}</div></div>`;
+      root().querySelector("[data-start-study]").onclick = hooks.startStudy;
       const filters = root().querySelector(".english-themes");
       if (filters) filters.scrollLeft = themeScroll;
       root().querySelectorAll("[data-english-card]").forEach(button => button.onclick = () => detail(data.items.find(i => i.id === button.dataset.englishCard)));
@@ -136,34 +138,19 @@
     function detail(item) {
       rememberLibraryPosition();
       generation++; audio.stop(); round = null; audioError = "";
-      detailItemId = item.id; detailExposed = false;
-      root().innerHTML = `<div class="card english-detail"><button class="back-btn" id="english-back">← 全部词卡</button><div class="english-detail-layout"><button class="english-main-picture" id="english-picture" aria-label="听单词 ${escape(item.meaning)}">${art(item)}<span aria-hidden="true">◖))</span></button><div class="english-detail-copy"><h1><button class="english-read-word" id="english-word-play" lang="en" aria-label="听单词 ${escape(item.word)}">${escape(item.word)} <span aria-hidden="true">◖))</span></button></h1><button class="english-meaning english-read-meaning" id="english-meaning-play" aria-label="听中文 ${escape(item.meaning)}">${escape(item.meaning)} <span aria-hidden="true">◖))</span></button><button class="english-sentence" id="english-sentence-play" aria-label="听句子 ${escape(item.sentence)}"><span class="english-sentence-text" lang="en">${escape(item.sentence)} <i aria-hidden="true">◖))</i></span><span>${escape(item.translation)}</span></button>${item.action ? `<p class="english-action">${escape(item.action.zh)}</p>` : ""}${item.note ? `<details class="english-content-note"><summary>家长小提示</summary><p>${escape(item.note)}</p></details>` : ""}<button class="btn btn-learn english-practice-button" id="english-single">▶ 开始小练习</button></div></div>${soundBar(true)}</div>`;
+      detailItemId = item.id;
+      root().innerHTML = `<div class="card english-detail"><button class="back-btn" id="english-back">← 全部词卡</button><div class="english-detail-layout"><button class="english-main-picture" id="english-picture" aria-label="听单词 ${escape(item.meaning)}">${art(item)}<span aria-hidden="true">◖))</span></button><div class="english-detail-copy"><h1><button class="english-read-word" id="english-word-play" lang="en" aria-label="听单词 ${escape(item.word)}">${escape(item.word)} <span aria-hidden="true">◖))</span></button></h1><button class="english-meaning english-read-meaning" id="english-meaning-play" aria-label="听中文 ${escape(item.meaning)}">${escape(item.meaning)} <span aria-hidden="true">◖))</span></button><button class="english-sentence" id="english-sentence-play" aria-label="听句子 ${escape(item.sentence)}"><span class="english-sentence-text" lang="en">${escape(item.sentence)} <i aria-hidden="true">◖))</i></span><span>${escape(item.translation)}</span></button>${item.action ? `<p class="english-action">${escape(item.action.zh)}</p>` : ""}${item.note ? `<details class="english-content-note"><summary>家长小提示</summary><p>${escape(item.note)}</p></details>` : ""}<p class="english-browse-note">自由听读 · 不记录学习，不获得水滴</p></div></div>${soundBar(true)}</div>`;
       bindSound();
       root().querySelector("#english-back").onclick = returnToLibrary;
       for (const [id, key] of [["english-picture","word"],["english-word-play","word"],["english-sentence-play","sentence"],["english-meaning-play","meaning"]]) root().querySelector("#" + id).onclick = () => play(item.id + "-" + key);
-      root().querySelector("#english-single").onclick = () => start([item], undefined, false, detailExposed ? [item.id] : []);
       scrollTo(0);
       play(item.id + "-word");
-    }
-    function dailySummary() {
-      const currentState = state(), today = hooks.todayStr();
-      const count = new Set(Object.values(currentState.activity || {}).filter(a => a.type === "english" && a.day === today).map(a => a.id)).size;
-      return {remaining:selectDaily(data.items,currentState,today).length,count};
-    }
-    async function getDailySummary() { await ensure(); return dailySummary(); }
-    function renderDailyEmpty() {
-      generation++; audio.stop(); round = null;
-      const {count} = dailySummary();
-      root().innerHTML = `<div class="card english-finish"><span class="flower-reward" aria-hidden="true">✿</span><h1>${count >= 3 ? "今日英语完成啦" : "今天没有待复习的词卡"}</h1><button class="btn btn-primary" id="english-daily-home">回首页</button><button class="text-btn" id="english-daily-library">看全部词卡 →</button></div>`;
-      root().querySelector("#english-daily-home").onclick = hooks.onHome;
-      root().querySelector("#english-daily-library").onclick = () => { theme = "all"; libraryScroll = 0; themeScroll = 0; renderHome(); scrollTo(0); };
-      scrollTo(0);
     }
     function setupItem() {
       const item = current(), existing = progress(item);
       round.steps = item.source === "extension" && !existing ? ["learn","listen","sentence","recall"] : ["listen","learn","sentence","recall"];
       round.step = 0;
-      const observedExposure = round.exposedIds.includes(item.id);
+      const observedExposure = exposure(item.id);
       round.result = {attempts:0, firstTryCorrect:null, heardPrompt:false, assisted:false, speaking:"listened", usedHint:false, observedExposure, exposureFirst:round.steps[0] === "learn" || observedExposure};
       round.activityId = `english-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
       round.saved = false; round.operations = null;
@@ -171,17 +158,13 @@
       const other = data.items.filter(i => i.id !== item.id && !same.includes(i));
       round.choices = shuffle([item,...shuffle(same).concat(shuffle(other)).slice(0,2)]);
     }
-    async function start(items, onDone, daily = false, exposedIds = []) {
-      if (saving || (!daily && !items.length)) return;
-      generation++; detailItemId = null; detailExposed = false; audio.stop();
-      const token = generation;
-      let ok;
-      try { ok = await hooks.syncNow(); } catch { ok = false; }
-      if (token !== generation || !hooks.isActive()) return;
-      if (!ok) { root().innerHTML = `<div class="card"><p>暂时连不上服务器。连接后再开始，才能保存练习。</p><button class="btn btn-primary" id="english-reconnect">重试</button></div>`; root().querySelector("#english-reconnect").onclick = () => start(items,onDone,daily,exposedIds); return; }
-      if (daily) items = selectDaily(data.items,state(),hooks.todayStr());
-      if (!items.length) { renderDailyEmpty(); return; }
-      round = {items,index:0,onDone,exposedIds}; setupItem(); scrollTo(0); renderStep();
+    function start(group) {
+      if (saving || !group || group.items.length !== 5) return;
+      generation++; detailItemId = null; audio.stop();
+      const items = group.items.map(selected=>data.items.find(item=>item.id===selected.id));
+      if (items.some(item=>!item)) throw new Error("这一组有词卡暂时无法打开，请返回重新生成。");
+      round = {items,index:0,entries:[],group};
+      setupItem(); scrollTo(0); renderStep();
     }
     function renderStep() {
       audio.stop(); generation++; audioError = "";
@@ -190,7 +173,7 @@
       let content;
       if (phase === "listen") content = `<button class="btn btn-primary english-listen-button" id="english-prompt">◖)) 听一听</button><div class="english-choices">${round.choices.map((choice,i) => `<button class="english-choice" data-english-choice="${escape(choice.id)}" aria-label="选择图片 ${i + 1}：${escape(choice.meaning)}" disabled>${art(choice)}<span>${i + 1}</span></button>`).join("")}</div><p class="english-feedback" id="english-feedback" role="status">先听声音，再选图片。</p><button class="btn btn-primary english-next" id="english-next" disabled>找到了，继续 →</button>`;
       else content = `<div class="english-practice-layout"><button class="english-main-picture" id="english-repeat-picture" aria-label="再听${phase === "sentence" ? "句子" : "单词"}">${art(item)}<span>◖)) ${phase === "recall" ? "需要提示时，点这里" : "点图片，再听一次"}</span></button><div class="english-practice-copy">${phase === "recall" ? `<p class="english-recall-title">轮到你啦</p><p>可以说单词，也可以试着说一句。</p>` : `<h2 lang="en">${escape(phase === "sentence" ? item.sentence : item.word)}</h2><p class="english-meaning">${escape(phase === "sentence" ? item.translation : item.meaning)}</p>`}<div class="btn-row"><button class="btn btn-ghost" id="english-word-hint">◖)) ${phase === "recall" ? "听单词提示" : "听单词"}</button><button class="btn btn-ghost" id="english-sentence-hint">◖)) ${phase === "recall" ? "听句子提示" : "听句子"}</button></div>${item.action && phase === "sentence" ? `<p class="english-action">${escape(item.action.zh)}</p>` : ""}<p class="english-turn" id="english-turn" role="status">${phase === "recall" ? "慢慢想，想不起来也没关系。" : "先听一听，稍后轮到你说。"}</p><button class="btn btn-primary english-next" id="english-next" ${phase === "recall" ? "" : "disabled"}>${phase === "recall" ? "我试着说了 ✓" : "我准备好了，继续 →"}</button>${phase === "recall" ? `<button class="text-btn english-listen-only" id="english-listen-only">今天先听听，也可以</button><p class="english-speech-note">记录一次开口尝试，不评判发音对错。</p>` : ""}</div></div>`;
-      root().innerHTML = `<div class="english-round-top"><button class="text-btn" id="english-exit">← 先休息</button><span>小小练习 ${round.index + 1} / ${round.items.length}</span><span>${round.step + 1} / 4 步</span></div><div class="english-step-dots">${round.steps.map((s,i) => `<span class="${i === round.step ? "now" : i < round.step ? "done" : ""}">${labels[s]}</span>`).join("")}</div><div class="card english-practice"><div class="english-practice-heading"><p class="eyebrow">中文带着玩 · 英文慢慢说</p><h1>${labels[phase]}</h1></div>${content}${soundBar()}<p id="english-save-error" class="form-error" role="alert"></p></div>`;
+      root().innerHTML = `<div class="english-round-top"><button class="text-btn" id="english-exit">← 先休息</button><span>英语${round.group.mode === "review" ? "复习" : "学习"} ${round.index + 1} / 5</span><span>${round.step + 1} / 4 步</span></div><p class="study-group-note">${round.group.items[round.index]?.afterPractice ? "顺便温习 · 原定复习日期不变" : Object.values(state().garden?.groups || {}).filter(group=>group.day===hooks.todayStr() && group.waterAwarded).length >= 3 ? "今天水滴已领完，本组仍会记录学习" : "学完 5 个词，收获 1 滴水 · 中途退出从头开始"}</p><div class="english-step-dots">${round.steps.map((s,i) => `<span class="${i === round.step ? "now" : i < round.step ? "done" : ""}">${labels[s]}</span>`).join("")}</div><div class="card english-practice"><div class="english-practice-heading"><p class="eyebrow">中文带着玩 · 英文慢慢说</p><h1>${labels[phase]}</h1></div>${content}${soundBar()}<p id="english-save-error" class="form-error" role="alert"></p></div>`;
       bindSound();
       root().querySelector("#english-exit").onclick = () => {stop(); hooks.onExit();};
       root().querySelector("#english-next").onclick = next;
@@ -245,51 +228,17 @@
       round.step++; renderStep();
     }
     async function finishItem(speaking) {
-      if (saving) return;
+      if (saving || !round) return;
       saving = true; audio.stop();
-      const token = generation, active = round, item = current(), result = active.result;
+      const active = round, item = current(), result = active.result;
       result.speaking = speaking;
-      root().querySelector("#english-next").disabled = true;
-      root().querySelector("#english-listen-only").disabled = true;
-      root().querySelector("#english-save-error").textContent = "正在保存今天的小练习…";
-      if (!active.operations) {
-        const today = hooks.todayStr(), existing = progress(item), fresh = hooks.newItem(item.id,{type:"english",title:`${item.word} · ${item.meaning}`});
-        const base = existing || fresh;
-        const outcome = listeningResult(result), independent = outcome === "independent";
-        const memory = base.nextReview <= today ? hooks.reviewPatch(base, independent ? "remember" : "fuzzy") : {};
-        const value = {...memory,learned:true,englishListening:{day:today,firstTryCorrect:result.firstTryCorrect,attempts:result.attempts,independent,exposureFirst:result.exposureFirst,observedExposure:result.observedExposure},englishSpeaking:{day:today,status:speaking,usedHint:result.usedHint,assessed:false}};
-        const activity = global.ChenchenLearning.createActivity({
-          id:item.id,type:"english",title:`${item.word} · ${item.meaning}`,skill:"english-listening",result:outcome,source:"automatic",day:today,at:new Date().toISOString(),
-          details:{attempts:result.attempts,firstTryCorrect:result.firstTryCorrect,exposureFirst:result.exposureFirst,observedExposure:result.observedExposure,assisted:result.assisted,speaking,usedHint:result.usedHint,speakingAssessed:false,sentencePracticed:true}
-        });
-        const operations = [];
-        if (state().hiddenCourses?.[item.id]) operations.push({op:"delete",collection:"hiddenCourses",key:item.id});
-        if (!existing) operations.push({op:"create",collection:"items",key:item.id,value:fresh});
-        operations.push({op:"merge",collection:"items",key:item.id,value}, {op:"set",collection:"activity",key:active.activityId,value:{...activity,listening:outcome,speaking}});
-        active.operations = operations;
-      }
-      try {
-        await hooks.commitOperations(active.operations);
-        if (token !== generation || round !== active || !hooks.isActive()) return;
-        saving = false; active.saved = true;
-        if (active.onDone) {const callback = active.onDone; round = null; callback(); return;}
-        active.index++;
-        if (active.index < active.items.length) {setupItem(); renderStep();}
-        else renderFinish(active.items.length);
-      } catch (error) {
-        if (token !== generation || round !== active) return;
-        saving = false;
-        root().querySelector("#english-save-error").textContent = error.status === 409 ? "这张词卡已在另一台设备移除，请先休息，返回词卡重新开始。" : "还没有保存成功，请保持页面打开，点下面按钮重试。";
-        root().querySelector("#english-next").disabled = error.status === 409;
-        root().querySelector("#english-next").textContent = "重试保存";
-        root().querySelector("#english-next").onclick = () => finishItem(result.speaking);
-      }
-    }
-    function renderFinish(count) {
-      generation++; round = null;
-      root().innerHTML = `<div class="card english-finish"><span class="flower-reward" aria-hidden="true">✿</span><p class="eyebrow">今天的小小收获</p><h1>英语小花开啦！</h1><p>认真练习了 ${count} 个词，也听了小句子。</p><p class="muted">站起来动一动，看看远处的绿色吧。</p><button class="btn btn-primary" id="english-finish">收下小花，休息一下</button>${soundBar()}</div>`;
-      bindSound(); root().querySelector("#english-finish").onclick = hooks.onHome;
-      play("guide-done");
+      active.entries.push({
+        id:item.id,type:"english",title:`${item.word} · ${item.meaning}`,skill:"english-listening",result:listeningResult(result),source:"automatic",
+        details:{attempts:result.attempts,firstTryCorrect:result.firstTryCorrect,exposureFirst:result.exposureFirst,observedExposure:result.observedExposure,assisted:result.assisted,speaking,usedHint:result.usedHint,speakingAssessed:false,sentencePracticed:true}
+      });
+      active.index++;
+      if (active.index < active.items.length) {saving=false;setupItem();renderStep();}
+      else await hooks.completeGroup(active.entries);
     }
     async function open(options = {}) {
       stop(); const token = generation;
@@ -297,8 +246,8 @@
       try {
         await ensure();
         if (token !== generation || !hooks.isActive()) return;
-        if (options.itemId) { const item = data.items.find(i => i.id === options.itemId); if (!item) throw new Error("没有找到这张英语词卡。"); await start([item], options.onDone); }
-        else if (options.daily) await start([], undefined, true);
+        if (options.group) start(options.group);
+        else if (options.itemId) {const item=data.items.find(item=>item.id===options.itemId);if(!item) throw new Error("没有找到这张英语词卡。");detail(item);}
         else { libraryScroll = 0; renderHome(); scrollTo(0); }
       } catch (error) {
         if (token !== generation || !hooks.isActive()) return;
@@ -306,7 +255,7 @@
         root().querySelector("#english-retry-load").onclick = () => open(options);
       }
     }
-    return {open,stop,getDailySummary,pause:() => audio.pause()};
+    return {open,stop,catalog:async()=>{await ensure();return data.items.map(item=>({...item,type:"english",title:`${item.word} · ${item.meaning}`}));},pause:() => audio.pause()};
   }
-  global.ChenchenEnglish = {create,selectDaily};
+  global.ChenchenEnglish = {create};
 })(typeof window !== "undefined" ? window : globalThis);

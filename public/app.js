@@ -2,7 +2,6 @@
 (function () {
   "use strict";
 
-  const INTERVALS = [1, 2, 4, 7, 15, 30]; // days
   const Learning = window.ChenchenLearning;
   const REVIEW_RESULT = {independent:"remember",supported:"fuzzy",again:"forgot",practice:"fuzzy"};
   const ASSESSMENT_RESULT = {remember:"independent",fuzzy:"supported",forgot:"again"};
@@ -89,40 +88,49 @@
   let serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {} };
   let stateReady = false;
   let serverQueue = Promise.resolve();
-  let lastServerContact = null;
-  let syncStatus = { text: "正在连接服务器…", kind: "busy" };
 
   function loadState() { return serverState; }
 
-  function setSyncStatus(text, kind) {
-    syncStatus = { text, kind: kind || "muted" };
-    const el = document.getElementById("sync-status");
-    if (el) { el.textContent = text; el.dataset.kind = syncStatus.kind; }
-  }
-
   async function apiFetch(path, opts) {
-    const res = await fetch(API_BASE + path, {
-      ...opts,
-      cache: "no-store",
-      headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
-    });
-    let data;
-    try { data = await res.json(); }
-    catch (_) { throw new Error("服务器响应不是有效的 JSON，请稍后重试"); }
-    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("服务器返回了无效的进度数据");
-    if (!res.ok) {
-      const error = new Error(data.error || "server_unavailable");
-      error.status = res.status;
-      error.data = data;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(API_BASE + path, {
+        ...opts,
+        cache: "no-store",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
+      });
+      let data;
+      try { data = await res.json(); }
+      catch (error) {
+        if (controller.signal.aborted) throw error;
+        throw new Error("服务器响应不是有效的 JSON，请稍后重试");
+      }
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("服务器返回了无效的进度数据");
+      if (!res.ok) {
+        const error = new Error(data.error || "server_unavailable");
+        error.status = res.status;
+        error.data = data;
+        throw error;
+      }
+      const method = (opts?.method || "GET").toUpperCase();
+      const hasPayload = validPayload(data.payload);
+      if (method === "GET" && !(data.found === true && hasPayload || data.found === false && (data.payload === null || data.payload === undefined))) {
+        throw new Error("服务器进度格式不正确，请稍后重试");
+      }
+      if (["PATCH", "POST"].includes(method) && !(data.ok === true && hasPayload)) throw new Error("服务器尚未确认保存，请重试");
+      return data;
+    } catch (error) {
+      if (controller.signal.aborted) {
+        // Aborting a request does not undo a server commit. Keep this an
+        // unknown outcome so the group or watering action retries its same ID.
+        const timeout = new Error("服务器确认超时，请重试确认；不会重复记录或扣水。");
+        timeout.name = "TimeoutError";
+        throw timeout;
+      }
       throw error;
-    }
-    const method = (opts?.method || "GET").toUpperCase();
-    const hasPayload = validPayload(data.payload);
-    if (method === "GET" && !(data.found === true && hasPayload || data.found === false && (data.payload === null || data.payload === undefined))) {
-      throw new Error("服务器进度格式不正确，请稍后重试");
-    }
-    if (method === "PATCH" && !(data.ok === true && hasPayload)) throw new Error("服务器尚未确认保存，请重试");
-    return data;
+    } finally { clearTimeout(timer); }
   }
 
   function isRecord(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -136,9 +144,7 @@
     const payload = empty ? {} : data.payload;
     serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {}, ...payload };
     stateReady = true;
-    lastServerContact = Date.now();
     POEMS = [...BUILTIN_POEMS, ...Object.values(serverState.customPoems)];
-    setSyncStatus("已保存到服务器 · " + new Date().toLocaleTimeString("zh-CN", {hour:"2-digit",minute:"2-digit"}), "ok");
     return serverState;
   }
 
@@ -148,107 +154,35 @@
     return next;
   }
 
-  function commitOperations(operations) {
-    return queueServerTask(async () => {
-      if (!stateReady) throw new Error("尚未连接学习服务器");
-      setSyncStatus("正在保存到服务器…", "busy");
-      try {
-        const response = await apiFetch("/api/progress", {method:"PATCH", body:JSON.stringify({operations})});
-        return acceptServerState(response);
-      } catch (error) {
-        setSyncStatus("保存未完成，请保持页面打开并重试", "err");
-        if (error.status === 409) {
-          if (validPayload(error.data?.payload)) acceptServerState(error.data);
-          else {
-            const response = await apiFetch("/api/progress", {method:"GET"}).catch(() => null);
-            if (response) acceptServerState(response);
-          }
-          toast("这项内容已在另一台设备删除，请回首页刷新。");
-        } else toast("还没保存成功，请检查网络后再点一次。");
-        throw error;
-      }
-    });
-  }
-
   async function syncNow() {
     try {
       await queueServerTask(async () => {
-        setSyncStatus("正在读取服务器进度…", "busy");
         acceptServerState(await apiFetch("/api/progress", {method:"GET"}));
       });
       if (currentView === "home" && !showingCelebration) renderHome();
       return true;
     } catch (error) {
-      setSyncStatus("暂时无法连接服务器，请检查网络后重试", "err");
       return false;
     }
   }
 
-  function syncPanelHtml() {
-    const last = lastServerContact ? new Date(lastServerContact).toLocaleString("zh-CN", {month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "尚未连接";
-    return `<div class="card sync-card" id="sync-card"><h2>💾 服务器进度</h2><p class="sync-desc">课堂内容与复习进度仅保存在服务器 SQLite 中。手机、平板访问同一地址，就能接着复习。需要连接服务器才能保存练习。</p><div class="btn-row sync-actions"><button type="button" class="btn btn-learn" id="sync-now">刷新服务器进度</button></div><div class="sync-status" id="sync-status" data-kind="${escapeHtml(syncStatus.kind)}">${escapeHtml(syncStatus.text)}</div><div class="sync-meta">上次连接：${escapeHtml(last)}</div></div>`;
-  }
-
-  function bindSyncPanel(root) {
-    const btn = (root || document).querySelector("#sync-now");
-    if(btn) btn.onclick = async () => {
-      btn.disabled = true;
-      const ok = await syncNow();
-      btn.disabled = false;
-      if (ok && document.getElementById("parent-dialog").open) openParent();
-    };
-  }
-
   function todayStr() {
-    return localDate(new Date());
+    return window.ChenchenStudyGroups.day();
   }
-  function localDate(d) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // Ephemeral evidence only: free browsing still makes no learning record.
+  // Keep actual exposure across page/group changes, but never across days.
+  let exposureDay = "";
+  const dailyExposures = new Set();
+  function observedExposure(type, id, remember = false) {
+    const day = todayStr();
+    if (exposureDay !== day) { exposureDay = day; dailyExposures.clear(); }
+    const key = `${type}:${id}`;
+    if (remember) dailyExposures.add(key);
+    return dailyExposures.has(key);
   }
-  function addDays(dateStr, days) {
-    const d = new Date(dateStr + "T12:00:00");
-    d.setDate(d.getDate() + days);
-    return localDate(d);
-  }
-
   function getItem(id) {
     const s = loadState();
     return s.items[id] || null;
-  }
-
-  function newClassroomItem(id, meta) {
-    return { id, ...meta, learned: true, stage: 0, nextReview: todayStr(), lastResult:"enrolled", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
-  }
-
-  function reviewPatch(cur, result) {
-    const startingStage = cur.reviewDay === todayStr() ? (cur.reviewStartStage || 0) : (cur.stage || 0);
-    const days = result === "remember" ? INTERVALS[Math.min(startingStage, INTERVALS.length - 1)] : 1;
-    const stage = result === "remember" ? Math.min(startingStage + 1, INTERVALS.length - 1) : 0;
-    return { stage, lastResult:result, reviewDay:todayStr(), reviewStartStage:startingStage, nextReview:addDays(todayStr(),days), updatedAt:new Date().toISOString() };
-  }
-
-  async function markLearned(id, meta, extraOperations = []) {
-    const existing = getItem(id);
-    const operations = extraOperations.slice();
-    if (loadState().hiddenCourses[id]) operations.unshift({op:"delete",collection:"hiddenCourses",key:id});
-    if (existing && !existing.learned) {
-      const value = {learned:true,updatedAt:new Date().toISOString()};
-      if (!existing.nextReview) value.nextReview = todayStr();
-      operations.push({op:"merge",collection:"items",key:id,value});
-    } else if (!existing) {
-      operations.push({op:"create",collection:"items",key:id,value:newClassroomItem(id,meta)});
-    }
-    if (operations.length) await commitOperations(operations);
-    return getItem(id);
-  }
-
-  async function removeClassroomItem(id) {
-    const state = loadState();
-    const operations = [{op:"delete",collection:"items",key:id}];
-    if (BUILTIN_POEMS.some(poem=>poem.id===id) || id.startsWith("english-")) operations.push({op:"set",collection:"hiddenCourses",key:id,value:{removedAt:new Date().toISOString()}});
-    if(state.customPoems[id]) operations.push({op:"delete",collection:"customPoems",key:id});
-    if(state.customCharacters[id]) operations.push({op:"delete",collection:"customCharacters",key:id});
-    await commitOperations(operations);
   }
 
   function dueItems() {
@@ -257,11 +191,6 @@
     return Object.values(s.items).filter(
       (it) => it.learned && it.nextReview && it.nextReview <= today
     ).sort((a, b) => a.nextReview.localeCompare(b.nextReview) || (a.createdAt || "").localeCompare(b.createdAt || ""));
-  }
-
-  function allLearned() {
-    const s = loadState();
-    return Object.values(s.items).filter((it) => it.learned);
   }
 
   // ---------- Ruby helpers ----------
@@ -305,12 +234,14 @@
 
   function getEnglishModule() {
     if (!englishModule) englishModule = window.ChenchenEnglish.create({
-      loadState, commitOperations, reviewPatch, todayStr, syncNow,
-      newItem:newClassroomItem,
+      loadState, todayStr, syncNow,
+      startStudy:() => startStudyGroup("english", "learn"),
+      groupStartHtml:() => groupStartHtml("english"),
+      completeGroup:entries => completeEnglishGroup(entries),
+      groupSaving:() => !!reviewSession?.saving,
       isActive:() => currentView === "english",
       onHome:() => navigate("home"),
       onExit:() => navigate("english"),
-      onParent:openParent,
     });
     return englishModule;
   }
@@ -345,6 +276,7 @@
 
   function showView(name) {
     resetPracticeAttempt();
+    if (name !== "home") window.ChenchenGarden?.stop();
     if (name !== "write-detail") stopWritingDemo();
     if (name !== "pinyin") stopPinyinAudio(true);
     if (name !== "english") englishModule?.stop();
@@ -438,299 +370,139 @@
     });
   }
 
-  async function recordPractice(id, type, result, attempt, meta = {}) {
-    const activityId = attempt?.activityId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    if (attempt?.operations) return commitOperations(attempt.operations);
-    const item = getItem(id);
-    if ((reviewSession || attempt?.requireClassroom) && !item?.learned) {
-      const error = new Error("这项课堂内容已经删除");
-      error.status = 409;
-      toast("这项课堂内容已经删除，请回到小花园。");
-      throw error;
-    }
-    const at = attempt?.at || new Date().toISOString();
-    const entries = meta.entries || [{id,type,title:meta.title || item?.title || id,skill:meta.skill || "general",
-      result:ASSESSMENT_RESULT[result] || result,source:meta.source || "parent",details:meta.details || {}}];
-    const operations = [];
-    for (const [index, entry] of entries.entries()) {
-      const existing = getItem(entry.id);
-      const event = Learning.createActivity({...entry,day:todayStr(),at});
-      operations.push({op:"set",collection:"activity",key:meta.entries ? `${activityId}-${index}` : activityId,value:event});
-      const rehearsed = [event.details.afterPractice,event.details.observedExposure,event.details.exposureFirst].some(value=>value===true);
-      const reviewResult = event.result === "independent" && rehearsed ? "fuzzy" : REVIEW_RESULT[event.result] || "fuzzy";
-      const sameDayChecked = Object.values(loadState().activity).some(a=>a.schemaVersion===2 && a.day===todayStr() && a.id===entry.id && a.skill===entry.skill && ["independent","supported","again"].includes(a.result));
-      const previous = existing || newClassroomItem(entry.id,{type:entry.type,title:entry.title});
-      const lastAssessment = {result:event.result,source:event.source,skill:event.skill,at};
-      if (existing?.learned) {
-        const value = !sameDayChecked && existing.nextReview <= todayStr() ? reviewPatch(existing,reviewResult) : {};
-        operations.unshift({op:"merge",collection:"items",key:entry.id,value:{...value,lastAssessment}});
-      } else if (meta.enroll && !existing) {
-        operations.unshift({op:"create",collection:"items",key:entry.id,value:{...previous,...reviewPatch(previous,reviewResult),lastAssessment}});
-      }
-    }
-    // Legacy whole-subject tasks become the specific content actually checked.
-    const retiredGroup = meta.retirePinyinGroup ? "pinyin-basic" : meta.retireWritingGroup ? "write-basic" : null;
-    if (retiredGroup && getItem(retiredGroup)?.learned) {
-      operations.push({op:"merge",collection:"items",key:retiredGroup,value:{learned:false,replacedBy:retiredGroup === "pinyin-basic" ? "individual-pinyin" : "individual-characters",updatedAt:at}});
-    }
-    if (attempt) attempt.operations = operations;
-    await commitOperations(operations);
+  async function studyCatalog() {
+    const catalogs = await Promise.allSettled([ensurePoems(),getEnglishModule().catalog()]);
+    const english = catalogs[1].status === "fulfilled" ? catalogs[1].value : [];
+    return [
+      ...POEMS.map(item=>({id:item.id,type:"poem",title:item.title})),
+      {id:"math-addsub-10",type:"math",title:"10以内加减法"},
+      {id:"math-decomp-10",type:"decomp",title:"10以内分解组合"},
+      ...[...INITIALS,...FINALS].map(symbol=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`})),
+      ...writingCharacters().map(item=>({id:item.id,type:"write",title:`汉字·${item.c}`})),
+      ...english,
+    ];
+  }
+
+  function waterEarnedToday() {
+    return Object.values(loadState().garden?.groups || {}).filter(group=>group.day===todayStr() && group.waterAwarded).length;
+  }
+
+  function groupStartHtml(type) {
+    const config = window.ChenchenStudyGroups.CONFIG[type];
+    const remaining = Math.max(0,3-waterEarnedToday());
+    return `<section class="study-start-card"><div><p class="eyebrow">一组一个小收获</p><h3>${config.count} ${config.unit}，一起学一组</h3><p>${remaining ? `整组完成获得 1 滴水 · 今天还可获得 ${remaining} 滴` : "今天的水滴已领完，仍可完成学习并记录"}</p><small>退出后从头开始。单独点卡片只浏览，不留学习记录。</small></div><button class="btn btn-primary study-start-button" data-start-study="${type}">▶ 开始学习</button></section>`;
+  }
+
+  function bindStudyStart(root) {
+    root.querySelectorAll("[data-start-study]").forEach(button=>button.onclick=()=>startStudyGroup(button.dataset.startStudy,"learn"));
+  }
+
+  let studyStarting = false;
+  async function startStudyGroup(type, mode = "learn") {
+    if (studyStarting || reviewSession?.saving) return;
+    studyStarting = true;
+    const generation = practiceGeneration;
+    try {
+      if (!await syncNow()) throw new Error("暂时连不上服务器，请重试。");
+      const catalog = await studyCatalog();
+      if (generation !== practiceGeneration) return;
+      const group = type ? window.ChenchenStudyGroups.select(catalog,loadState(),type,mode,todayStr()) : window.ChenchenStudyGroups.reviews(catalog,loadState(),todayStr())[0];
+      if (!group) {toast(mode === "review" ? "暂时没有可组成完整一组的到期内容，今天可以休息啦。" : "当前可用内容不足一组，先看看卡片，或换个学科学习吧。");return;}
+      reviewSession = {...group,id:globalThis.crypto?.randomUUID?.() || `group-${Date.now()}-${Math.random().toString(36).slice(2)}`,index:0,entries:[],saving:false};
+      if (group.type === "english") {
+        showView("english");
+        await getEnglishModule().open({group:reviewSession});
+      } else openReviewItem(group.items[0].id,group.type);
+    } catch(error) {toast(error.message || "学习组暂时没有打开，请再试一次。");}
+    finally {studyStarting=false;}
   }
 
   function sessionBanner() {
     if (!reviewSession) return "";
-    return `<div class="session-banner"><span>小小复习 · ${reviewSession.index + 1} / ${reviewSession.items.length}</span><span>${reviewSession.items.map((_, i) => `<i class="${i < reviewSession.index ? "done" : i === reviewSession.index ? "now" : ""}"></i>`).join("")}</span><button class="text-btn" id="session-exit">先休息</button></div>`;
+    const item = reviewSession.items[reviewSession.index];
+    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title}${reviewSession.mode === "review" ? "复习" : "学习"} · ${["math","decomp"].includes(reviewSession.type) ? "10 题一组" : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${item?.afterPractice ? "顺便温习 · 原定复习日期不变" : waterEarnedToday() >= 3 ? "今天水滴已领完，本组仍会记录学习" : "整组完成，收获 1 滴水"}</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
   }
 
   function bindSessionExit() {
     const btn = document.getElementById("session-exit");
-    if (btn) btn.onclick = () => { reviewSession = null; showView("home"); renderHome(); };
+    if (btn) btn.onclick = () => navigate("home");
   }
 
   let completingPractice = null;
   let pendingPracticeAttempt = null;
   async function completePractice(id, result, meta) {
-    if (reviewSession && reviewSession.items[reviewSession.index]?.id !== id) return true;
-    if (completingPractice) return true;
-    if (pendingPracticeAttempt?.id === id && pendingPracticeAttempt.operations && pendingPracticeAttempt.result !== result) {
-      toast("上一次还没保存成功，请先重试原来的选项。");
-      return true;
-    }
-    const sessionAtStart = reviewSession;
-    const viewAtStart = currentView;
-    const generationAtStart = practiceGeneration;
-    if (!pendingPracticeAttempt || pendingPracticeAttempt.id !== id || pendingPracticeAttempt.result !== result) {
-      pendingPracticeAttempt = {id,result,activityId:`${Date.now()}-${Math.random().toString(36).slice(2,10)}`,at:new Date().toISOString(),requireClassroom:!!getItem(id)?.learned || !!meta.requireClassroom};
-    }
-    const attemptAtStart = pendingPracticeAttempt;
-    completingPractice = attemptAtStart;
-    try {
-      await recordPractice(id, meta.type, result, attemptAtStart, meta);
-    } catch (error) {
-      if (completingPractice === attemptAtStart) completingPractice = null;
-      if (error.status === 409 && practiceGeneration === generationAtStart && reviewSession === sessionAtStart && currentView === viewAtStart) navigate("home");
-      return true;
-    }
-    if (completingPractice === attemptAtStart) completingPractice = null;
-    if (pendingPracticeAttempt === attemptAtStart) pendingPracticeAttempt = null;
-    if (practiceGeneration !== generationAtStart || reviewSession !== sessionAtStart || currentView !== viewAtStart) return true;
-    return advanceReviewItem(id);
-  }
-
-  function advanceReviewItem(id) {
-    if (!reviewSession || reviewSession.items[reviewSession.index]?.id !== id) { toast("一朵小花送给认真练习的你！"); return false; }
-    reviewSession.index++;
-    if (reviewSession.index < reviewSession.items.length) {
-      const next = reviewSession.items[reviewSession.index];
-      toast("完成啦！我们去看看下一个小伙伴。");
-      openReviewItem(next.id, next.type);
-    } else {
-      const count = reviewSession.items.length;
-      reviewSession = null;
-      showingCelebration = true;
-      showView("home");
-      const el = document.getElementById("home-content");
-      el.innerHTML = `<div class="celebration card"><div class="flower-reward" aria-hidden="true">✿</div><p class="eyebrow">今天的小小收获</p><h1>你的小花开啦！</h1><p>认真复习了 ${count} 个内容，给自己一个抱抱。</p><p class="muted">休息一下，看看远处的绿色吧。</p><button class="btn btn-primary" id="done-home">回到小花园　⌂</button></div>`;
-      document.getElementById("done-home").onclick = () => navigate("home");
-      speakGuide("你的小花开啦！认真复习完了，休息一下吧。");
-    }
+    const group = reviewSession;
+    if (!group || group.saving || group.items[group.index]?.id !== id) return true;
+    const selected = group.items[group.index];
+    const entries = meta.entries || [{id,type:meta.type,title:meta.title || selected.title,skill:meta.skill || "general",result:ASSESSMENT_RESULT[result] || result,source:meta.source || "parent",details:meta.details || {}}];
+    group.entries.push(...entries.map(entry=>({...entry,details:{...entry.details,...(selected.afterPractice ? {afterPractice:true} : {})}})));
+    group.index++;
+    if (group.index < group.items.length) {
+      const next = group.items[group.index];
+      openReviewItem(next.id,next.type);
+    } else await saveStudyGroup(group);
     return true;
   }
 
-  async function startReview() {
-    if (!await syncNow()) { toast("暂时连不上服务器，请重试。"); return; }
-    await ensurePoems().catch(() => {});
-    const learned = allLearned();
-    const due = dueItems();
-    if (!learned.length) { openParent(); return; }
-    if (!due.length) { toast("今天到期的内容都复习好啦。"); return; }
-    const items = due.slice(0, 3);
-    reviewSession = { items, index: 0 };
-    openReviewItem(items[0].id, items[0].type);
+  async function completeEnglishGroup(entries) {
+    const group = reviewSession;
+    if (!group || group.type !== "english") return;
+    group.entries = entries.map(entry=>({...entry,details:{...entry.details,...(group.items.find(item=>item.id===entry.id)?.afterPractice ? {afterPractice:true} : {})}}));
+    await saveStudyGroup(group);
   }
 
-  async function renderHome() {
-    try { await ensurePoems(); } catch (_) {}
-    const due = dueItems();
-    const learned = allLearned();
-    const state = loadState();
-    const practiced = Object.values(state.activity || {}).filter(it => it.day === todayStr()).length;
-    const todayList = due.slice(0, 3);
-    const nextDate = learned.map(it=>it.nextReview).filter(Boolean).sort()[0];
-    const el = document.getElementById("home-content");
-    el.innerHTML = `
-      <div class="welcome-line"><span>你好，辰辰 <span aria-hidden="true">☀</span></span><span>${formatDateCN(todayStr())} · 美好的一天</span></div>
-      <div class="home-top">
-        <section class="daily-review" aria-labelledby="daily-review-title">
-          <div class="hero">
-            <div class="hero-copy"><p class="eyebrow"><span></span> 把学过的，再想起来</p><h1 id="daily-review-title">今日复习</h1><p class="hero-description">${learned.length && !due.length ? "今天没有到期内容。" : "和小兔一起，复习课上的小本领。"}</p><button class="btn btn-primary start-btn" id="start-review" ${learned.length && !due.length ? "disabled" : ""}><span aria-hidden="true">▶</span> ${learned.length && !due.length ? "到期复习完成" : "开始复习"} <span aria-hidden="true">→</span></button><p class="hero-note">${due.length ? `今天有 ${due.length} 项到期 · 一次最多 3 个小练习` : learned.length ? `下次复习：${formatDateCN(nextDate || todayStr())}` : "请家长记录课上学过的内容，复习会自动安排"}</p></div>
-            <div class="hero-illustration">${rabbitArt()}<span class="art-caption">小兔陪你，一起长大</span></div>
-          </div>
-          <div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>暂无到期内容</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}
-            <button class="today-item today-english" id="home-english-daily" disabled><span class="english-daily-icon" aria-hidden="true">Aa</span><span><strong>复习今日英语</strong><small id="home-english-status">准备今日词卡…</small></span><span class="step-go" aria-hidden="true">→</span></button>
-          </div>
-        </section>
-        <aside class="growth-card"><div class="growth-heading"><span class="tiny-sprout" aria-hidden="true">♧</span><span>我的小小收获</span></div><h2>${practiced ? "小花正在长大" : "今天也来浇浇水"}</h2><p>${practiced ? `今天完成了 ${practiced} 次练习` : "每认真练习一次，就收获一朵小花"}</p><div class="flower-row" aria-label="今天完成 ${practiced} 次练习">${[0,1,2].map(i => `<span class="flower ${i < practiced ? "bloomed" : ""}" aria-hidden="true">✿<i></i></span>`).join("")}</div><div class="growth-bottom"><span>${Math.min(practiced,3)} / 3 朵小花</span><span>一点点，就是进步</span></div><div class="growth-track"><span style="width:${Math.min(practiced/3,1)*100}%"></span></div><button class="text-btn home-records" id="home-records">练习记录 →</button></aside>
-      </div>`;
-    document.getElementById("start-review").onclick = startReview;
-    document.getElementById("home-records").onclick = () => navigate("records");
-    const dailyEnglish = document.getElementById("home-english-daily");
-    dailyEnglish.onclick = startDailyEnglish;
-    void updateHomeEnglishDaily(dailyEnglish);
-    document.getElementById("home-setup")?.addEventListener("click", openParent);
-    el.querySelectorAll("[data-review]").forEach(btn => btn.onclick = () => { reviewSession = {items:[getItem(btn.dataset.review)],index:0}; openReviewItem(btn.dataset.review,btn.dataset.type); });
-  }
-
-  async function updateHomeEnglishDaily(button) {
-    const active = () => currentView === "home" && document.getElementById("home-english-daily") === button;
+  async function saveStudyGroup(group) {
+    if (group.saving || reviewSession !== group) return;
+    group.saving = true;
+    group.definiteFailure = false;
+    showingCelebration = true;
+    showView("home");
+    const root = document.getElementById("home-content");
+    root.innerHTML = `<div class="card celebration study-saving"><div class="study-water-reward" aria-hidden="true">💧</div><h1>这一组完成啦</h1><p>正在保存本组学习，请稍等一下…</p><p role="status" id="study-save-status"></p><button class="btn btn-primary" id="study-save-retry" hidden>重试保存</button></div>`;
     try {
-      const {remaining, count} = await getEnglishModule().getDailySummary();
-      if (!active()) return;
-      button.disabled = !remaining;
-      document.getElementById("home-english-status").textContent = remaining ? `今日 ${remaining} 个词` : count ? "今日已完成 ✓" : "今天没有待复习";
-    } catch (_) {
-      if (!active()) return;
-      button.disabled = false;
-      document.getElementById("home-english-status").textContent = "听一听 · 找一找 · 说一说";
+      await queueServerTask(async()=>{
+        const response = await apiFetch("/api/study-groups",{method:"POST",body:JSON.stringify({id:group.id,type:group.type,mode:group.mode,entries:group.entries})});
+        acceptServerState(response);
+      });
+      group.saving = false;
+      reviewSession = null;
+      const saved = Object.values(loadState().garden?.groups || {}).find(item=>item.id===group.id);
+      const rewarded = !!saved?.waterAwarded;
+      root.innerHTML = `<div class="card celebration study-finish"><div class="study-water-reward ${rewarded ? "is-earned" : ""}" aria-hidden="true">${rewarded ? "💧" : "✓"}</div><p class="eyebrow">一点点，就是成长</p><h1>${rewarded ? "收获一滴水！" : "这一组，认真完成啦"}</h1><p>${group.title} ${group.count} ${group.unit}已记入学习记录。</p><p>${rewarded ? "小水滴已装进水壶，回去照顾小树吧。" : "本组已保存，今天不再重复发水。"}</p><p class="muted">休息一下，看看远处的绿色。</p><button class="btn btn-primary" id="study-finish-home">回到我的小树 →</button></div>`;
+      document.getElementById("study-finish-home").onclick = ()=>navigate("home");
+    } catch(error) {
+      group.saving = false;
+      group.definiteFailure = error.status >= 400 && error.status < 500;
+      document.getElementById("study-save-status").textContent = "还没有确认保存。请保持页面打开，重试不会重复领奖。";
+      const button = document.getElementById("study-save-retry");
+      button.hidden = false;
+      button.onclick = ()=>saveStudyGroup(group);
+      if (group.definiteFailure) {
+        document.getElementById("study-save-status").textContent = "本组未保存，部分课堂内容可能已经更改。可以返回首页，重新开始一组。";
+        const back = document.createElement("button");
+        back.className = "btn btn-ghost"; back.textContent = "返回首页";
+        back.onclick = ()=>navigate("home");root.appendChild(back);
+      }
     }
   }
 
-  function startDailyEnglish() {
-    if (!stateReady) return;
-    showingCelebration = false;
-    reviewSession = null;
-    showView("english");
-    return getEnglishModule().open({daily:true});
-  }
-
-  function customPoemFromForm(form) {
-    const body = form.elements.body.value.trim();
-    const texts = body.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-    if (!texts.length) throw new Error("请写下古诗正文，每句一行。");
-    if (texts.length > 32 || texts.some(line=>[...line].length>50)) throw new Error("每句请控制在 50 个字以内，最多 32 句。");
-    const rawPinyin = form.elements.pinyin.value;
-    const pinyinLines = rawPinyin.trim() ? rawPinyin.split(/\r?\n/).map(line=>line.trim()) : [];
-    while (pinyinLines.length > texts.length && !pinyinLines[pinyinLines.length-1]) pinyinLines.pop();
-    if (pinyinLines.length && pinyinLines.length !== texts.length) throw new Error("拼音行数需要和正文相同；不填写也可以。");
-    const lines = texts.map((text, index)=>{
-      const syllables = pinyinLines[index] ? pinyinLines[index].split(/\s+/).filter(Boolean) : [];
-      const characters = [...text];
-      const spokenCount = characters.filter(c=>/[^\s，。！？、；：,.!?;:“”‘’「」『』（）()—…《》]/u.test(c)).length;
-      if (syllables.length && syllables.length !== spokenCount) throw new Error(`第 ${index+1} 句拼音有 ${syllables.length} 个音节，正文有 ${spokenCount} 个字，请用空格隔开每个音节。`);
-      let at = 0;
-      return {text,chars:characters.map(c=>({c,p:/[^\s，。！？、；：,.!?;:“”‘’「」『』（）()—…《》]/u.test(c) ? (syllables[at++] || "") : ""}))};
+  async function renderHome() {
+    const generation = practiceGeneration;
+    let catalog = [];
+    try {catalog = await studyCatalog();} catch(error) {console.warn("部分学习内容尚未准备好",error);}
+    if (currentView !== "home" || showingCelebration || generation !== practiceGeneration) return;
+    return window.ChenchenGarden.renderHome({
+      root:document.getElementById("home-content"),loadState,todayStr,apiFetch,acceptServerState,queueServerTask,toast,navigate,syncNow,
+      reviewGroups:window.ChenchenStudyGroups.reviews(catalog,loadState(),todayStr()),
+      startReview:type=>startStudyGroup(type,"review"),catalog:studyCatalog,
+      isActive:()=>currentView === "home" && !showingCelebration,stateReady,
     });
-    return {id:`custom-poem-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, title:form.elements.title.value.trim() || texts[0].slice(0,18), author:form.elements.author.value.trim(), dynasty:"",titlePy:[],authorPy:[],dynastyPy:[],lines};
-  }
-
-  async function openParent() {
-    if (!stateReady) { toast("先连接服务器，才能管理课堂内容。"); return; }
-    if (currentView === "english") englishModule?.pause();
-    if (currentView === "write-detail") {writingDemo?.stop();writingVoice?.stop();}
-    if (currentView === "pinyin") stopPinyinAudio();
-    await ensurePoems().catch(() => {});
-    const dialog = document.getElementById("parent-dialog");
-    const scroll = dialog.open ? dialog.scrollTop : 0;
-    const courses = [
-      {id:"math-addsub-10", type:"math", title:"10以内加减法"},
-      {id:"math-decomp-10", type:"decomp", title:"10以内分解组合"},
-    ];
-    const learned = allLearned();
-    const removedPoems = BUILTIN_POEMS.filter(poem=>loadState().hiddenCourses[poem.id]);
-    dialog.innerHTML = `
-      <div class="dialog-heading"><div><p class="eyebrow">记录课堂，复习交给小兔</p><h2 id="parent-title">课堂内容管理</h2></div><button class="close-btn" id="close-parent" aria-label="关闭课堂内容管理">×</button></div>
-      <p class="parent-description">已有古诗都是课上学过的，已自动安排复习。其他新学的内容可以在这里补充，小兔按记忆间隔挑出当天到期内容。</p>
-      <div class="memory-schedule"><span>今天巩固</span><i>→</i><span>1 天</span><i>→</i><span>2 天</span><i>→</i><span>4 天</span><i>→</i><span>7 天</span><i>→</i><span>15 天</span><i>→</i><span>30 天</span></div>
-      <p class="form-help">自己完成时逐步拉开间隔；提示后完成或还要练习时，明天再巩固。同一天多练不会连续跳级。</p>
-      <h3>古诗 · 自动安排复习</h3>
-      <p class="form-help">已有诗卡无需逐首加入；新录入的古诗也会直接开始复习。</p>
-      ${removedPoems.length ? `<div class="parent-add"><select id="parent-poem" aria-label="选择要恢复复习的古诗"><option value="">已移除的诗卡…</option>${removedPoems.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`).join("")}</select><button class="btn btn-primary" id="restore-class-poem">恢复复习</button></div>` : ""}
-      <details class="classroom-section"><summary>＋ 诗库里没有？新增一首古诗</summary><form id="custom-poem-form" class="classroom-form">
-        <div class="form-two"><label>标题 <small>可选</small><input name="title" maxlength="50" placeholder="留空时使用第一句" /></label><label>作者 <small>可选</small><input name="author" maxlength="30" placeholder="如：李白" /></label></div>
-        <label>古诗正文 <textarea name="body" rows="5" maxlength="4000" required placeholder="每句一行，例如：&#10;床前明月光，&#10;疑是地上霜。"></textarea></label>
-        <label>逐行拼音 <small>可选，不自动猜读音</small><textarea name="pinyin" rows="4" maxlength="4000" placeholder="每字一个音节，以空格隔开；标点不用填写。&#10;chuáng qián míng yuè guāng&#10;yí shì dì shàng shuāng"></textarea></label>
-        <p class="form-help">拼音逐行对应正文。不填的行保留空行，也可以全部留空，仅显示汉字。</p><p class="form-error" id="poem-form-error" role="alert"></p><button class="btn btn-primary" type="submit">保存古诗，自动安排复习</button>
-      </form></details>
-      <h3>汉字 · 一个字一张复习卡</h3>
-      <form id="custom-character-form" class="classroom-form"><div class="form-two"><label>今天学的汉字<input name="character" maxlength="2" required placeholder="如：春" /></label><label>笔画 / 笔顺 <small>可选</small><input name="strokes" maxlength="120" placeholder="如：9 画" /></label></div><label>记忆或书写提示 <small>可选</small><input name="tip" maxlength="160" placeholder="写下老师教过的小提示" /></label><p class="form-error" id="character-form-error" role="alert"></p><button class="btn btn-learn" type="submit">记录这个汉字</button></form>
-      <h3>数学 · 记录已学内容</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" ${getItem(c.id)?.learned ? "disabled" : ""}><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已记录" : "+ 记录"}</span></button>`).join("")}</div>
-      <h3>英语 · 程序带着听和说</h3><p class="form-help">39 项课堂词汇与 48 项生活拓展，单词、句子和中文引导都能播放。完成小练习后加入间隔复习；生活拓展不会一次全部加入。家长无需示范发音。</p><button class="btn btn-ghost" id="parent-open-english">打开英语小花园 →</button>
-      <h3>课堂记录 <span class="muted">${learned.length} 项</span></h3><div class="parent-enrolled">${learned.length ? learned.map(it=>`<div><span>${escapeHtml(it.title)}<small>${it.nextReview <= todayStr() ? "今天到期" : "下次 "+escapeHtml(it.nextReview)} · 自动安排</small></span><button class="text-btn delete-course" data-remove="${escapeHtml(it.id)}" aria-label="删除课堂内容 ${escapeHtml(it.title)}">删除</button></div>`).join("") : '<p class="muted">还没有课堂记录。先添加今天学过的一两项就好。</p>'}</div>
-      <p class="parent-tip">陪练建议：古诗先回想再听示范；拼音先听范音再跟读；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">记录好啦，回小花园</button>`;
-    if (!dialog.open) dialog.showModal();
-    dialog.scrollTop = scroll;
-    const close = () => {dialog.close(); if(currentView === "home" && !showingCelebration) renderHome();};
-    document.getElementById("close-parent").onclick = close;
-    document.getElementById("parent-done").onclick = () => {dialog.close();navigate("home");};
-    document.getElementById("parent-open-english").onclick = () => {dialog.close();navigate("english");};
-    const restorePoem = document.getElementById("restore-class-poem");
-    if (restorePoem) restorePoem.onclick = async (event) => {
-      const poem = POEMS.find(p=>p.id===document.getElementById("parent-poem").value);
-      if (!poem) {toast("先选择要恢复的诗卡。");return;}
-      const button = event.currentTarget;
-      button.disabled = true;
-      try {await markLearned(poem.id,{type:"poem",title:poem.title});await openParent();toast("已恢复复习，今天先一起巩固。");}
-      catch (_) {button.disabled = false;}
-    };
-    document.getElementById("custom-poem-form").onsubmit = async event => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const error = document.getElementById("poem-form-error");
-      const button = form.querySelector('[type="submit"]');
-      error.textContent = "";
-      try {
-        const poem = customPoemFromForm(form);
-        form.pendingPoemId = form.pendingPoemId || poem.id;
-        poem.id = form.pendingPoemId;
-        button.disabled = true;
-        await markLearned(poem.id,{type:"poem",title:poem.title},[{op:"set",collection:"customPoems",key:poem.id,value:poem}]);
-        await openParent(); toast("新诗卡保存好啦，今天先一起巩固。");
-      } catch (failure) {error.textContent = failure.status ? "没有保存成功，请检查连接后再试。" : failure.message;button.disabled = false;}
-    };
-    document.getElementById("custom-character-form").onsubmit = async event => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const error = document.getElementById("character-form-error");
-      const button = form.querySelector('[type="submit"]');
-      const c = form.elements.character.value.trim();
-      error.textContent = "";
-      if ([...c].length !== 1 || !/\p{Script=Han}/u.test(c)) {error.textContent = "请只填写一个汉字，例如「春」。";return;}
-      const id = `write-char-${c.codePointAt(0).toString(16)}`;
-      const builtin = WRITE_CHARS.find(ch=>ch.c===c);
-      const ch = {id,c,strokes:form.elements.strokes.value.trim() || builtin?.strokes || "",tip:form.elements.tip.value.trim() || builtin?.tip || ""};
-      button.disabled = true;
-      try {
-        // Store the parent's optional hints even for a character in the starter library.
-        await markLearned(id,{type:"write",title:`汉字·${c}`},[{op:"set",collection:"customCharacters",key:id,value:ch}]);
-        await openParent();toast(`「${c}」已经记下啦，会单独安排复习。`);
-      } catch (_) {error.textContent = "没有保存成功，请检查连接后再试。";button.disabled = false;}
-    };
-    dialog.querySelectorAll("[data-course]").forEach(button=>button.onclick=async()=>{
-      button.disabled = true;
-      const course = courses.find(it=>it.id===button.dataset.course);
-      try {await markLearned(course.id,course);await openParent();}
-      catch (_) {button.disabled = false;}
-    });
-    dialog.querySelectorAll("[data-remove]").forEach(button=>button.onclick=async()=>{
-      button.disabled = true;
-      try {
-        const removedId = button.dataset.remove;
-        await removeClassroomItem(removedId);
-        if (currentView === "poem-detail" && selectedPoemId === removedId || currentView === "write-detail" && selectedWriteId === removedId || currentView === "english" || reviewSession?.items.some(item=>item.id===removedId)) navigate("home");
-        await openParent();toast("课堂内容已删除，后续不再安排复习。");
-      }
-      catch (_) {button.disabled = false;}
-    });
-    bindSyncPanel(dialog);
   }
 
   function openReviewItem(id, type) {
     if (type === "english") {
-      const session = reviewSession;
       showView("english");
-      getEnglishModule().open({itemId:id,onDone:() => {
-        if (currentView === "english" && reviewSession === session) advanceReviewItem(id);
-      }});
+      getEnglishModule().open({group:reviewSession});
     } else if (type === "poem") {
       selectedPoemId = id;
       poemListScroll = 0;
@@ -812,6 +584,7 @@
     el.innerHTML = `
       <div class="card">
         <h2>读古诗 <span class="heading-flower">✿</span></h2>
+        ${groupStartHtml("poem")}
         <div class="toolbar">
           <input type="search" id="poem-search" placeholder="搜索题目 / 作者 / 诗句…" value="${escapeHtml(
             poemQuery
@@ -838,11 +611,12 @@
                     </button>`;
                   })
                   .join("")
-              : `<div class="empty" style="grid-column:1/-1">${poemQuery ? "没有找到这首诗，换个词试试吧。" : poemFilter === "due" ? "今天的古诗都复习好啦，也可以点「全部诗卡」看看。" : "这里暂时没有诗卡，可以请家长添加或恢复。"}</div>`
+              : `<div class="empty" style="grid-column:1/-1">${poemQuery ? "没有找到这首诗，换个词试试吧。" : poemFilter === "due" ? "今天的古诗都复习好啦，也可以点「全部诗卡」看看。" : "这里暂时没有诗卡，先到其他学科学习吧。"}</div>`
           }
         </div>
       </div>`;
 
+    bindStudyStart(el);
     el.querySelector("#poem-search").addEventListener("input", (e) => {
       poemQuery = e.target.value;
       renderPoems();
@@ -901,8 +675,7 @@
       .join("");
 
     const it = getItem(id);
-    const enrolled = !!it?.learned;
-    let poemExposure = false;
+    const enrolled = !!reviewSession && reviewSession.type === "poem";
 
     el.innerHTML = `
       ${sessionBanner()}<div class="poem-detail card">
@@ -934,7 +707,7 @@
     if (enrolled) bindAssessment("poem-check",id,async result => {
       const r = REVIEW_RESULT[result];
       if (await completePractice(id,r,{type:"poem",title:displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""),requireClassroom:enrolled,
-        source:"parent",skill:"poem-recitation",details:{observedExposure:poemExposure}})) return;
+        source:"parent",skill:"poem-recitation",details:{observedExposure:observedExposure("poem",id)}})) return;
       if (!active()) return;
       toast("记下来啦，每一次练习都有收获。");
       renderPoemDetail(id);
@@ -945,7 +718,6 @@
     updateSpeakButton("idle");
     if (btnSpeak) {
       btnSpeak.onclick = () => {
-        poemExposure = true;
         if (!window.ChenchenSpeech || !ChenchenSpeech.supported(poem)) {
           toast("暂时无法播放朗读。");
           return;
@@ -962,7 +734,11 @@
             lines: poem.lines.map((ln) => ln.text),
           },
           {
-            onState: state => { if (active()) updateSpeakButton(state); },
+            onState: state => {
+              if (!active()) return;
+              if (state === "speaking") observedExposure("poem",id,true);
+              updateSpeakButton(state);
+            },
             onError: () => { if (active()) toast("朗读暂时打不开，请再试一次。"); },
             onUnsupported: () => { if (active()) toast("这首诗暂未配音。"); },
           }
@@ -973,7 +749,9 @@
   }
 
   // ---------- Math ----------
-  const MATH_ROUND_SIZE = 5;
+  const MATH_ROUND_SIZE = 10;
+  let mathQuestions = [];
+  let mathQuestionKeys = [];
   let mathMode = "addsub";
   let mathScore = { ok: 0, total: 0 };
   let currentQ = null;
@@ -1057,7 +835,7 @@
 
   function genBondSheet() {
     bondQIndex += 1;
-    const item = genBondItem();
+    const item = reviewSession && mathQuestions[mathCompleted] ? mathQuestions[mathCompleted] : genBondItem();
     return {
       item,
       qIndex: bondQIndex,
@@ -1236,11 +1014,20 @@
     mathScore = { ok: 0, total: 0 };
     mathCompleted = 0;
     bondQIndex = 0;
+    mathQuestions = []; mathQuestionKeys = [];
+    if (reviewSession) {
+      while (mathQuestions.length < MATH_ROUND_SIZE) {
+        const question = mathMode === "decomp" ? genBondItem() : genAddSub();
+        const key = mathMode === "decomp" ? `${question.n}:${question.left}:${question.right}:${question.mode}:${Object.values(question.blanks).map(Number).join("")}` : `${question.meta.a}${question.meta.op}${question.meta.b}`;
+        if (!mathQuestionKeys.includes(key)) {mathQuestionKeys.push(key);mathQuestions.push(question);}
+      }
+    }
     const el = document.getElementById("math-content");
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / ${MATH_ROUND_SIZE} 题</span></div>
+    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml(mathMode === "decomp" ? "decomp" : "math")}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / ${MATH_ROUND_SIZE} 题</span></div>
       ${reviewSession ? "" : `<div class="tabs-mini"><button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button><button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button></div>`}
       <p class="practice-instruction">做 ${MATH_ROUND_SIZE} 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
       <div class="btn-row practice-controls"><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div></div>`;
+    bindStudyStart(el);
     el.querySelectorAll("[data-m]").forEach(btn=>btn.onclick=()=>renderMath(btn.dataset.m));
     document.getElementById("math-next").onclick = advanceMathQuestion;
     nextMathQ();
@@ -1273,11 +1060,12 @@
     const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
     const result = mathScore.ok >= MATH_ROUND_SIZE ? "independent" : mathScore.ok > 0 ? "supported" : "again";
     const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法",
-      enroll:true,source:"automatic",skill:"math-solving",details:{correct:mathScore.ok,total:MATH_ROUND_SIZE,mode:mathMode}};
+      enroll:true,source:"automatic",skill:"math-solving",details:{correct:mathScore.ok,total:MATH_ROUND_SIZE,mode:mathMode,questionKeys:mathQuestionKeys}};
     const panel = document.getElementById("math-panel");
-    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${MATH_ROUND_SIZE} 道题，真棒！</h3><p>${assessmentBadge(result)}</p><p>首次答对 ${mathScore.ok} / ${MATH_ROUND_SIZE} 题</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "收下小花，继续 →" : "收下小花，休息一下"}</button></div>`;
+    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${MATH_ROUND_SIZE} 道题，真棒！</h3><p>${assessmentBadge(result)}</p><p>首次答对 ${mathScore.ok} / ${MATH_ROUND_SIZE} 题</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "保存这一组，休息一下" : "自由练习完成，休息一下"}</button></div>`;
     document.querySelector("#math-content .practice-controls").hidden = true;
     document.getElementById("finish-math").onclick = async () => {
+      if (!reviewSession) {navigate("home");return;}
       const advanced = await completePractice(id, REVIEW_RESULT[result], meta);
       if (!advanced) navigate("home");
     };
@@ -1293,7 +1081,7 @@
       renderBondPanel();
       return;
     }
-    currentQ = genAddSub();
+    currentQ = reviewSession ? mathQuestions[mathCompleted] : genAddSub();
     const panel = document.getElementById("math-panel");
     if (!panel) return;
     const opts = choicesFor(currentQ.answer);
@@ -1355,6 +1143,7 @@
   let pyVoice = null;
   let pyAudioRequest = 0;
   let pyAudioButton = null;
+  let pyAudioExposureId = null;
 
   function stopPinyinAudio(destroy = false) {
     pyAudioRequest++;
@@ -1363,6 +1152,7 @@
     pyAudioButton?.classList.remove("is-reading");
     pyAudioButton?.removeAttribute("aria-busy");
     pyAudioButton = null;
+    pyAudioExposureId = null;
   }
 
   async function playPinyin(kind, value, button) {
@@ -1370,13 +1160,16 @@
     stopSpeechSafe();
     stopPinyinAudio();
     const request = pyAudioRequest;
+    pyAudioExposureId = pinyinId(kind === "sound" ? value : pySelected);
     const status = document.getElementById("py-assessment")?.hidden === false ? document.getElementById("py-check-error") : document.getElementById("py-audio-status");
     status.textContent = "";
     pyAudioButton = button;
     button.classList.add("is-reading");
     button.setAttribute("aria-busy", "true");
     try {
-      pyVoice ||= window.ChenchenPinyinAudio.create();
+      pyVoice ||= window.ChenchenPinyinAudio.create({onPlaying: () => {
+        if (pyAudioExposureId) observedExposure("pinyin",pyAudioExposureId,true);
+      }});
       // Start in this click's call stack so phones can unlock media playback.
       await (kind === "sound" ? pyVoice.playSound(value) : pyVoice.playExample(value));
     } catch (error) {
@@ -1403,7 +1196,8 @@
     const targetId = reviewSession?.items[reviewSession.index]?.type === "pinyin" ? reviewSession.items[reviewSession.index].id : null;
     const target = [...INITIALS,...FINALS].find(symbol=>pinyinId(symbol)===targetId);
     const examples = PINYIN_DATA[pyTab].find(item => item.id === pySelected).examples;
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card pinyin-practice"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">${target ? "先试着自己读" : `已记录 ${pyPracticed.size} / 3`}</span></div><div class="tabs-mini" ${target ? "hidden" : ""}><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read">确认练习</button></div><div class="pinyin-assessment" id="py-assessment" hidden><span class="assessment-pinyin">${escapeHtml(pySelected)}</span>${assessmentButtons("py-check","家长确认 · 能自己读吗？")}<button class="text-btn" id="py-check-hint">◖)) 听提示</button><button class="text-btn" id="py-check-back">回去练一练</button></div><div class="pinyin-grid" ${target ? "hidden" : ""}>${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div></div>`;
+    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml("pinyin")}<div class="card practice-card pinyin-practice"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">${target ? "先试着自己读" : "自由点读 · 不留学习记录"}</span></div><div class="tabs-mini" ${target ? "hidden" : ""}><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read" ${reviewSession ? "" : "hidden"}>确认本项练习</button></div><div class="pinyin-assessment" id="py-assessment" hidden><span class="assessment-pinyin">${escapeHtml(pySelected)}</span>${assessmentButtons("py-check","家长确认 · 能自己读吗？")}<button class="text-btn" id="py-check-hint">◖)) 听提示</button><button class="text-btn" id="py-check-back">回去练一练</button></div><div class="pinyin-grid" ${target ? "hidden" : ""}>${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div></div>`;
+    bindStudyStart(el);
     let afterPractice = true, saving = false;
     const beginCheck = rehearsed => {
       stopPinyinAudio();
@@ -1429,14 +1223,14 @@
       el.querySelector(".pinyin-practice").classList.remove("is-assessing");
     };
     bindAssessment("py-check",targetId || pinyinId(pySelected),async result => {
-      if (saving) return;
+      if (saving || !reviewSession) return;
       saving = true;
       stopPinyinAudio();
       const symbol = pySelected;
       const entry = {id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`,skill:"pinyin-reading",source:"parent",result,
-        details:{symbol,afterPractice:afterPractice || pyExposures.has(symbol)}};
+        details:{symbol,afterPractice:afterPractice || pyExposures.has(symbol) || observedExposure("pinyin",pinyinId(symbol))}};
       el.querySelectorAll("button").forEach(button=>button.disabled=true);
-      document.getElementById("py-check-error").textContent = "正在保存…";
+      document.getElementById("py-check-error").textContent = "本项完成，继续这一组…";
       try {
         const advanced = await completePractice(targetId || entry.id,REVIEW_RESULT[result],{type:"pinyin",entries:[entry],enroll:true,retirePinyinGroup:true});
         if (advanced || generation !== practiceGeneration || currentView !== "pinyin") return;
@@ -1447,7 +1241,7 @@
         toast("已记录，试试下一张。");
       } finally { saving = false; }
     });
-    if (target === pySelected && !pyPracticed.has(target)) beginCheck(false);
+    if (reviewSession?.mode === "review" && target === pySelected && !pyPracticed.has(target)) beginCheck(false);
     bindSessionExit();
   }
 
@@ -1641,7 +1435,8 @@
     stopSpeechSafe();
     const el = document.getElementById("write-content");
     const all = writingCharacters();
-    el.innerHTML = `<div class="card practice-card write-library-page"><div class="practice-heading"><div><p class="eyebrow">先选一个字</p><h2>写汉字</h2></div><span class="practice-count">${all.length} 个字</span></div><p class="practice-instruction">简单的在前面，点一个字开始读写。</p><div class="write-list write-library" aria-label="从简单到复杂的汉字">${all.map(w=>`<button class="${w.id === selectedWriteId ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-label="选择汉字 ${escapeHtml(w.c)}" aria-pressed="${w.id === selectedWriteId}">${writingRuby(w.c,w.pinyin)}</button>`).join("")}</div></div>`;
+    el.innerHTML = `${groupStartHtml("write")}<div class="card practice-card write-library-page"><div class="practice-heading"><div><p class="eyebrow">先选一个字</p><h2>写汉字</h2></div><span class="practice-count">${all.length} 个字</span></div><p class="practice-instruction">简单的在前面，点一个字开始读写。</p><div class="write-list write-library" aria-label="从简单到复杂的汉字">${all.map(w=>`<button class="${w.id === selectedWriteId ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-label="选择汉字 ${escapeHtml(w.c)}" aria-pressed="${w.id === selectedWriteId}">${writingRuby(w.c,w.pinyin)}</button>`).join("")}</div></div>`;
+    bindStudyStart(el);
     el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>openWriteCharacter(btn.dataset.writeId));
   }
 
@@ -1666,8 +1461,10 @@
     const all = writingCharacters();
     const ch = all.find(it=>it.id===selectedWriteId) || all[0];
     selectedWriteId = ch.id;
+    const startsWithBlindCheck = !!(ch.pinyin && reviewSession?.mode === "review" && reviewSession?.items[reviewSession.index]?.type === "write");
+    if (!startsWithBlindCheck) observedExposure("write",ch.id,true);
     const words = ch.words || [];
-    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">听一听，描一描</p><h2>汉字描一描</h2></div><span class="practice-count">今天描 1 个就好</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字${escapeHtml(ch.c)}的读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div class="char" id="write-font-outline" hidden>${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" hidden width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas><button id="write-clear" class="write-erase" hidden aria-label="擦掉，重新描">↶ 擦掉</button></div>${words.length ? `<div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p>` : ""}<div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-primary" id="write-finish">写好啦 ✓</button></div><div class="write-paper-confirm" id="write-paper-confirm" hidden><p>已经在纸上写过这个字了吗？</p><div class="btn-row"><button class="btn btn-primary" id="write-paper">在纸上写好啦 ✓</button><button class="text-btn" id="write-keep-drawing">我再描一描</button></div></div><div class="write-assessment" id="write-assessment" hidden><p class="assessment-prompt">不看范字，试着在纸上写一写</p><button class="btn btn-ghost" id="write-check-prompt">◖)) 听字音</button>${assessmentButtons("write-check","家长确认 · 独立书写")}<button class="text-btn" id="write-check-back">回去练一练</button></div></div>`;
+    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">听一听，描一描</p><h2>汉字描一描</h2></div><span class="practice-count">${reviewSession ? "一笔一画，慢慢写" : "自由描写 · 不留学习记录"}</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字${escapeHtml(ch.c)}的读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div class="char" id="write-font-outline" hidden>${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" hidden width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas><button id="write-clear" class="write-erase" hidden aria-label="擦掉，重新描">↶ 擦掉</button></div>${words.length ? `<div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p>` : ""}<div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-primary" id="write-finish" ${reviewSession ? "" : "hidden"}>写好啦 ✓</button></div><div class="write-paper-confirm" id="write-paper-confirm" hidden><p>已经在纸上写过这个字了吗？</p><div class="btn-row"><button class="btn btn-primary" id="write-paper">在纸上写好啦 ✓</button><button class="text-btn" id="write-keep-drawing">我再描一描</button></div></div><div class="write-assessment" id="write-assessment" hidden><p class="assessment-prompt">不看范字，试着在纸上写一写</p><button class="btn btn-ghost" id="write-check-prompt">◖)) 听字音</button>${assessmentButtons("write-check","家长确认 · 独立书写")}<button class="text-btn" id="write-check-back">回去练一练</button></div></div>`;
     document.getElementById("write-back").onclick = returnToWriteLibrary;
     const canvas = document.getElementById("write-canvas");
     const ctx = canvas.getContext("2d");
@@ -1707,6 +1504,7 @@
       else layer.classList.add("is-copy-guide");
     };
     const watch = () => {
+      observedExposure("write",ch.id,true);
       stopSpeechSafe(); stopReading(); drawing = false; watching = true; canvas.hidden = true; finishButton.disabled = true; eraseButton.hidden = true; paperConfirm.hidden = true; layer.classList.remove("is-copy-guide");
     };
     const setupDemo = () => {
@@ -1785,13 +1583,15 @@
     const beginWritingCheck = (method, afterPractice = true) => {
       writingDemo?.stop(); stopReading();
       writingMethod = method;
-      writingAfterPractice = afterPractice;
+      writingAfterPractice = afterPractice || observedExposure("write",ch.id);
+      if (afterPractice) observedExposure("write",ch.id,true);
       paperConfirm.hidden = true;
       document.getElementById("write-assessment").hidden = false;
       el.querySelector(".write-practice").classList.add("is-assessing");
       document.getElementById("write-check-prompt").hidden = !ch.pinyin;
     };
     const finish = async result => {
+      if (!reviewSession) return;
       writingDemo?.stop(); stopReading();
       const id = reviewSession?.items[reviewSession.index]?.id || ch.id;
       const entry = {id:ch.id,type:"write",title:`汉字·${ch.c}`,source:"parent",skill:"hanzi-writing",result,details:{character:ch.c,method:writingMethod,afterPractice:writingAfterPractice}};
@@ -1810,12 +1610,13 @@
     document.getElementById("write-check-back").onclick = () => {
       stopReading();
       writingAfterPractice = true;
+      observedExposure("write",ch.id,true);
       document.getElementById("write-assessment").hidden = true;
       el.querySelector(".write-practice").classList.remove("is-assessing");
     };
     document.getElementById("write-check-prompt").onclick = () => read(`char-${ch.c.codePointAt(0).toString(16)}`,ch.c,document.getElementById("write-check-prompt"));
     bindAssessment("write-check",reviewSession?.items[reviewSession.index]?.id || ch.id,finish);
-    if (ch.pinyin && reviewSession?.items[reviewSession.index]?.type === "write") beginWritingCheck("paper",false);
+    if (startsWithBlindCheck) beginWritingCheck("paper",false);
 
     bindSessionExit();
   }
@@ -1841,6 +1642,7 @@
 
   // ---------- Init ----------
   function navigate(v) {
+    if (reviewSession && (reviewSession.saving || !reviewSession.definiteFailure && reviewSession.entries.length >= reviewSession.items.length)) {toast("这一组正在确认保存，请保持页面打开并重试。");return;}
     if (!stateReady) { toast("先连接服务器，再开始复习。"); return; }
     const restorePoemScroll = v === "poems" && currentView === "poem-detail";
     showingCelebration = false;
@@ -1863,8 +1665,6 @@
   function bindNav() {
     document.querySelectorAll(".nav button").forEach(btn=>btn.onclick=()=>navigate(btn.dataset.nav));
     document.getElementById("brand-home").onclick = event => {event.preventDefault();navigate("home");};
-    document.getElementById("open-parent").onclick = openParent;
-    document.getElementById("parent-dialog").addEventListener("click",event=>{if(event.target===event.currentTarget){event.currentTarget.close();if(currentView==="home" && !showingCelebration)renderHome();}});
   }
 
   async function initializePage() {
@@ -1878,6 +1678,7 @@
   }
   document.addEventListener("DOMContentLoaded", () => {
     bindNav();
+    window.addEventListener("beforeunload",event=>{if(reviewSession && (reviewSession.saving || !reviewSession.definiteFailure && reviewSession.entries.length>=reviewSession.items.length)){event.preventDefault();event.returnValue="";}});
     showView("home");
     initializePage();
   });

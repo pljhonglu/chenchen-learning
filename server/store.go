@@ -27,6 +27,7 @@ type progressStore struct {
 	db           *sql.DB
 	path         string
 	builtinPoems []classroomPoem
+	now          func() time.Time // Optional clock for server-owned garden transactions.
 }
 
 type progress struct {
@@ -122,19 +123,32 @@ func (s *progressStore) put(ctx context.Context, payload json.RawMessage, update
 	defer tx.Rollback()
 	// Legacy PUT clients do not know about poem-removal tombstones. Retain
 	// those server-side decisions; restoration uses the explicit PATCH flow.
-	if len(s.builtinPoems) > 0 {
-		previous, err := scanProgress(tx.QueryRowContext(ctx,
-			"SELECT payload, updated_at FROM progress WHERE id = 1"))
+	previous, err := scanProgress(tx.QueryRowContext(ctx,
+		"SELECT payload, updated_at FROM progress WHERE id = 1"))
+	if err != nil {
+		return progress{}, "", err
+	}
+	if previous.Found && updatedAt >= previous.UpdatedAt {
+		enabled, err := hasSavedStudyGroups(previous)
 		if err != nil {
-			return progress{}, "", err
+			return previous, "", err
 		}
+		if enabled {
+			return previous, "", &patchError{http.StatusConflict, "legacy_client_upgrade_required", "成长系统已启用，请刷新或升级旧客户端后使用分组学习；旧版全量保存已停止，当前学习记录和成长进度保持不变"}
+		}
+	}
+	payload, err = retainGarden(payload, previous)
+	if err != nil {
+		return progress{}, "", err
+	}
+	if len(s.builtinPoems) > 0 {
 		payload, err = s.retainPoemRemovals(payload, previous)
 		if err != nil {
 			return progress{}, "", err
 		}
 	}
-	if len(payload) > maxProgressBytes {
-		return progress{}, "", &patchError{http.StatusRequestEntityTooLarge, "payload too large", "stored progress exceeds 5 MiB"}
+	if len(payload) > maxStoredProgressBytes {
+		return progress{}, "", &patchError{http.StatusRequestEntityTooLarge, "payload too large", "stored progress exceeds 32 MiB"}
 	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO progress (id, payload, updated_at)
 		VALUES (1, ?, ?)

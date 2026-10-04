@@ -203,3 +203,52 @@ func TestProgressCapacityAcceptsHistoryBeyondOldLimitAndRejectsOversizedPut(t *t
 		t.Fatal("oversized PUT changed history")
 	}
 }
+
+func TestSmallHTTPMutationsKeepWorkingAfterHistoryExceedsFiveMiB(t *testing.T) {
+	app := testApp(t)
+	// Accumulating history uses small mutations; no oversized input is needed.
+	for index := 0; index < 3; index++ {
+		body, _ := json.Marshal(map[string]any{"operations": []progressOperation{
+			operation("set", "activity", fmt.Sprint("legacy-history-", index), fmt.Sprintf(`{"note":%q}`, strings.Repeat("h", 2*1024*1024))),
+		}})
+		if len(body) > maxProgressRequestBytes {
+			t.Fatal("fixture accidentally exceeded request limit")
+		}
+		response := request(app, http.MethodPatch, "/api/progress", string(body))
+		if response.Code != http.StatusOK {
+			t.Fatalf("bounded history mutation: %d %s", response.Code, response.Body.String())
+		}
+	}
+	stored, err := app.store.get(context.Background())
+	if err != nil || len(stored.Payload) <= maxProgressBytes || len(stored.Payload) >= maxStoredProgressBytes {
+		t.Fatalf("history did not pass old storage threshold: size=%d err=%v", len(stored.Payload), err)
+	}
+	// Automatic course enrollment uses the same larger storage boundary.
+	app.store.builtinPoems = []classroomPoem{{ID: "capacity-poem", Title: "课堂古诗"}}
+	stored, err = app.store.get(context.Background())
+	if err != nil || decodeState(t, decodeState(t, stored.Payload)["items"])["capacity-poem"] == nil {
+		t.Fatalf("poem enrollment stopped above 5 MiB: %v", err)
+	}
+	response := request(app, http.MethodPatch, "/api/progress", `{"operations":[{"op":"create","collection":"items","key":"parent-character","value":{"id":"parent-character","type":"write","title":"汉字·木","learned":true}}]}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("parent management stopped above 5 MiB: %d", response.Code)
+	}
+	group := gardenTestGroup("large-history-group", "write", "large-history-character")
+	body, _ := json.Marshal(group)
+	response = request(app, http.MethodPost, "/api/study-groups", string(body))
+	if response.Code != http.StatusOK {
+		t.Fatalf("group save stopped above 5 MiB: %d %s", response.Code, response.Body.String())
+	}
+	response = request(app, http.MethodPost, "/api/garden/water", `{"id":"large-history-water"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("watering stopped above 5 MiB: %d %s", response.Code, response.Body.String())
+	}
+	stored, err = app.store.get(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger := readGarden(t, stored)
+	if len(ledger.Groups) != 1 || len(ledger.Watering) != 1 {
+		t.Fatal("large snapshot lost garden history")
+	}
+}

@@ -17,7 +17,7 @@
     return error;
   }
 
-  function create() {
+  function create(options = {}) {
     let audio = null;
     let setupError = null;
     let current = null;
@@ -80,6 +80,7 @@
             }
             clearTimeout(request.timer);
             request.timer = null;
+            options.onPlaying?.();
           },
           waiting: waitForAudio,
           stalled: waitForAudio,

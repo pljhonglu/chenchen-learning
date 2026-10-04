@@ -13,8 +13,11 @@ import (
 	"time"
 )
 
+// Incoming legacy snapshots and individual mutation requests stay bounded at
+// 5 MiB. Server-side history can accumulate through small atomic mutations.
 const maxProgressBytes = 5 * 1024 * 1024
 const maxProgressRequestBytes = maxProgressBytes + 64*1024 // JSON envelope and operation names.
+const maxStoredProgressBytes = 32 * 1024 * 1024
 
 type application struct {
 	store  *progressStore
@@ -35,7 +38,7 @@ func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		origin = "*"
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, PATCH, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, PATCH, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Add("Vary", "Origin")
 	if r.Method == http.MethodOptions {
@@ -59,6 +62,12 @@ func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok": true, "service": "chenchen-learning", "storage": "sqlite", "db": app.store.path,
 		})
+	case "/api/study-groups", "/api/garden/water":
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w, "POST, OPTIONS")
+			return
+		}
+		app.gardenRequest(w, r.WithContext(ctx))
 	case "/api/progress":
 		switch r.Method {
 		case http.MethodGet:
@@ -149,7 +158,11 @@ func (app *application) putProgress(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var limit *patchError
 		if errors.As(err, &limit) {
-			writeJSON(w, limit.status, map[string]string{"error": limit.code})
+			response := map[string]any{"ok": false, "error": limit.code, "message": limit.message}
+			if limit.status == http.StatusConflict && stored.Found {
+				response["payload"], response["updatedAt"] = stored.Payload, stored.UpdatedAt
+			}
+			writeJSON(w, limit.status, response)
 			return
 		}
 		app.storageError(w, err)

@@ -23,9 +23,6 @@ func testClassroomPoems(t *testing.T) []classroomPoem {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(poems) != 35 {
-		t.Fatalf("expected all 35 classroom poems, got %d", len(poems))
-	}
 	return poems
 }
 
@@ -46,7 +43,7 @@ func TestPoemsAutomaticallyStartReviewAndInitializationIsIdempotent(t *testing.T
 		t.Fatalf("get: %+v, %v", first, err)
 	}
 	items := progressItems(t, first)
-	if len(items) != 35 {
+	if len(items) != len(app.store.builtinPoems) {
 		t.Fatalf("initial poem count = %d", len(items))
 	}
 	for _, poem := range app.store.builtinPoems {
@@ -91,9 +88,17 @@ func TestPoemMigrationPreservesProgressAndUsesShanghaiReviewDate(t *testing.T) {
 	if string(paused["learned"]) != "true" || string(paused["stage"]) != "3" || string(paused["nextReview"]) != `"2026-11-08"` || string(paused["createdAt"]) != `"old"` {
 		t.Fatalf("existing stage or dates changed: %s", items["poem-02"])
 	}
-	newItem := decodeState(t, items["poem-03"])
-	if string(newItem["nextReview"]) != `"2026-10-01"` || string(items["math"]) != string(oldItems["math"]) || string(decodeState(t, stored.Payload)["future"]) != `{"preserve":true}` {
+	if len(items) != len(app.store.builtinPoems)+1 || string(items["math"]) != string(oldItems["math"]) || string(decodeState(t, stored.Payload)["future"]) != `{"preserve":true}` {
 		t.Fatalf("wrong date or unrelated changes: %s", stored.Payload)
+	}
+	for _, poem := range app.store.builtinPoems {
+		if _, existed := oldItems[poem.ID]; existed {
+			continue
+		}
+		newItem := decodeState(t, items[poem.ID])
+		if string(newItem["nextReview"]) != `"2026-10-01"` || string(newItem["stage"]) != "0" || string(newItem["learned"]) != "true" {
+			t.Fatalf("new poem %s did not start today's review: %s", poem.ID, items[poem.ID])
+		}
 	}
 }
 
@@ -103,7 +108,7 @@ func TestRemovedPoemStaysRemovedUntilExplicitRestore(t *testing.T) {
 	ctx := context.Background()
 	// A PATCH before the first GET also enrolls the classroom poems.
 	stored, err := app.store.patch(ctx, []progressOperation{operation("merge", "items", "poem-01", `{"stage":3,"nextReview":"2026-11-01"}`)})
-	if err != nil || len(progressItems(t, stored)) != 35 {
+	if err != nil || len(progressItems(t, stored)) != len(app.store.builtinPoems) {
 		t.Fatalf("initial PATCH: %v", err)
 	}
 	if _, err := app.store.patch(ctx, []progressOperation{operation("delete", "items", "poem-01", "")}); err != nil {
@@ -142,7 +147,7 @@ func TestRemovedPoemStaysRemovedUntilExplicitRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored, err = app.store.get(ctx)
-	if err != nil || len(progressItems(t, stored)) != 35 {
+	if err != nil || len(progressItems(t, stored)) != len(app.store.builtinPoems) {
 		t.Fatalf("restore: %v", err)
 	}
 }
@@ -155,7 +160,7 @@ func TestPutBeforeFirstReadIncludesClassroomPoems(t *testing.T) {
 		t.Fatalf("put: %s, %v", kept, err)
 	}
 	items := progressItems(t, stored)
-	if len(items) != 36 || string(decodeState(t, items["math"])["stage"]) != "2" {
+	if len(items) != len(app.store.builtinPoems)+1 || string(decodeState(t, items["math"])["stage"]) != "2" {
 		t.Fatalf("PUT omitted poems or changed math: %s", stored.Payload)
 	}
 }
@@ -199,7 +204,7 @@ func TestConcurrentPoemInitializationCannotOverwriteReview(t *testing.T) {
 	}
 	items := progressItems(t, stored)
 	item := decodeState(t, items["poem-01"])
-	if len(items) != 35 || string(item["stage"]) != "4" || string(item["nextReview"]) != `"2026-11-15"` {
+	if len(items) != len(first.builtinPoems) || string(item["stage"]) != "4" || string(item["nextReview"]) != `"2026-11-15"` {
 		t.Fatalf("concurrent initialization reset review: %s", stored.Payload)
 	}
 }

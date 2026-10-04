@@ -9,17 +9,16 @@ const sourcePath = path.join(__dirname, '../public/app.js');
 const source = fs.readFileSync(sourcePath, 'utf8');
 const instrumented = source.replace(/\}\)\(\);\s*$/, `
 globalThis.subject = {
- loadState, getItem, markLearned, removeClassroomItem, reviewPatch, recordPractice,
- todayStr, addDays, dueItems, syncNow, commitOperations, completePractice,
- navigate, bindSessionExit, openReviewItem, startReview, renderHome, updateHomeEnglishDaily,
- writingCharacters, openWriteCharacter, openParent, initializePage, customPoemFromForm, renderPoems, renderPoemDetail, openPoemFromList,
+ loadState, getItem, saveStudyGroup, syncNow, completePractice,
+ navigate, bindSessionExit, openReviewItem, startStudyGroup, renderHome, studyCatalog,
+ writingCharacters, openWriteCharacter, initializePage, renderPoems, renderPoemDetail, openPoemFromList,
  setPoemFilter: value => poemFilter=value,
  getPoemQuery: () => poemQuery,
  getPoemId: () => selectedPoemId,
  setPoemsLoadPromise: value => poemsLoadPromise=value,
  setPoemIllustrations: value => POEM_ILLUSTRATIONS=value,
  setView: value => currentView=value,
- setSession: value => reviewSession=value,
+ setSession: value => { if(value){value.entries ||= [];value.id ||= "test-group";value.type ||= value.items[0]?.type;value.count ||= value.items.length;value.title ||= value.type;value.mode ||= "review";}reviewSession=value; },
  getSession: () => reviewSession,
  getView: () => currentView,
  getWritingId: () => selectedWriteId,
@@ -32,7 +31,7 @@ assert.doesNotMatch(source, /\b(?:localStorage|sessionStorage|indexedDB)\b/,
   'Course content and progress must never be persisted in the browser');
 const copy = value => JSON.parse(JSON.stringify(value));
 const flush = () => new Promise(resolve => setImmediate(resolve));
-const emptyState = () => ({items:{},activity:{},customPoems:{},customCharacters:{},hiddenCourses:{}});
+const emptyState = () => ({items:{},activity:{},customPoems:{},customCharacters:{},hiddenCourses:{},garden:{groups:{}}});
 const course = (id,type='poem',extra={}) => ({id,type,title:id,learned:true,stage:0,nextReview:'2026-10-01',
   createdAt:'2026-09-30T12:00:00Z',updatedAt:'2026-09-30T12:00:00Z',...extra});
 
@@ -49,7 +48,7 @@ function environment(initial = {}) {
       querySelectorAll:()=>[],querySelector:selector=>element(selector),
       setAttribute:()=>{},removeAttribute:()=>{},addEventListener(name,handler){this.listeners[name]=handler;},
       focus:()=>{},setSelectionRange:()=>{},
-      showModal(){this.open=true;},close(){this.open=false;},reset(){this.value='';},
+      showModal(){this.open=true;},close(){this.open=false;},reset(){this.value='';},appendChild(){},
       getContext:()=>({}),getBoundingClientRect:()=>({left:0,top:0,width:600,height:600}),
     });
     return elements.get(id);
@@ -58,29 +57,26 @@ function environment(initial = {}) {
     constructor(...args) { super(...(args.length?args:[now])); }
     static now() { return now; }
   }
-  // Only the documented API contract is modeled: atomic entry operations,
-  // merge cannot recreate deletions; deleting a course preserves its history.
+  // The current UI only reads progress and saves complete learning groups.
+  // SQLite atomicity and legacy content-management operations have Go tests.
   function serverResponse(request) {
     if (request.method==='GET') return {status:200,data:{found:true,payload:copy(database),updatedAt:database.updatedAt||0}};
-    assert.equal(request.method,'PATCH','Never PUT a whole stale browser snapshot');
-    const {operations,...other}=request.body;
-    assert.deepEqual(other,{});
-    if(!Array.isArray(operations)||!operations.length||operations.length>100) return {status:400,data:{error:'invalid_operations'}};
-    const next=copy(database);
-    for(const operation of operations) {
-      const entries=next[operation.collection]||={};
-      if(operation.op==='merge') {
-        if(!Object.hasOwn(entries,operation.key)) return {status:409,data:{error:'entry_not_found',payload:copy(database),updatedAt:database.updatedAt||0}};
-        entries[operation.key]={...entries[operation.key],...copy(operation.value)};
-      } else if(operation.op==='create') {
-        if(!Object.hasOwn(entries,operation.key)) entries[operation.key]=copy(operation.value);
-      } else if(operation.op==='set') entries[operation.key]=copy(operation.value);
-      else if(operation.op==='delete') {
-        delete entries[operation.key];
-      } else assert.fail(`Unknown operation ${operation.op}`);
+    if(request.method==='POST') {
+      assert.equal(request.url,'/api/study-groups');
+      const group=request.body;
+      if(database.garden.groups[group.id]) return {status:200,data:{ok:true,payload:copy(database)}};
+      const count={poem:5,pinyin:10,write:5,english:5,math:1,decomp:1}[group.type];
+      if(group.entries.length!==count) return {status:400,data:{error:'invalid_group_size'}};
+      if(group.mode==='review' && group.entries.some(entry=>!database.items[entry.id]?.learned)) return {status:409,data:{error:'entry_not_found'}};
+      const next=copy(database),day=context.window.ChenchenStudyGroups.day(new FakeDate());
+      group.entries.forEach((entry,index)=>{
+        next.activity[`${group.id}-${index}`]={...copy(entry),schemaVersion:2,day,at:new FakeDate().toISOString()};
+        next.items[entry.id]={...(next.items[entry.id]||{}),id:entry.id,type:entry.type,title:entry.title,learned:true};
+      });
+      next.garden.groups[group.id]={id:group.id,day,type:group.type,count:group.entries.length,contentIds:group.entries.map(entry=>entry.id),waterAwarded:1};
+      database=next;return {status:200,data:{ok:true,payload:copy(database),updatedAt:now}};
     }
-    next.updatedAt=Math.max(now,(database.updatedAt||0)+1);database=next;
-    return {status:200,data:{ok:true,payload:copy(database),updatedAt:database.updatedAt}};
+    assert.fail(`Unexpected progress mutation: ${request.method}`);
   }
   const context=vm.createContext({
     Date:FakeDate,Math,console,AbortController,crypto:require('crypto').webcrypto,
@@ -95,9 +91,15 @@ function environment(initial = {}) {
             if(result.jsonError) throw new SyntaxError('Unexpected token <');return copy(result.data);
           }}); },
         fail(){this.settled=true;reject(new Error('network unavailable'));},
+        commitWithoutResponse(){serverResponse(this);},
         commitThenLoseResponse(){this.settled=true;serverResponse(this);reject(new Error('response lost'));},
       };
-      assert.equal(url,'/api/progress');requests.push(request);
+      options.signal?.addEventListener('abort',()=>{
+        if(request.settled)return;
+        request.settled=true;
+        const error=new Error('Request aborted');error.name='AbortError';reject(error);
+      },{once:true});
+      assert.ok(['/api/progress','/api/study-groups'].includes(url));requests.push(request);
       if(!holdRequests) queueMicrotask(()=>request.reply());
     }),
   });
@@ -107,6 +109,9 @@ function environment(initial = {}) {
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/writing-vocabulary.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/pinyin-data.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/learning-model.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/study-groups.js'),'utf8'),context);
+  context.window.ChenchenEnglish={create:()=>({catalog:async()=>[],stop(){},pause(){}})};
+  context.window.ChenchenGarden={renderHome:hooks=>{context.lastGardenHooks=hooks;},stop(){}};
   vm.runInContext(instrumented,context,{filename:sourcePath});
   context.subject.setView('poems');context.subject.setPoems([]);
   return {context,subject:context.subject,requests,scrolls,timers,elements,element,db:()=>copy(database),
@@ -175,25 +180,6 @@ test('server is sole source; GET-only loading and a fresh page read current serv
   const other=environment(e.db());await other.connect();assert.equal(other.subject.getItem('a'),null);assert.ok(other.subject.getItem('b'));
 });
 
-test('classroom poems open directly for review without an enrollment button or unlearned filter',async()=>{
-  const poem={id:'poem-1',title:'静夜思',author:'李白',dynasty:'唐',lines:[{text:'床前明月光',chars:[{c:'床',p:'chuáng'}]}]};
-  const e=environment({items:{[poem.id]:course(poem.id,'poem',{title:poem.title})}}),t=e.subject;
-  t.setPoems([poem]);await e.connect();await t.renderPoems();
-  assert.match(e.element('poems-content').innerHTML,/今天复习/);
-  assert.doesNotMatch(e.element('poems-content').innerHTML,/还没学过|data-f="new"|data-f="learned"/);
-  t.setView('poem-detail');await t.renderPoemDetail(poem.id);
-  assert.match(e.element('poem-detail-content').innerHTML,/id="poem-check-independent"/);
-  assert.match(e.element('poem-detail-content').innerHTML,/id="poem-check-supported"/);
-  assert.match(e.element('poem-detail-content').innerHTML,/id="poem-check-again"/);
-  assert.doesNotMatch(e.element('poem-detail-content').innerHTML,/我记得|提醒一下|一起再读/);
-  assert.doesNotMatch(e.element('poem-detail-content').innerHTML,/btn-enroll|加入复习|课上学过吗/);
-  assert.ok(e.requests.every(request=>request.method==='GET'),'Rendering must not enroll from a stale browser snapshot');
-  await t.openParent();assert.doesNotMatch(e.element('parent-dialog').innerHTML,/id="add-class-poem"/);
-  assert.match(e.element('parent-dialog').innerHTML,/已有古诗都是课上学过的，已自动安排复习/);
-  await t.recordPractice(poem.id,'poem','remember');
-  t.setPoemFilter('due');await t.renderPoems();assert.doesNotMatch(e.element('poems-content').innerHTML,/class="poem-card"/);
-  assert.match(e.element('poems-content').innerHTML,/今天的古诗都复习好啦/);
-});
 
 test('poem detail returns to the same filtered search and list scroll position',async()=>{
   const poems=samplePoems(),items=Object.fromEntries(poems.map(poem=>[poem.id,course(poem.id)]));
@@ -215,6 +201,7 @@ test('poem detail returns to the same filtered search and list scroll position',
   assert.ok(e.requests.every(request=>request.method==='GET'),'Browsing must not record practice');
 });
 
+
 test('a poem opened from scheduled review returns to the list top without stale browsing scroll',async()=>{
   const poems=samplePoems(),item=course('poem-02'),e=environment({items:{[item.id]:item}}),t=e.subject;
   t.setPoems(poems);await e.connect();t.navigate('poems');
@@ -230,6 +217,7 @@ test('a poem opened from scheduled review returns to the list top without stale 
   assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
+
 test('poem detail has one reading button without hide toggles or playback instructions',async()=>{
   const poems=samplePoems(),e=environment({items:{'poem-01':course('poem-01')}}),t=e.subject;
   t.setPoems(poems);t.setPoemIllustrations({'poem-01':{src:'images/poems/poem-01.png',hint:'看图背古诗'}});
@@ -242,6 +230,7 @@ test('poem detail has one reading button without hide toggles or playback instru
   assert.match(html,/class="hz">床/,'Characters stay visible with the poem');
   assert.match(html,/<figure class="poem-picture">/,'Removing instructions must retain the illustration');
 });
+
 
 test('one poem reading button pauses while loading or speaking and resumes the same recording',async()=>{
   const poems=samplePoems(),e=environment(),t=e.subject;t.setPoems(poems);await e.connect();
@@ -262,6 +251,7 @@ test('one poem reading button pauses while loading or speaking and resumes the s
   assert.deepEqual(e.db(),before);assert.ok(e.requests.every(request=>request.method==='GET'),'Listening is not completion');
 });
 
+
 test('leaving a poem detail stops its loading or playing audio without recording completion',async()=>{
   for(const playing of [false,true]) {
     const poems=samplePoems(),e=environment(),t=e.subject;t.setPoems(poems);await e.connect();
@@ -275,6 +265,7 @@ test('leaving a poem detail stops its loading or playing audio without recording
     assert.ok(e.requests.every(request=>request.method==='GET'));
   }
 });
+
 
 test('late poem detail rendering cannot replace a newer selection or reopen a closed detail',async()=>{
   for(const next of ['poem-03','poems']) {
@@ -299,171 +290,22 @@ test('late poem detail rendering cannot replace a newer selection or reopen a cl
   }
 });
 
-test('removing a built-in poem saves a tombstone and the parent can explicitly restore review',async()=>{
-  const poem={id:'poem-1',title:'静夜思',lines:[{text:'床前明月光',chars:[]}]};
-  const e=environment({items:{[poem.id]:course(poem.id)}}),t=e.subject;
-  t.setPoems([poem]);await e.connect();await t.removeClassroomItem(poem.id);
-  assert.ok(t.loadState().hiddenCourses[poem.id]);assert.equal(t.getItem(poem.id),null);
-  await t.renderPoems();assert.doesNotMatch(e.element('poems-content').innerHTML,/class="poem-card"/);
-  await t.openParent();assert.match(e.element('parent-dialog').innerHTML,/恢复复习/);
-  e.element('parent-poem').value=poem.id;
-  await e.element('restore-class-poem').onclick({currentTarget:e.element('restore-class-poem')});
-  assert.equal(t.loadState().hiddenCourses[poem.id],undefined);assert.equal(t.getItem(poem.id).learned,true);
-  assert.equal(t.getItem(poem.id).nextReview,'2026-10-01');
+
+test('historical custom poems stay browsable while removed poems and all activity remain unchanged',async()=>{
+  const poems=samplePoems(),removed=poems[0].id;
+  const custom={id:'custom-poem-legacy',title:'旧课堂诗',author:'',lines:[{text:'春天来了',chars:[{c:'春',p:'chūn'}]}]};
+  const activity={old:{day:'2026-09-30',id:removed,type:'poem'},custom:{day:'2026-09-30',id:custom.id,type:'poem'}};
+  const e=environment({items:{[custom.id]:course(custom.id)},customPoems:{[custom.id]:custom},hiddenCourses:{[removed]:{removedAt:'2026-09-30T12:00:00Z'}},activity}),t=e.subject;
+  t.setPoems(poems);const before=e.db();await e.connect();await t.renderPoems();
+  assert.match(e.element('poems-content').innerHTML,/data-id="custom-poem-legacy"/);
+  assert.ok(!e.element('poems-content').innerHTML.includes(`data-id="${removed}"`));
+  await t.openPoemFromList(custom.id);assert.equal(t.getPoemId(),custom.id);
+  assert.match(e.element('poem-detail-content').innerHTML.replace(/<[^>]*>/g,''),/旧课堂诗/);
+  assert.deepEqual(copy(t.loadState().customPoems[custom.id]),custom);
+  assert.deepEqual(copy(t.loadState().activity),activity);assert.deepEqual(e.db(),before);
+  assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
-test('local dates and intervals 1, 2, 4, 7, 15, 30; same-day and early practice never advance again',async()=>{
-  const e=environment(),t=e.subject;await e.connect();
-  assert.equal(t.todayStr(),'2026-10-01');assert.equal(t.addDays('2026-12-31',1),'2027-01-01');assert.equal(t.addDays('2024-02-28',1),'2024-02-29');
-  await t.markLearned('a',{type:'poem',title:'课堂古诗'});assert.equal(t.getItem('a').nextReview,'2026-10-01');
-  const schedule=[['2026-10-01','2026-10-02'],['2026-10-02','2026-10-04'],['2026-10-04','2026-10-08'],
-    ['2026-10-08','2026-10-15'],['2026-10-15','2026-10-30'],['2026-10-30','2026-11-29'],['2026-11-29','2026-12-29']];
-  for(const [day,next] of schedule) {
-    e.at(day);await t.recordPractice('a','poem','remember');assert.equal(t.getItem('a').nextReview,next,`After ${day}`);
-    const before=copy(t.getItem('a'));await t.recordPractice('a','poem','remember');
-    assert.deepEqual(copy(t.getItem('a')),before,'Same-day/free practice must not advance the interval');
-  }
-  const before=copy(t.getItem('a'));await t.markLearned('a',{type:'poem',title:'again'});assert.deepEqual(copy(t.getItem('a')),before);
-  e.at('2026-12-29');await t.recordPractice('a','poem','forgot');assert.equal(t.getItem('a').stage,0);assert.equal(t.getItem('a').nextReview,'2026-12-30');
-  const sameDay=t.reviewPatch({...course('x'),stage:4,reviewDay:'2026-12-29',reviewStartStage:2},'remember');
-  assert.equal(sameDay.stage,3);assert.equal(sameDay.nextReview,'2027-01-02');
-});
-
-test('today shows due items oldest first; no due items never falls back to all learned content',async()=>{
-  const e=environment({items:{future:course('future','pinyin',{nextReview:'2026-10-04'})}}),t=e.subject;await e.connect();await t.renderHome();
-  assert.equal(t.dueItems().length,0);assert.doesNotMatch(e.element('home-content').innerHTML,/data-review="future"/);
-  assert.match(e.element('home-content').innerHTML,/id="start-review"[^>]*disabled/);await t.startReview();assert.equal(t.getSession(),null);
-  e.alterServer(state=>{state.items.today=course('today','pinyin');state.items.overdue=course('overdue','pinyin',{nextReview:'2026-09-28'});state.items.inactive=course('inactive','pinyin',{learned:false});});
-  await t.syncNow();assert.deepEqual(copy(t.dueItems().map(item=>item.id)),['overdue','today']);
-  await t.startReview();assert.deepEqual(copy(t.getSession().items.map(item=>item.id)),['overdue','today']);
-});
-
-test('pending/failed save never updates progress, flowers or session; retry succeeds',async()=>{
-  const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;await e.connect();
-  t.setSession({items:[item],index:0});e.hold(true);const operation=t.completePractice(item.id,'remember',item);const request=await e.nextRequest();
-  assert.equal(request.method,'PATCH');assert.equal(t.getItem(item.id).stage,0);assert.equal(Object.keys(t.loadState().activity).length,0);assert.equal(t.getSession().index,0);
-  request.fail();await operation;assert.equal(t.getItem(item.id).stage,0);assert.equal(t.getSession().index,0);assert.equal(Object.keys(t.loadState().activity).length,0);
-  assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
-  const retry=t.completePractice(item.id,'remember',item);(await e.nextRequest()).reply();await retry;
-  assert.equal(t.getItem(item.id).nextReview,'2026-10-02');assert.equal(Object.keys(t.loadState().activity).length,1);assert.equal(t.getSession(),null);
-  assert.match(e.element('home-content').innerHTML,/你的小花开啦/);
-});
-
-test('queued PATCHes address only changed entries and preserve independent server additions',async()=>{
-  const e=environment(),t=e.subject;await e.connect();e.hold(true);
-  const a=t.markLearned('a',{type:'poem',title:'a'}),first=await e.nextRequest();const b=t.markLearned('b',{type:'write',title:'b'});await flush();
-  assert.equal(e.requests.filter(r=>!r.settled).length,1);assert.equal(t.getItem('a'),null);assert.equal(t.getItem('b'),null);
-  e.alterServer(state=>{state.items.remote=course('remote');});first.reply();await a;const second=await e.nextRequest();
-  assert.ok(first.body.operations.every(op=>op.key==='a'));assert.ok(second.body.operations.every(op=>op.key==='b'));
-  second.reply();await b;assert.deepEqual(Object.keys(t.loadState().items).sort(),['a','b','remote']);
-});
-
-test('stale enrollment uses insert-if-absent and cannot reset another device\'s course progress',async()=>{
-  const e=environment(),t=e.subject;await e.connect();
-  const advanced=course('a','poem',{stage:4,nextReview:'2026-10-15',lastResult:'remember'});
-  e.alterServer(state=>{state.items.a=copy(advanced);});
-  await t.markLearned('a',{type:'poem',title:'a'});
-  assert.deepEqual(copy(t.getItem('a')),advanced);
-});
-
-test('legacy paused courses resume without losing their stage or next review date',async()=>{
-  const paused=course('paused','poem',{learned:false,stage:3,nextReview:'2026-10-08'});
-  const missingDate=course('missing-date','write',{learned:false,stage:2,nextReview:null});
-  const e=environment({items:{paused,'missing-date':missingDate}}),t=e.subject;
-  await e.connect();assert.equal(t.dueItems().length,0);
-  await t.markLearned('paused',{type:'poem',title:'paused'});
-  assert.equal(t.getItem('paused').learned,true);
-  assert.equal(t.getItem('paused').stage,3);
-  assert.equal(t.getItem('paused').nextReview,'2026-10-08');
-  assert.equal(t.dueItems().length,0,'Resuming must not make a future review due immediately');
-  await t.markLearned('missing-date',{type:'write',title:'missing-date'});
-  assert.equal(t.getItem('missing-date').learned,true);
-  assert.equal(t.getItem('missing-date').stage,2);
-  assert.equal(t.getItem('missing-date').nextReview,'2026-10-01');
-  assert.deepEqual(copy(t.dueItems().map(item=>item.id)),['missing-date']);
-});
-
-test('HTML or malformed JSON with HTTP 200 cannot be mistaken for a successful save',async()=>{
-  for(const response of [{status:200,jsonError:true},{status:200,data:{}},{status:200,data:{ok:true,payload:{items:[]}}}]) {
-    const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;await e.connect();
-    t.setSession({items:[item],index:0});e.hold(true);const attempt=t.completePractice(item.id,'remember',item);
-    (await e.nextRequest()).reply(response);await attempt;
-    assert.equal(t.getItem(item.id).stage,0);assert.equal(t.getSession().index,0);
-    assert.equal(Object.keys(t.loadState().activity).length,0);assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
-  }
-});
-
-test('a lost completion acknowledgement can be retried without a second flower or interval advance',async()=>{
-  const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;await e.connect();
-  t.setSession({items:[item],index:0});e.hold(true);const initial=t.completePractice(item.id,'remember',item);
-  const first=await e.nextRequest();first.commitThenLoseResponse();await initial;
-  assert.equal(Object.keys(e.db().activity).length,1);assert.equal(Object.keys(t.loadState().activity).length,0);assert.equal(t.getSession().index,0);
-  const retry=t.completePractice(item.id,'remember',item),second=await e.nextRequest();
-  assert.equal(first.body.operations.find(op=>op.collection==='activity').key,second.body.operations.find(op=>op.collection==='activity').key);
-  second.reply();await retry;assert.equal(Object.keys(e.db().activity).length,1);assert.equal(t.getItem(item.id).stage,1);
-});
-
-test('remote deletion conflicts cannot recreate a course or award a flower',async()=>{
-  const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;await e.connect();
-  const classroomCheck={...item,requireClassroom:true};
-  t.setSession({items:[item],index:0});e.alterServer(state=>{delete state.items[item.id];});await t.completePractice(item.id,'remember',classroomCheck);
-  assert.equal(t.getItem(item.id),null);assert.equal(e.db().items[item.id],undefined);assert.equal(Object.keys(e.db().activity).length,0);
-  assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
-  // Retrying after the 409 refresh must not degrade into activity-only success.
-  await t.completePractice(item.id,'remember',classroomCheck);assert.equal(Object.keys(e.db().activity).length,0);
-  assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
-});
-
-test('custom course enrollment persists together with content and routes to the exact character',async()=>{
-  const e=environment(),t=e.subject;await e.connect();
-  const poem={id:'custom-poem-class',title:'课堂小诗',titlePy:[],author:'老师',authorPy:[],dynasty:'',dynastyPy:[],lines:[{text:'春天来啦',chars:[{c:'春',p:''}]}]};
-  const character={id:'custom-char-ming',c:'明',strokes:'8画',tip:'左日右月'};
-  await t.markLearned(poem.id,{type:'poem',title:poem.title},[{op:'set',collection:'customPoems',key:poem.id,value:poem}]);
-  await t.markLearned(character.id,{type:'write',title:'汉字·明'},[{op:'set',collection:'customCharacters',key:character.id,value:character}]);
-  assert.ok(t.getItem(poem.id));assert.ok(t.getItem(character.id));assert.equal(e.requests.filter(r=>r.method==='PATCH').length,2);
-  const fresh=environment(e.db());await fresh.connect();assert.equal(fresh.subject.loadState().customPoems[poem.id].title,poem.title);
-  const session={items:[fresh.subject.getItem(character.id)],index:0};
-  fresh.subject.setSession(session);fresh.subject.openReviewItem(character.id,'write');
-  assert.equal(fresh.subject.getSession(),session,'Review routing must preserve the active session');
-  assert.equal(fresh.subject.getView(),'write-detail');assert.equal(fresh.subject.getWritingId(),character.id);
-  assert.match(fresh.element('write-detail-content').innerHTML,/明 字描红画布/);
-  assert.doesNotMatch(fresh.element('write-detail-content').innerHTML,/data-write-id=/,'Review detail must not contain a character library');
-  await fresh.element('write-finish').onclick();
-  assert.equal(fresh.element('write-paper-confirm').hidden,false);
-  assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-01','Opening paper confirmation must not save progress');
-  await fresh.element('write-paper').onclick();
-  assert.equal(fresh.element('write-assessment').hidden,false);
-  assert.equal(Object.keys(fresh.subject.loadState().activity).length,0,'Writing participation must await parent assessment');
-  await fresh.element('write-check-independent').onclick();assert.equal(fresh.subject.getItem(character.id).nextReview,'2026-10-02');
-  assert.equal(fresh.subject.getItem('write-basic'),null);assert.equal(fresh.subject.getItem(poem.id).nextReview,'2026-10-01');
-});
-
-test('parent poem form validates syllables and keeps one ID after a lost save acknowledgement',async()=>{
-  const e=environment(),t=e.subject;await e.connect();await t.openParent();
-  const form=e.element('custom-poem-form');
-  form.elements={title:{value:'春晓'},author:{value:'孟浩然'},body:{value:'春眠不觉晓，\n处处闻啼鸟。'},pinyin:{value:'chūn mián bù jué xiǎo\nchù chù wén tí niǎo'}};
-  const parsed=t.customPoemFromForm(form);assert.equal(parsed.lines[0].chars[0].p,'chūn');
-  assert.equal(parsed.lines[0].chars.at(-1).p,'');
-  form.elements.pinyin.value='chūn\nchù';assert.throws(()=>t.customPoemFromForm(form),/音节/);
-  form.elements.pinyin.value='';e.hold(true);
-  const event={preventDefault(){},currentTarget:form};
-  const initial=form.onsubmit(event),first=await e.nextRequest();first.commitThenLoseResponse();await initial;
-  assert.equal(Object.keys(e.db().customPoems).length,1);assert.equal(Object.keys(t.loadState().customPoems).length,0);
-  e.at('2026-10-02');const retry=form.onsubmit(event),second=await e.nextRequest();
-  assert.equal(first.body.operations.find(op=>op.collection==='customPoems').key,second.body.operations.find(op=>op.collection==='customPoems').key);
-  second.reply();await retry;assert.equal(Object.keys(t.loadState().customPoems).length,1);assert.equal(Object.keys(t.loadState().items).length,1);
-});
-
-test('parent character form rejects non-single Han input and updates built-in hints without duplicate cards',async()=>{
-  const e=environment(),t=e.subject;await e.connect();await t.openParent();const form=e.element('custom-character-form');
-  form.elements={character:{value:'春天'},strokes:{value:''},tip:{value:''}};
-  const event={preventDefault(){},currentTarget:form},initialRequests=e.requests.length;
-  await form.onsubmit(event);assert.equal(e.requests.length,initialRequests);assert.match(e.element('character-form-error').textContent,/一个汉字/);
-  form.elements.character.value='A';await form.onsubmit(event);assert.equal(e.requests.length,initialRequests);
-  form.elements.character.value='木';form.elements.tip.value='老师说：横短竖长';await form.onsubmit(event);
-  const cards=t.writingCharacters().filter(ch=>ch.c==='木');assert.equal(cards.length,1);assert.equal(cards[0].tip,'老师说：横短竖长');
-  assert.ok(t.getItem(cards[0].id));assert.equal(t.getItem('write-basic'),null);
-});
 
 test('one writing library sorts by stroke count and preserves custom identity, pronunciation and words',async()=>{
   const character={id:'custom-classroom-mu',c:'木',strokes:'4画',tip:'老师的提示'};
@@ -479,6 +321,7 @@ test('one writing library sorts by stroke count and preserves custom identity, p
   assert.ok(e.requests.every(request=>request.method==='GET'),'Opening the expanded library must not enroll or complete anything');
 });
 
+
 test('writing opens a list of all 150 characters without a canvas, media or progress mutation',async()=>{
   const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
   const before=e.db();t.navigate('write');
@@ -489,6 +332,7 @@ test('writing opens a list of all 150 characters without a canvas, media or prog
   assert.equal(media.viewers.length,0);assert.equal(media.voices.length,0);
   assert.deepEqual(e.db(),before);assert.ok(e.requests.every(request=>request.method==='GET'));
 });
+
 
 test('selecting a character opens its detail and returning stops media without completing it',async()=>{
   const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
@@ -506,6 +350,7 @@ test('selecting a character opens its detail and returning stops media without c
   assert.ok(e.requests.every(request=>request.method==='GET'),'Leaving an unfinished detail must not save completion');
 });
 
+
 test('returning from a scheduled writing detail exits the session without advancing review',async()=>{
   const item=course('write-char-6728','write'),e=environment({items:{[item.id]:item}}),t=e.subject;
   await e.connect();const media=writingMediaProbe(e),before=e.db();
@@ -517,62 +362,6 @@ test('returning from a scheduled writing detail exits the session without advanc
   assert.deepEqual(e.db(),before);assert.equal(t.getItem(item.id).stage,0);
 });
 
-test('free writing returns to the library only after saving the selected character',async()=>{
-  const e=environment(),t=e.subject;await e.connect();
-  t.navigate('write');t.openWriteCharacter('write-char-6728');
-  e.element('write-finish').onclick();assert.equal(e.element('write-paper-confirm').hidden,false);
-  assert.equal(Object.keys(t.loadState().activity).length,0,'Opening paper confirmation is not completion');
-  e.element('write-paper').onclick();assert.equal(e.element('write-assessment').hidden,false);
-  assert.equal(Object.keys(t.loadState().activity).length,0,'Confirming practice is not a mastery check');
-  e.hold(true);const saving=e.element('write-check-supported').onclick(),request=await e.nextRequest();
-  assert.equal(t.getView(),'write-detail');assert.equal(Object.keys(t.loadState().activity).length,0);
-  request.reply();await saving;
-  assert.equal(t.getView(),'write');assert.equal(t.getSession(),null);
-  const activities=Object.values(t.loadState().activity);
-  assert.equal(activities.length,1);assert.equal(activities[0].id,'write-char-6728');
-  assert.equal(activities[0].result,'supported');assert.equal(activities[0].source,'parent');
-  assert.equal(activities[0].skill,'hanzi-writing');assert.equal(activities[0].details.afterPractice,true);
-  assert.equal(activities[0].details.method,'paper');
-  assert.deepEqual(Object.keys(e.db().items),['write-char-6728'],'Only the confirmed character joins review');
-});
-
-test('a delayed writing save cannot navigate away from another character opened meanwhile',async()=>{
-  const e=environment(),t=e.subject;await e.connect();
-  t.navigate('write');t.openWriteCharacter('write-char-6728');
-  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
-  const saving=e.element('write-check-independent').onclick(),request=await e.nextRequest();
-  e.element('write-back').onclick();assert.equal(t.getView(),'write');
-  t.openWriteCharacter('write-char-6c34');
-  assert.equal(t.getView(),'write-detail');assert.equal(t.getWritingId(),'write-char-6c34');
-  const currentDetail=e.element('write-detail-content').innerHTML;
-  request.reply();await saving;
-  assert.equal(t.getView(),'write-detail','The old save must not send the new detail back to the library');
-  assert.equal(t.getWritingId(),'write-char-6c34');assert.equal(e.element('write-detail-content').innerHTML,currentDetail);
-  const activities=Object.values(t.loadState().activity);
-  assert.equal(activities.length,1);assert.equal(activities[0].id,'write-char-6728');
-  assert.equal(t.getSession(),null);assert.equal(e.requests.filter(request=>request.method==='PATCH').length,1);
-});
-
-test('course deletion removes custom data while retaining all 120 history entries',async()=>{
-  const id='custom-char-ming',activity=Object.fromEntries(Array.from({length:120},(_,i)=>[`event-${i}`,{day:'2026-09-30',id,type:'write'}]));
-  activity.unrelated={day:'2026-09-30',id:'other',type:'poem'};
-  const e=environment({items:{[id]:course(id,'write'),other:course('other')},activity,customCharacters:{[id]:{id,c:'明'}}}),t=e.subject;
-  await e.connect();await t.removeClassroomItem(id);assert.equal(t.getItem(id),null);assert.equal(t.loadState().customCharacters[id],undefined);
-  assert.equal(Object.values(t.loadState().activity).filter(event=>event.id===id).length,120);assert.ok(t.getItem('other'));assert.ok(t.loadState().activity.unrelated);
-  assert.ok(e.requests.find(r=>r.method==='PATCH').body.operations.length<=100);await t.syncNow();assert.equal(t.getItem(id),null);
-});
-
-test('home/rest cancel sessions; delayed completion cannot advance a newly started session',async()=>{
-  const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;await e.connect();
-  t.setSession({items:[item],index:0});t.navigate('home');await flush();assert.equal(t.getSession(),null);
-  t.setSession({items:[item],index:0});t.bindSessionExit();e.element('session-exit').onclick();await flush();assert.equal(t.getSession(),null);
-  t.setSession({items:[item],index:0});e.hold(true);const saved=t.completePractice(item.id,'remember',item),request=await e.nextRequest();
-  t.navigate('home');await flush();
-  // The home review tile can start a different session while its predecessor saves.
-  t.setSession({items:[item],index:0});t.openReviewItem(item.id,item.type);
-  const newSession=t.getSession();assert.ok(newSession);request.reply();await saved;
-  assert.equal(t.getSession(),newSession,'Completion belongs to its original session');assert.equal(newSession.index,0);
-});
 
 test('initial connection failure has a retry and cannot report successful practice',async()=>{
   const e=environment(),t=e.subject;e.hold(true);const initialization=t.initializePage();(await e.nextRequest()).fail();await initialization;
@@ -583,25 +372,6 @@ test('initial connection failure has a retry and cannot report successful practi
   const retry=e.element('retry-connection').onclick();(await e.nextRequest()).reply();await retry;assert.equal(t.isReady(),true);
 });
 
-test('home English tile opens today directly and clears the unrelated shared review',async()=>{
-  const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;
-  await e.connect();const opened=[];
-  e.context.window.ChenchenEnglish={create:()=>({
-    getDailySummary:async()=>({remaining:4,count:6}),open:options=>opened.push(options),stop:()=>{},pause:()=>{},
-  })};
-  t.setView('home');await t.renderHome();await flush();
-  assert.match(e.element('home-content').innerHTML,/id="home-english-daily"/);
-  assert.match(e.element('home-content').innerHTML,/<strong>复习今日英语<\/strong>/);
-  assert.doesNotMatch(e.element('home-content').innerHTML,/<strong>玩英语<\/strong>/);
-  assert.equal(e.element('home-english-status').textContent,'今日 4 个词');
-  assert.equal(e.element('home-english-daily').disabled,false);
-  assert.equal(opened.length,0,'Reading the daily summary must not start a lesson');
-  const before=e.db();t.setSession({items:[item],index:0});
-  await e.element('home-english-daily').onclick();
-  assert.equal(t.getView(),'english');assert.deepEqual(copy(opened),[{daily:true}]);
-  assert.equal(t.getSession(),null,'The home daily lesson must not retain an unrelated shared review');
-  assert.deepEqual(e.db(),before);assert.ok(e.requests.every(request=>request.method==='GET'));
-});
 
 test('normal English navigation continues to open the card library',async()=>{
   const item=course('pinyin-basic','pinyin'),e=environment({items:{[item.id]:item}}),t=e.subject;
@@ -613,245 +383,171 @@ test('normal English navigation continues to open the card library',async()=>{
   assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
-test('home English rest states stay quiet and a failed summary leaves a retryable entry',async()=>{
-  const e=environment(),t=e.subject;await e.connect();const opened=[];
-  let summary={remaining:0,count:6};
-  e.context.window.ChenchenEnglish={create:()=>({
-    getDailySummary:async()=>{if(summary instanceof Error)throw summary;return summary;},
-    open:options=>opened.push(options),stop:()=>{},pause:()=>{},
-  })};
-  t.setView('home');await t.renderHome();await flush();
-  const button=e.element('home-english-daily');
-  assert.equal(button.disabled,true);assert.equal(e.element('home-english-status').textContent,'今日已完成 ✓');
-  summary={remaining:0,count:0};await t.updateHomeEnglishDaily(button);
-  assert.equal(button.disabled,true);assert.equal(e.element('home-english-status').textContent,'今天没有待复习');
-  assert.equal(opened.length,0);assert.ok(e.requests.every(request=>request.method==='GET'));
-  summary=new Error('temporarily unavailable');await t.updateHomeEnglishDaily(button);
-  assert.equal(button.disabled,false,'A summary failure must allow the lesson to retry loading');
-  await button.onclick();assert.deepEqual(copy(opened),[{daily:true}]);
+
+function makeGroup(type='poem',mode='learn') {
+  const size={poem:5,pinyin:10,write:5,english:5}[type];
+  const entries=Array.from({length:size},(_,index)=>({id:`${type}-group-${index}`,type,title:`${type} ${index}`,skill:type==='poem'?'poem-recitation':type==='write'?'hanzi-writing':'pinyin-reading',source:'parent',result:['independent','supported','again'][index%3],details:{afterPractice:false}}));
+  return {id:'complete-test-group',type,mode,title:type,count:size,unit:'个',items:entries.map(entry=>({id:entry.id,type,title:entry.title})),index:size,entries,saving:false};
+}
+
+function beginCompleted(e,group=makeGroup()) {
+  e.subject.setSession(group);
+  return {group,save:e.subject.saveStudyGroup(group)};
+}
+
+test('free poem cards keep reading available but never show completion ratings',async()=>{
+  const e=environment(),t=e.subject;t.setPoems(samplePoems());await e.connect();await t.openPoemFromList('poem-01');
+  assert.doesNotMatch(e.element('poem-detail-content').innerHTML,/id="poem-check-(?:independent|supported|again)"/);
+  assert.match(e.element('poem-detail-content').innerHTML,/id="btn-speak"/);
   assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
-test('late English summaries cannot alter another page or a replacement home tile',async()=>{
-  const e=environment(),t=e.subject;await e.connect();const replies=[];
-  e.context.window.ChenchenEnglish={create:()=>({
-    getDailySummary:()=>new Promise(resolve=>replies.push(resolve)),open:()=>assert.fail('Summary must not open a lesson'),stop:()=>{},pause:()=>{},
-  })};
-  t.setView('home');await t.renderHome();
-  const oldButton=e.element('home-english-daily'),status=e.element('home-english-status');
-  oldButton.disabled=true;status.textContent='waiting on the old home';
-  t.navigate('poems');replies.shift()({remaining:4,count:6});await flush();
-  assert.equal(t.getView(),'poems');assert.equal(oldButton.disabled,true);
-  assert.equal(status.textContent,'waiting on the old home');
-  t.setView('home');const oldUpdate=t.updateHomeEnglishDaily(oldButton);
-  const replacement={...oldButton,disabled:true};e.elements.set('home-english-daily',replacement);
-  status.textContent='waiting on the current home';replies.shift()({remaining:5,count:6});await oldUpdate;
-  assert.equal(replacement.disabled,true);assert.equal(oldButton.disabled,true);
-  assert.equal(status.textContent,'waiting on the current home','An old summary must not overwrite a newly rendered home');
-  const currentUpdate=t.updateHomeEnglishDaily(replacement);replies.shift()({remaining:2,count:6});await currentUpdate;
-  assert.equal(replacement.disabled,false);assert.equal(status.textContent,'今日 2 个词');
+test('home passes only complete due groups and a review starts with the oldest due item',async()=>{
+  const poems=[...samplePoems(),...samplePoems().slice(0,2).map((poem,i)=>({...poem,id:`poem-fill-${i}`}))];
+  const items=Object.fromEntries(poems.map(poem=>[poem.id,course(poem.id,'poem',{nextReview:'2026-10-04'})]));
+  const e=environment({items}),t=e.subject;t.setPoems(poems);await e.connect();t.setView('home');await t.renderHome();
+  assert.equal(e.context.lastGardenHooks.reviewGroups.length,0);
+  e.alterServer(state=>{state.items['poem-02'].nextReview='2026-09-28';});await t.syncNow();await t.renderHome();
+  assert.equal(e.context.lastGardenHooks.reviewGroups.length,1);assert.equal(e.context.lastGardenHooks.reviewGroups[0].items.length,5);
+  await t.startStudyGroup('poem','review');await flush();
+  assert.equal(t.getSession().items[0].id,'poem-02');assert.equal(t.getSession().items.filter(item=>item.afterPractice).length,4);
+  t.navigate('poems');assert.equal(t.getSession(),null);
   assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
-test('English saved completion advances the shared review once without writing progress twice',async()=>{
-  const word=course('english-cat','english'),other=course('pinyin-basic','pinyin');
-  const e=environment({items:{[word.id]:word,[other.id]:other}}),t=e.subject;await e.connect();
-  const opened=[];let stops=0;
-  e.context.window.ChenchenEnglish={create:()=>({open:options=>opened.push(options),stop:()=>stops++,pause:()=>{}})};
-  t.setSession({items:[word,other],index:0});t.openReviewItem(word.id,'english');
-  assert.equal(t.getView(),'english');assert.equal(opened[0].itemId,word.id);
-  const before=e.requests.length;opened[0].onDone();
-  assert.equal(t.getView(),'pinyin');assert.equal(t.getSession().index,1);
-  assert.equal(e.requests.length,before,'English module already saved; shared router must not save twice');
-  assert.ok(stops>0);
-  t.setSession({items:[word],index:0});t.openReviewItem(word.id,'english');
-  const stale=opened[1].onDone;t.navigate('home');await flush();stale();
-  assert.equal(t.getSession(),null);assert.doesNotMatch(e.element('home-content').innerHTML,/你的小花开啦/);
-  await t.removeClassroomItem(word.id);assert.ok(t.loadState().hiddenCourses[word.id]);
+test('the learning button generates a fixed group and exiting a partial group writes nothing',async()=>{
+  const e=environment(),t=e.subject;await e.connect();await t.startStudyGroup('write','learn');await flush();
+  const group=t.getSession();assert.equal(group.items.length,5);assert.equal(group.index,0);assert.equal(t.getView(),'write-detail');
+  const item=group.items[0];await t.completePractice(item.id,'remember',{type:'write',title:item.title,skill:'hanzi-writing',details:{afterPractice:true}});
+  assert.equal(group.entries.length,1);assert.equal(t.getSession().index,1);
+  t.navigate('write');assert.equal(t.getSession(),null);assert.equal(Object.keys(t.loadState().activity).length,0);
+  assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
-test('poem confirmation records each shared rating with its own skill and parent source',async()=>{
+test('pending and failed whole-group saves do not claim water or update the local snapshot',async()=>{
+  const e=environment(),t=e.subject;await e.connect();e.hold(true);const {group,save}=beginCompleted(e),request=await e.nextRequest();
+  assert.equal(request.method,'POST');assert.equal(Object.keys(t.loadState().activity).length,0);assert.equal(group.saving,true);
+  request.fail();await save;assert.equal(Object.keys(t.loadState().activity).length,0);assert.equal(group.saving,false);
+  assert.doesNotMatch(e.element('home-content').innerHTML,/收获一滴水/);
+  const retry=t.saveStudyGroup(group);(await e.nextRequest()).reply();await retry;
+  assert.equal(Object.keys(t.loadState().activity).length,5);assert.equal(t.getSession(),null);assert.match(e.element('home-content').innerHTML,/收获一滴水/);
+});
+
+test('a 15-second save timeout unlocks same-ID retry without treating the outcome as a definite failure',async()=>{
+  for(const committed of [false,true]) {
+    const e=environment(),t=e.subject;await e.connect();e.hold(true);
+    const {group,save}=beginCompleted(e),first=await e.nextRequest(),body=copy(first.body);
+    if(committed)first.commitWithoutResponse();
+    const timeout=[...e.timers.values()].find(timer=>timer.delay===15000);
+    assert.ok(timeout,'Every API request needs a bounded wait');timeout.fn();await save;
+    assert.equal(first.options.signal.aborted,true);assert.equal(group.saving,false);
+    assert.equal(group.definiteFailure,false);assert.equal(e.element('study-save-retry').hidden,false);
+    assert.equal(Object.keys(t.loadState().activity).length,0);
+    assert.ok(![...e.timers.values()].some(timer=>timer.delay===15000),'A settled request clears its deadline');
+    t.navigate('write');assert.equal(t.getSession(),group);assert.equal(t.getView(),'home');
+    const retry=e.element('study-save-retry').onclick(),second=await e.nextRequest();
+    assert.deepEqual(second.body,body);second.reply();await retry;
+    assert.equal(t.getSession(),null);assert.equal(Object.keys(e.db().activity).length,5);
+    assert.equal(Object.keys(e.db().garden.groups).length,1);
+    assert.ok(![...e.timers.values()].some(timer=>timer.delay===15000),'Successful retry clears its deadline too');
+  }
+});
+
+test('malformed whole-group acknowledgements never look like a successful completion',async()=>{
+  for(const response of [{status:200,jsonError:true},{status:200,data:{}},{status:200,data:{ok:true,payload:{items:[]}}}]) {
+    const e=environment(),t=e.subject;await e.connect();e.hold(true);const {save}=beginCompleted(e);
+    (await e.nextRequest()).reply(response);await save;
+    assert.equal(Object.keys(t.loadState().activity).length,0);assert.ok(t.getSession());assert.doesNotMatch(e.element('home-content').innerHTML,/收获一滴水/);
+  }
+});
+
+test('a lost group acknowledgement retries the same ID and evidence even across midnight',async()=>{
+  const e=environment(),t=e.subject;await e.connect();e.hold(true);const {group,save}=beginCompleted(e);
+  const first=await e.nextRequest();first.commitThenLoseResponse();await save;
+  assert.equal(Object.keys(e.db().activity).length,5);assert.equal(Object.keys(t.loadState().activity).length,0);
+  e.at('2026-10-02');const retry=t.saveStudyGroup(group),second=await e.nextRequest();
+  assert.deepEqual(second.body,first.body);second.reply();await retry;
+  assert.equal(Object.keys(e.db().activity).length,5);assert.equal(Object.keys(e.db().garden.groups).length,1);
+  assert.equal(Object.values(t.loadState().activity)[0].day,'2026-10-01');
+});
+
+test('a definite review deletion conflict cannot recreate content and permits a fresh start',async()=>{
+  const group=makeGroup('poem','review'),items=Object.fromEntries(group.items.map(item=>[item.id,course(item.id)]));
+  const e=environment({items}),t=e.subject;await e.connect();e.alterServer(state=>{delete state.items[group.items[0].id];});
+  await beginCompleted(e,group).save;
+  assert.equal(Object.keys(e.db().activity).length,0);assert.equal(Object.keys(e.db().garden.groups).length,0);
+  assert.equal(t.getSession().definiteFailure,true);t.navigate('poems');assert.equal(t.getSession(),null);
+});
+
+test('an uncertain whole-group save prevents navigation and duplicate completion',async()=>{
+  const e=environment(),t=e.subject;await e.connect();e.hold(true);const {group,save}=beginCompleted(e);const first=await e.nextRequest();
+  t.navigate('write');assert.equal(t.getView(),'home');assert.equal(t.getSession(),group);
+  await t.saveStudyGroup(group);assert.equal(e.requests.filter(r=>r.method==='POST').length,1);
+  first.reply();await save;assert.equal(t.getSession(),null);
+});
+
+test('poem ratings and immediate audio exposure remain distinct inside the temporary group',async()=>{
   for(const result of ['independent','supported','again']) {
-    const item=course('poem-01','poem',{stage:2,title:'静夜思'}),e=environment({items:{[item.id]:item}}),t=e.subject;
-    t.setPoems(samplePoems());await e.connect();t.openPoemFromList(item.id);await flush();
-    await e.element(`poem-check-${result}`).onclick();
-    const event=Object.values(t.loadState().activity)[0];
-    assert.equal(event.result,result);assert.equal(event.source,'parent');assert.equal(event.skill,'poem-recitation');
-    assert.equal(event.title,'静夜思');assert.equal(event.details.observedExposure,false);
-    assert.equal(t.getItem(item.id).stage,result==='independent'?3:0);
-    assert.equal(Object.values(t.loadState().activity).length,1);
+    const e=environment(),t=e.subject,poems=samplePoems();t.setPoems(poems);await e.connect();
+    t.setSession({id:'poem-rating',type:'poem',mode:'learn',title:'古诗',count:5,items:poems.map(poem=>({id:poem.id,type:'poem',title:poem.title})),index:0,entries:[]});
+    t.openReviewItem('poem-01','poem');await flush();
+    await e.element(`poem-check-${result}`).onclick();const entry=t.getSession().entries[0];
+    assert.equal(entry.result,result);assert.equal(entry.source,'parent');assert.equal(entry.skill,'poem-recitation');assert.equal(entry.details.observedExposure,false);
+    assert.ok(e.requests.every(request=>request.method==='GET'));
   }
+  const e=environment(),t=e.subject,poems=samplePoems();t.setPoems(poems);await e.connect();const media=poemMediaProbe(e);
+  t.setSession({items:poems.map(poem=>({id:poem.id,type:'poem',title:poem.title})),index:0});t.openReviewItem('poem-01','poem');await flush();
+  e.element('btn-speak').onclick();media.recordings[0].emit('playing');media.recordings[0].emit('ended');await e.element('poem-check-independent').onclick();
+  assert.equal(t.getSession().entries[0].details.observedExposure,true);assert.equal(Object.keys(t.loadState().activity).length,0);
 });
 
-test('listening to a poem first records rehearsal and cannot extend its recall interval',async()=>{
-  const item=course('poem-01','poem',{stage:2}),e=environment({items:{[item.id]:item}}),t=e.subject;
-  t.setPoems(samplePoems());await e.connect();const media=poemMediaProbe(e);t.openPoemFromList(item.id);await flush();
-  e.element('btn-speak').onclick();media.recordings[0].emit('playing');media.recordings[0].emit('ended');
-  await e.element('poem-check-independent').onclick();
-  const event=Object.values(t.loadState().activity)[0];
-  assert.equal(event.result,'independent');assert.equal(event.details.observedExposure,true);
-  assert.equal(t.getItem(item.id).stage,0);assert.equal(t.getItem(item.id).nextReview,'2026-10-02');
-});
-
-test('scheduled writing starts with recall, while returning to the model records fresh rehearsal',async()=>{
+test('writing review distinguishes the dictation prompt from seeing the model before confirmation',async()=>{
   for(const rehearsed of [false,true]) {
-    const item=course('write-char-6728','write',{stage:2}),e=environment({items:{[item.id]:item}}),t=e.subject;
-    await e.connect();writingMediaProbe(e);t.setSession({items:[item],index:0});t.openReviewItem(item.id,'write');await flush();
-    assert.equal(e.element('write-assessment').hidden,false);
-    assert.equal(Object.values(t.loadState().activity).length,0);
-    await e.element('write-check-prompt').onclick();
-    if(rehearsed) {
-      e.element('write-check-back').onclick();
-      assert.equal(e.element('write-assessment').hidden,true);
-      e.element('write-finish').onclick();e.element('write-paper').onclick();
-    }
-    await e.element('write-check-independent').onclick();
-    const event=Object.values(t.loadState().activity)[0];
-    assert.equal(event.result,'independent');assert.equal(event.skill,'hanzi-writing');
-    assert.equal(event.details.afterPractice,rehearsed);assert.equal(event.details.method,'paper');
-    assert.equal(t.getItem(item.id).stage,rehearsed?0:3,'The dictation sound is a task prompt; showing the model is rehearsal');
+    const e=environment(),t=e.subject;await e.connect();writingMediaProbe(e);
+    const ids=['write-char-6728','write-char-6c34','write-char-4e00','write-char-4e8c','write-char-4e09'];
+    t.setSession({id:'write-review',type:'write',mode:'review',title:'汉字',count:5,items:ids.map(id=>({id,type:'write'})),index:0,entries:[]});t.openReviewItem(ids[0],'write');await flush();
+    assert.equal(e.element('write-assessment').hidden,false);await e.element('write-check-prompt').onclick();
+    if(rehearsed){e.element('write-check-back').onclick();e.element('write-finish').onclick();e.element('write-paper').onclick();}
+    await e.element('write-check-independent').onclick();const entry=t.getSession().entries[0];
+    assert.equal(entry.result,'independent');assert.equal(entry.details.afterPractice,rehearsed);assert.equal(entry.details.method,'paper');assert.equal(entry.skill,'hanzi-writing');
+    assert.equal(Object.keys(t.loadState().activity).length,0);
   }
 });
 
-test('an uncertain writing save locks the original choice and retries without duplicate evidence',async()=>{
-  const e=environment(),t=e.subject;await e.connect();t.navigate('write');t.openWriteCharacter('write-char-6728');
-  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
-  const save=e.element('write-check-supported').onclick(),first=await e.nextRequest();
-  assert.ok(['independent','supported','again'].every(result=>e.element(`write-check-${result}`).disabled));
-  first.commitThenLoseResponse();await save;
-  assert.equal(Object.values(t.loadState().activity).length,0);assert.equal(Object.values(e.db().activity).length,1);
-  assert.equal(e.element('write-check-supported').disabled,false);assert.match(e.element('write-check-supported').textContent,/重试保存/);
-  assert.equal(e.element('write-check-independent').disabled,true);assert.equal(e.element('write-check-again').disabled,true);
-  const before=e.requests.length;
-  await t.completePractice('write-char-6728','remember',{type:'write',title:'木',enroll:true});
-  assert.equal(e.requests.length,before,'A changed rating cannot create another uncertain save');
-  const retry=e.element('write-check-supported').onclick(),second=await e.nextRequest();
-  assert.deepEqual(second.body.operations,first.body.operations);second.reply();await retry;
-  assert.equal(Object.values(t.loadState().activity).length,1);assert.equal(Object.values(t.loadState().activity)[0].result,'supported');
-  assert.equal(t.getView(),'write');
+test('free poem playback remains exposure after leaving the card, but a failed start or a new day does not',async()=>{
+  for(const scenario of ['interrupted','failed','next-day']) {
+    const e=environment(),t=e.subject,poems=samplePoems();t.setPoems(poems);await e.connect();const media=poemMediaProbe(e);
+    await t.openPoemFromList('poem-01');e.element('btn-speak').onclick();
+    media.recordings[0].emit(scenario==='failed'?'error':'playing');
+    t.navigate('poems');if(scenario==='next-day')e.at('2026-10-02');
+    assert.equal(Object.keys(t.loadState().activity).length,0);
+    t.setSession({type:'poem',mode:'review',items:poems.map(poem=>({id:poem.id,type:'poem'})),index:0});
+    t.openReviewItem('poem-01','poem');await flush();await e.element('poem-check-independent').onclick();
+    const entry=t.getSession().entries[0];assert.equal(entry.result,'independent');
+    assert.equal(entry.details.observedExposure,scenario==='interrupted');
+    assert.equal(Object.keys(t.loadState().activity).length,0);assert.ok(e.requests.every(request=>request.method==='GET'));
+  }
 });
 
-test('confirmed practice stores explicit skill evidence and enrolls only the practiced content',async()=>{
-  const e=environment(),t=e.subject;await e.connect();
-  await t.recordPractice('write-char-6728','write','supported',undefined,{
-    type:'write',title:'木',skill:'hanzi-writing',source:'parent',enroll:true,details:{afterPractice:true,method:'paper'},
-  });
-  const events=Object.values(t.loadState().activity);
-  assert.equal(events.length,1);
-  assert.equal(events[0].schemaVersion,2);assert.equal(events[0].result,'supported');
-  assert.equal(events[0].skill,'hanzi-writing');assert.equal(events[0].source,'parent');
-  assert.equal(events[0].title,'木');assert.equal(events[0].details.afterPractice,true);
-  assert.equal(events[0].day,'2026-10-01');assert.ok(Number.isFinite(Date.parse(events[0].at)));
-  assert.deepEqual(Object.keys(t.loadState().items),['write-char-6728']);
-  assert.equal(t.getItem('write-char-6728').learned,true);
-  assert.equal(t.getItem('write-char-6728').nextReview,'2026-10-02');
-  assert.equal(t.getItem('write-char-6728').lastAssessment.result,'supported');
+test('free character models remain rehearsal evidence for same-day blind review only',async()=>{
+  for(const nextDay of [false,true]) {
+    const e=environment(),t=e.subject;await e.connect();writingMediaProbe(e);
+    t.openWriteCharacter('write-char-6728');await flush();t.navigate('write');
+    if(nextDay)e.at('2026-10-02');
+    t.setSession({type:'write',mode:'review',items:[{id:'write-char-6728',type:'write'},{id:'write-char-6c34',type:'write'}],index:0});
+    t.openReviewItem('write-char-6728','write');await flush();await e.element('write-check-independent').onclick();
+    const entry=t.getSession().entries[0];assert.equal(entry.result,'independent');assert.equal(entry.details.afterPractice,!nextDay);
+    assert.equal(Object.keys(t.loadState().activity).length,0);assert.ok(e.requests.every(request=>request.method==='GET'));
+  }
 });
 
-test('one pinyin save records each confirmed sound and retires the old all-sounds task atomically',async()=>{
-  const old=course('pinyin-basic','pinyin'),e=environment({items:{[old.id]:old}}),t=e.subject;await e.connect();
-  const meta={type:'pinyin',enroll:true,retirePinyinGroup:true,entries:[
-    {id:'pinyin-b',type:'pinyin',title:'b',skill:'pinyin-reading',result:'independent',source:'parent',details:{observedExposure:false}},
-    {id:'pinyin-v',type:'pinyin',title:'ü',skill:'pinyin-reading',result:'again',source:'parent',details:{observedExposure:true}},
-  ]};
-  await t.recordPractice('pinyin-basic','pinyin','independent',undefined,meta);
-  const events=Object.values(t.loadState().activity);
-  assert.equal(events.length,2);assert.deepEqual(events.map(event=>event.id),['pinyin-b','pinyin-v']);
-  assert.deepEqual(events.map(event=>event.result),['independent','again']);
-  assert.ok(events.every(event=>event.schemaVersion===2&&event.skill==='pinyin-reading'&&event.source==='parent'));
-  assert.equal(t.getItem(old.id).learned,false);assert.equal(t.getItem(old.id).replacedBy,'individual-pinyin');
-  assert.equal(t.getItem('pinyin-b').stage,1);assert.equal(t.getItem('pinyin-v').stage,0);
-  assert.equal(t.getItem('pinyin-v').nextReview,'2026-10-02');
-  assert.equal(e.requests.filter(request=>request.method==='PATCH').length,1);
-});
-
-test('retry after a lost response preserves complete evidence and scheduling operations across midnight',async()=>{
-  const e=environment(),t=e.subject;await e.connect();e.hold(true);
-  const meta={type:'write',title:'木',skill:'hanzi-writing',source:'parent',enroll:true,details:{method:'paper',afterPractice:true}};
-  const attempt={activityId:'stable-check',at:'2026-09-30T17:30:00.000Z'};
-  const firstSave=t.recordPractice('write-char-6728','write','independent',attempt,meta),first=await e.nextRequest();
-  const rejection=assert.rejects(firstSave,/network|response|未能|保存|连接/i);
-  first.commitThenLoseResponse();await rejection;
-  assert.equal(Object.values(e.db().activity).length,1);assert.equal(Object.values(t.loadState().activity).length,0);
-  e.at('2026-10-02');meta.title='changed';meta.details.method='changed';
-  const retry=t.recordPractice('write-char-6728','write','independent',attempt,meta),second=await e.nextRequest();
-  assert.deepEqual(second.body.operations,first.body.operations,'Retries must retain the original event and review date');
-  second.reply();await retry;
-  const event=Object.values(t.loadState().activity)[0];
-  assert.equal(event.title,'木');assert.equal(event.details.method,'paper');assert.equal(event.day,'2026-10-01');
-  assert.equal(t.getItem('write-char-6728').stage,0);assert.equal(t.getItem('write-char-6728').nextReview,'2026-10-02');
-  assert.equal(Object.values(t.loadState().activity).length,1);
-});
-
-test('leaving a failed confirmation starts a new attempt when the same content is opened again',async()=>{
-  const e=environment(),t=e.subject;await e.connect();t.navigate('write');t.openWriteCharacter('write-char-6728');
-  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
-  const firstSave=e.element('write-check-independent').onclick(),first=await e.nextRequest();first.fail();await firstSave;
-  const firstEvent=first.body.operations.find(op=>op.collection==='activity');
-  t.navigate('write');t.openWriteCharacter('write-char-6728');
-  e.element('write-finish').onclick();e.element('write-paper').onclick();
-  assert.equal(e.element('write-check-again').disabled,false,'The previous failure must not lock a fresh page');
-  const nextSave=e.element('write-check-again').onclick(),second=await e.nextRequest();
-  const nextEvent=second.body.operations.find(op=>op.collection==='activity');
-  assert.notEqual(nextEvent.key,firstEvent.key);assert.equal(nextEvent.value.result,'again');
-  second.reply();await nextSave;
-  assert.equal(Object.values(t.loadState().activity).length,1);
-  assert.equal(Object.values(t.loadState().activity)[0].result,'again');
-});
-
-test('a previous-page writing save may finish but cannot navigate or unlock a new same-content save',async()=>{
-  const e=environment(),t=e.subject;await e.connect();t.navigate('write');t.openWriteCharacter('write-char-6728');
-  e.element('write-finish').onclick();e.element('write-paper').onclick();e.hold(true);
-  const firstSave=e.element('write-check-independent').onclick(),first=await e.nextRequest();
-  t.navigate('write');
-  // A browser creates fresh controls on innerHTML replacement. Other DOM stubs
-  // deliberately stay minimal; replace this page's assessment nodes explicitly.
-  for(const result of ['independent','supported','again','error'])e.elements.delete(`write-check-${result}`);
-  t.openWriteCharacter('write-char-6728');e.element('write-finish').onclick();e.element('write-paper').onclick();
-  const newSave=e.element('write-check-supported').onclick();
-  assert.ok(['independent','supported','again'].every(result=>e.element(`write-check-${result}`).disabled));
-  first.reply();await firstSave;
-  assert.equal(t.getView(),'write-detail','The old completion must not close the new page of the same character');
-  const second=await e.nextRequest();
-  assert.ok(['independent','supported','again'].every(result=>e.element(`write-check-${result}`).disabled),'The old callback must not unlock a new in-flight confirmation');
-  const before=e.requests.length;
-  await t.completePractice('write-char-6728','forgot',{type:'write',enroll:true});
-  assert.equal(e.requests.length,before,'The active attempt lock must remain owned by the new save');
-  second.reply();await newSave;
-  const events=Object.values(t.loadState().activity);
-  assert.equal(events.length,2);assert.deepEqual(events.map(event=>event.result),['independent','supported']);
-});
-
-test('legacy all-character review migrates to the actual practiced character and keeps prior history',async()=>{
-  const item=course('write-basic','write',{title:'常用汉字描红'});
-  const previous={day:'2026-09-30',id:item.id,type:'write'};
-  const e=environment({items:{[item.id]:item},activity:{legacy:previous}}),t=e.subject;
-  await e.connect();writingMediaProbe(e);t.setSession({items:[item],index:0});t.openReviewItem(item.id,'write');await flush();
-  const actual=t.writingCharacters().find(character=>character.id===t.getWritingId());
-  assert.ok(actual,'The legacy group must resolve to a concrete character');
-  assert.notEqual(actual.id,item.id);assert.equal(e.element('write-assessment').hidden,false);
-  await e.element('write-check-supported').onclick();
-  assert.equal(t.getSession(),null);assert.equal(t.getView(),'home');
-  assert.equal(t.getItem(item.id).learned,false);assert.equal(t.getItem(actual.id).learned,true);
-  const activities=Object.values(t.loadState().activity),event=activities.find(event=>event.schemaVersion===2);
-  assert.equal(activities.length,2);assert.deepEqual(copy(t.loadState().activity.legacy),previous);
-  assert.equal(event.id,actual.id);assert.equal(event.title,`汉字·${actual.c}`);
-  assert.equal(event.details.character,actual.c);assert.equal(event.result,'supported');assert.equal(event.skill,'hanzi-writing');
-  const saves=e.requests.filter(request=>request.method==='PATCH');
-  assert.equal(saves.length,1,'The individual record, enrollment and old group retirement must be atomic');
-});
-
-test('a custom character without pronunciation opens its visible model before a writing check',async()=>{
+test('custom character details without pronunciation keep the visible model and stage evidence only',async()=>{
   const id='custom-char-da',character={id,c:'龘',strokes:'48画',tip:'老师教的字'};
-  const item=course(id,'write',{stage:2,title:'汉字·龘'}),e=environment({items:{[id]:item},customCharacters:{[id]:character}}),t=e.subject;
-  await e.connect();writingMediaProbe(e);t.setSession({items:[item],index:0});t.openReviewItem(id,'write');await flush();
-  assert.notEqual(e.element('write-assessment').hidden,false,'Without a spoken prompt, hiding the model would hide which character to write');
-  assert.match(e.element('write-detail-content').innerHTML,/龘 字描红画布/);
-  e.element('write-finish').onclick();e.element('write-paper').onclick();
-  assert.equal(e.element('write-assessment').hidden,false);assert.equal(e.element('write-check-prompt').hidden,true);
-  await e.element('write-check-independent').onclick();
-  const event=Object.values(t.loadState().activity)[0];
-  assert.equal(event.details.afterPractice,true);assert.equal(t.getItem(id).stage,0);
+  const e=environment({customCharacters:{[id]:character}}),t=e.subject;await e.connect();writingMediaProbe(e);
+  t.setSession({type:'write',mode:'review',items:[{id,type:'write'},{id:'write-char-6728',type:'write'}],index:0});t.openReviewItem(id,'write');await flush();
+  assert.notEqual(e.element('write-assessment').hidden,false);assert.match(e.element('write-detail-content').innerHTML,/龘 字描红画布/);
+  e.element('write-finish').onclick();e.element('write-paper').onclick();assert.equal(e.element('write-check-prompt').hidden,true);
+  await e.element('write-check-independent').onclick();assert.equal(t.getSession().entries[0].details.afterPractice,true);assert.equal(Object.keys(t.loadState().activity).length,0);
 });
 
 async function main(){

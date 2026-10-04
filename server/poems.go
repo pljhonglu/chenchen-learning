@@ -164,7 +164,7 @@ func (s *progressStore) ensureBuiltinPoems(ctx context.Context, tx *sql.Tx, stor
 	if err != nil {
 		return progress{}, err
 	}
-	if len(payload) > maxProgressBytes {
+	if len(payload) > maxStoredProgressBytes {
 		return progress{}, &patchError{http.StatusRequestEntityTooLarge, "payload too large", "poem enrollment exceeds progress storage limit"}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO progress (id, payload, updated_at)

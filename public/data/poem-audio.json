@@ -720,5 +720,50 @@
     "sha256": "76d6d6f05e102993554ec88519167a5fcefdd20d2068565a336bd7cf343a55d8",
     "sampleRate": 24000,
     "bitrate": 48000
+  },
+  "poem-36": {
+    "src": "/audio/poems/poem-36.mp3",
+    "label": "自然语音（AI 合成）",
+    "synthetic": true,
+    "provider": "Microsoft Edge Read Aloud",
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "-22%",
+    "sourceHash": "a5ab1d9f343bb93549d32f90c6b08d89b7555195004bfbbebaedf00378290619",
+    "synthesisText": "水掉歌头·明月几时有。\n宋，苏轼。\n明月几时有。\n把酒问青天。\n不知天上宫确。\n今夕是何年。\n我欲乘风归去。\n又恐琼楼玉宇。\n高处不圣寒。\n起舞弄清影。\n何似在人间。\n转朱阁。\n低起户。\n照无眠。\n不应有恨。\n何事长向别时圆。\n人有悲欢离合。\n月有阴晴圆缺。\n此事古难全。\n但愿人长久。\n千里共婵娟。",
+    "pronunciationCorrections": [
+      {
+        "location": "title",
+        "index": 1,
+        "character": "调",
+        "pinyin": "diào",
+        "spokenAs": "掉"
+      },
+      {
+        "location": "line-3",
+        "index": 5,
+        "character": "阙",
+        "pinyin": "què",
+        "spokenAs": "确"
+      },
+      {
+        "location": "line-7",
+        "index": 3,
+        "character": "胜",
+        "pinyin": "shèng",
+        "spokenAs": "圣"
+      },
+      {
+        "location": "line-11",
+        "index": 1,
+        "character": "绮",
+        "pinyin": "qǐ",
+        "spokenAs": "起"
+      }
+    ],
+    "durationSeconds": 48.384,
+    "bytes": 290304,
+    "sha256": "6e253ed54731da9cfd053bc2b4de047f489622266f4df9ff26f14656d8753b2a",
+    "sampleRate": 24000,
+    "bitrate": 48000
   }
 }

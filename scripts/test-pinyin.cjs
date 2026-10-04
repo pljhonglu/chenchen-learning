@@ -12,7 +12,7 @@ const publicDir = path.join(__dirname, "../public");
 const source = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
 const instrumented = source.replace(/\}\)\(\);\s*$/, `
 globalThis.subject = {
- navigate, openParent, openReviewItem, loadState,
+ navigate, openReviewItem, loadState,
  getView: () => currentView,
  getPracticed: () => Array.from(pyPracticed),
  getSelected: () => pySelected,
@@ -32,7 +32,7 @@ const read = name => fs.readFileSync(path.join(publicDir, name), "utf8");
 function harness(initial = {}) {
   const elements = new Map(), recordings = [], requests = [], timers = new Map();
   let timerId = 0, failNextSave = false, holdSaves = false;
-  let database = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {}, ...copy(initial) };
+  let database = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {}, garden:{groups:{}}, ...copy(initial) };
   const datasetName = name => name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
   const matches = (element, selector) => {
     if (/^[a-z]+$/.test(selector)) return element.tagName === selector;
@@ -84,7 +84,7 @@ function harness(initial = {}) {
     return node;
   }
   const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "write-detail", "english", "records"];
-  for (const id of [...views.map(view => `${view}-content`), "parent-dialog", "sync-status", "live-status", "toast"]) element(id);
+  for (const id of [...views.map(view => `${view}-content`), "live-status", "toast"]) element(id);
   for (const view of views) {
     elements.get(`${view}-content`).dataset.view = view;
     elements.get(`${view}-content`).classList.add("view");
@@ -105,7 +105,7 @@ function harness(initial = {}) {
     removeAttribute(name) { delete this[name]; }
     emit(name) { this[`on${name}`]?.(); for (const handler of [...(this.events.get(name) || [])]) handler(); }
   }
-  const window = { Audio, scrollY: 0, scrollTo() {}, addEventListener() {}, confirm: () => true };
+  const window = { ChenchenGarden:{renderHome() {},stop(){}}, ChenchenEnglish:{create:()=>({catalog:async()=>[],stop(){}})}, Audio, scrollY: 0, scrollTo() {}, addEventListener() {}, confirm: () => true };
   const context = vm.createContext({
     window, console, Date, Math, AbortController,
     document: {
@@ -117,10 +117,10 @@ function harness(initial = {}) {
     setTimeout: (fn, delay) => { const id = ++timerId; timers.set(id, { fn, delay }); return id; },
     clearTimeout: id => timers.delete(id),
     fetch: async (url, options = {}) => {
-      assert.equal(url, "/api/progress", "Tests must not fetch remote resources or actual audio");
+      assert.ok(["/api/progress","/api/study-groups"].includes(url), "Tests must not fetch remote resources or actual audio");
       const request = { url, method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null };
       requests.push(request);
-      if(holdSaves&&request.method==="PATCH") {
+      if(holdSaves&&request.method==="POST") {
         try {await new Promise((resolve,reject)=>{request.release=resolve;request.fail=()=>reject(new Error("Offline"));});}
         finally {request.settled=true;}
       }
@@ -133,17 +133,40 @@ function harness(initial = {}) {
           else assert.fail(`Unexpected save operation: ${op.op}`);
         }
       }
+      if (request.method === "POST") {
+        const group=request.body;
+        if (!database.garden.groups[group.id]) {
+          group.entries.forEach((entry,index)=>{
+            database.activity[`${group.id}-${index}`]={...copy(entry),schemaVersion:2,day:window.ChenchenStudyGroups.day()};
+            database.items[entry.id]={...(database.items[entry.id] || {}),id:entry.id,learned:true};
+          });
+          database.garden.groups[group.id]={id:group.id,day:window.ChenchenStudyGroups.day(),waterAwarded:1,contentIds:group.entries.map(entry=>entry.id)};
+        }
+      }
       return { ok: true, status: 200, json: async () => ({ ok: true, found: true, payload: copy(database) }) };
     },
   });
-  for (const script of ["writing-vocabulary.js", "pinyin-data.js", "pinyin-audio.js", "learning-model.js"]) vm.runInContext(read(script), context);
+  for (const script of ["writing-vocabulary.js", "pinyin-data.js", "pinyin-audio.js", "learning-model.js", "study-groups.js"]) vm.runInContext(read(script), context);
   vm.runInContext(instrumented, context, { filename: "app.js" });
   context.subject.prime(copy(database));
   context.subject.navigate("pinyin");
   const get = id => { const node = elements.get(id); assert.ok(node, `Rendered element #${id} must exist`); return node; };
   const select = selector => { const node = get("pinyin-content").querySelector(selector); assert.ok(node, `Rendered control ${selector} must exist`); return node; };
   const click = node => { assert.equal(typeof node.onclick, "function", "Control must have an app handler"); return node.onclick({ currentTarget: node }); };
-  return { subject: context.subject, window, get, select, click, recordings, requests, data: copy(window.ChenchenPinyinData),
+  let groupSerial=0;
+  const beginGroup=(first="b",mode="learn")=>{
+    const symbols=Object.values(window.ChenchenPinyinData).flat().map(item=>item.id);
+    const ordered=[first,...symbols.filter(symbol=>symbol!==first)].slice(0,10);
+    const items=ordered.map(symbol=>({id:`pinyin-${symbol.replace(/ü/g,"v")}`,type:"pinyin",title:`拼音·${symbol}`}));
+    context.subject.setSession({id:`pinyin-test-${++groupSerial}`,type:"pinyin",mode,title:"拼音",count:10,unit:"个",items,index:0,entries:[],saving:false});
+    context.subject.openReviewItem(items[0].id,"pinyin");
+    return items;
+  };
+  const confirm=async(result="independent")=>{
+    if (get("py-assessment").hidden) click(get("py-read"));
+    await click(get(`py-check-${result}`));
+  };
+  return {beginGroup,confirm, subject: context.subject, window, get, select, click, recordings, requests, data: copy(window.ChenchenPinyinData),
     db: () => copy(database), failSave: () => { failNextSave = true; },
     holdSaves: value => {holdSaves=value;},
     async nextSave() {await flush();const request=requests.find(request=>request.release&&!request.settled);assert.ok(request,"Expected a held save");return request;},
@@ -263,19 +286,6 @@ test("leaving the page destroys narration and a late event cannot restart it", a
   assert.equal(h.requests.length, 0);
 });
 
-test("opening the parent dialog cancels narration without completing or replacing the card", async () => {
-  const h = harness(), result = h.click(h.get("py-listen")), audio = h.audio();
-  await h.subject.openParent(); await result;
-  assert.equal(h.get("parent-dialog").open, true);
-  assert.equal(h.subject.getView(), "pinyin");
-  assert.equal(h.subject.getSelected(), "b");
-  assert.equal(audio.paused, true);
-  assert.equal(h.get("py-listen").classList.contains("is-reading"), false);
-  audio.attempts[0].reject(new Error("Late failure")); await flush();
-  assert.equal(h.get("py-audio-status").textContent, "");
-  assert.equal(h.requests.length, 0);
-});
-
 test("failed playback shows a concise retry and a second tap clears the error", async () => {
   const h = harness(), button = h.get("py-listen"), result = h.click(button);
   h.audio().emit("error"); await result;
@@ -301,182 +311,97 @@ test("a missing audio module offers the same retry and can recover without reren
   assert.equal(h.get("py-audio-status").textContent, "");
 });
 
-test("each parent confirmation saves that sound immediately and survives leaving after one card", async () => {
-  const h = harness();
-  assert.equal(h.get("pinyin-content").querySelector("#py-finish"), null);
-  assert.ok(h.get("pinyin-content").innerHTML.includes('id="py-read">确认练习</button>'));
-  const playback = h.click(h.get("py-listen"));
-  h.click(h.get("py-read")); await playback;
-  assert.equal(h.audio().paused, true);
-  assert.equal(h.get("py-assessment").hidden, false);
-  assert.deepEqual(copy(h.subject.getPracticed()), []);
-  assert.equal(h.requests.length, 0, "Opening confirmation must not record a result");
-  await h.click(h.get("py-check-supported"));
-  assert.deepEqual(copy(h.subject.getPracticed()), ["b"]);
-  assert.equal(h.subject.getSelected(), "p");
-  assert.equal(h.requests.length, 1, "Confirmation itself persists the completed sound");
-  assert.equal(h.requests[0].method, "PATCH");
-  assert.equal(h.subject.getView(), "pinyin");
-  const activity = Object.values(h.db().activity);
-  assert.equal(activity.length, 1);
-  assert.equal(activity[0].id, "pinyin-b");
-  assert.equal(activity[0].result, "supported");
-  assert.equal(activity[0].source, "parent"); assert.equal(activity[0].skill, "pinyin-reading");
-  assert.equal(activity[0].details.afterPractice, true);
-  assert.deepEqual(Object.keys(h.db().items), ["pinyin-b"], "Only confirmed sounds join review");
+test("free sound browsing hides confirmation and never creates records", async () => {
+  const h=harness();
+  assert.equal(h.get("py-read").hidden,true);
+  const sound=h.click(h.get("py-listen"));h.audio().emit("ended");await sound;
   h.subject.navigate("write");
-  assert.equal(Object.values(h.db().activity).length, 1, "Leaving after one card must not discard a confirmed result");
+  assert.equal(h.requests.length,0);
+  assert.deepEqual(h.db().activity,{});
 });
 
-test("three distinct confirmed sounds finish free practice without a separate completion button", async () => {
-  const h = harness();
-  for (const [symbol, result] of [["b", "independent"], ["p", "supported"], ["m", "again"]]) {
-    assert.equal(h.subject.getSelected(), symbol);
-    assert.equal(h.get("pinyin-content").querySelector("#py-finish"), null);
-    h.click(h.get("py-read"));
-    await h.click(h.get(`py-check-${result}`));
+test("a partially heard free sound stays rehearsal evidence across navigation into review", async () => {
+  const h=harness(),sound=h.click(h.get("py-listen"));h.audio().emit("playing");
+  h.subject.navigate("write");await sound;h.beginGroup("b","review");await h.confirm();
+  const entry=h.subject.getSession().entries[0];assert.equal(entry.result,"independent");assert.equal(entry.details.afterPractice,true);
+  assert.equal(h.requests.length,0);assert.deepEqual(h.db().activity,{});
+});
+
+test("a free sound that failed before playing does not count as heard in the next group", async () => {
+  const h=harness(),sound=h.click(h.get("py-listen"));h.audio().emit("error");await sound;
+  h.subject.navigate("write");h.beginGroup("b","review");await h.confirm();
+  assert.equal(h.subject.getSession().entries[0].details.afterPractice,false);assert.equal(h.requests.length,0);
+});
+
+test("all ten sounds stay temporary until the last parent confirmation saves one group", async () => {
+  const h=harness(),items=h.beginGroup();
+  for(let index=0;index<10;index++) {
+    assert.equal(h.subject.getSession().items[h.subject.getSession().index].id,items[index].id);
+    await h.confirm(["independent","supported","again"][index%3]);
+    if(index<9) {assert.equal(h.requests.length,0);assert.equal(Object.keys(h.db().activity).length,0);}
   }
-  assert.equal(h.subject.getView(), "home");
-  assert.deepEqual(Object.values(h.db().activity).map(event => [event.id, event.result]), [
-    ["pinyin-b", "independent"], ["pinyin-p", "supported"], ["pinyin-m", "again"],
-  ]);
-  assert.equal(h.requests.length, 3);
+  assert.equal(h.subject.getView(),"home");assert.equal(h.subject.getSession(),null);
+  assert.equal(h.requests.length,1);assert.equal(h.requests[0].method,"POST");
+  assert.equal(h.requests[0].body.type,"pinyin");assert.equal(h.requests[0].body.entries.length,10);
+  const entries=Object.values(h.db().activity);
+  assert.deepEqual(entries.map(entry=>entry.id),items.map(item=>item.id));
+  assert.deepEqual(entries.map(entry=>entry.result),Array.from({length:10},(_,i)=>["independent","supported","again"][i%3]));
+  assert.ok(entries.every(entry=>entry.source==="parent"&&entry.skill==="pinyin-reading"&&entry.details.afterPractice));
 });
 
-test("failed immediate confirmation stays on the sound and retries its original activity without duplication", async () => {
-  const h = harness(); h.click(h.get("py-read")); h.failSave();
-  await h.click(h.get("py-check-independent"));
-  assert.equal(h.subject.getView(), "pinyin");
-  assert.equal(h.subject.getSelected(), "b");
-  assert.deepEqual(copy(h.subject.getPracticed()), [], "A failed save cannot look completed");
-  assert.equal(Object.keys(h.db().activity).length, 0);
-  assert.ok(h.get("pinyin-content").querySelectorAll("button").filter(button => button.id !== "py-check-independent").every(button => button.disabled), "A failed confirmation freezes every control except its original retry");
-  assert.equal(h.get("py-check-independent").disabled, false);
-  assert.match(h.get("py-check-independent").textContent, /重试保存/);
-  await h.click(h.get("py-check-independent")); await flush();
-  assert.equal(h.subject.getView(), "pinyin");
-  assert.equal(h.subject.getSelected(), "p");
-  assert.deepEqual(copy(h.subject.getPracticed()), ["b"]);
-  assert.equal(Object.keys(h.db().activity).length, 1);
-  assert.deepEqual(h.requests[0].body.operations, h.requests[1].body.operations);
+test("leaving an incomplete group discards every temporary result and a new group begins at one", async () => {
+  const h=harness();h.beginGroup();await h.confirm();await h.confirm("again");
+  assert.equal(h.subject.getSession().entries.length,2);
+  h.subject.navigate("write");
+  assert.equal(h.subject.getSession(),null);assert.equal(h.requests.length,0);assert.deepEqual(h.db().activity,{});
+  h.beginGroup();assert.equal(h.subject.getSession().index,0);assert.equal(h.subject.getSession().entries.length,0);
 });
 
-test("a legacy scheduled pinyin group saves one actual sound, retires the group and advances once", async () => {
-  const item = { id: "pinyin-basic", title: "声母韵母认读", type: "pinyin", learned: true, stage: 0, nextReview: "2020-01-01" };
-  const h = harness({ items: { [item.id]: item } });
-  h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(item.id, item.type);
-  const sound = h.click(h.get("py-listen"));
-  h.click(h.get("py-read")); await sound;
-  await h.click(h.get("py-check-independent"));
-  assert.equal(h.subject.getSession(), null);
-  assert.equal(h.subject.getView(), "home");
-  assert.equal(h.audio().paused, true);
-  assert.equal(h.db().items[item.id].learned, false);
-  assert.equal(h.db().items["pinyin-b"].learned, true);
-  assert.equal(h.db().items["pinyin-b"].stage, 0, "A just-rehearsed sound must not lengthen its interval");
-  assert.equal(Object.keys(h.db().activity).length, 1);
-  assert.equal(Object.values(h.db().activity)[0].id, "pinyin-b");
-  assert.equal(h.requests.length, 1);
+test("a failed full-group save retries the exact immutable group and cannot lose its pending outcome", async () => {
+  const h=harness();h.beginGroup();for(let i=0;i<9;i++)await h.confirm();h.failSave();await h.confirm();
+  assert.equal(h.subject.getView(),"home");assert.equal(Object.keys(h.db().activity).length,0);
+  assert.equal(h.subject.getSession().entries.length,10);
+  h.subject.navigate("write");assert.equal(h.subject.getView(),"home");
+  await h.click(h.get("study-save-retry"));
+  assert.deepEqual(h.requests[0].body,h.requests[1].body);
+  assert.equal(Object.keys(h.db().activity).length,10);assert.equal(Object.keys(h.db().garden.groups).length,1);
 });
 
-test("an individual umlaut sound opens a silent recall check and saves under its stable v spelling", async () => {
-  for (const [id, symbol] of [["pinyin-v", "ü"], ["pinyin-vn", "ün"]]) {
-    const item = { id, title: `拼音·${symbol}`, type: "pinyin", learned: true, stage: 2, nextReview: "2020-01-01" };
-    const h = harness({ items: { [id]: item } });
-    h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(id, "pinyin");
-    assert.equal(h.subject.getSelected(), symbol); assert.equal(h.get("py-assessment").hidden, false);
-    assert.equal(h.allAttempts().length, 0, "Review must let the child recall before hearing a model");
-    assert.equal(h.get("pinyin-content").querySelector("#py-finish"), null);
-    await h.click(h.get("py-check-independent"));
-    const event = Object.values(h.db().activity)[0];
-    assert.equal(event.id, id); assert.equal(event.result, "independent"); assert.equal(event.details.symbol, symbol);
-    assert.equal(event.details.afterPractice, false); assert.equal(h.db().items[id].stage, 3);
-    assert.equal(h.subject.getSession(), null);
+test("umlaut sounds in a review group open silent recall and retain stable v spelling", async () => {
+  for(const [id,symbol] of [["pinyin-v","ü"],["pinyin-vn","ün"]]) {
+    const h=harness();h.beginGroup(symbol,"review");
+    assert.equal(h.subject.getSelected(),symbol);assert.equal(h.get("py-assessment").hidden,false);
+    assert.equal(h.allAttempts().length,0);
+    await h.confirm();const entry=h.subject.getSession().entries[0];
+    assert.equal(entry.id,id);assert.equal(entry.result,"independent");assert.equal(entry.details.symbol,symbol);assert.equal(entry.details.afterPractice,false);
+    assert.equal(h.requests.length,0,"A single confirmed sound never persists the partial group");
   }
 });
 
-test("a hint during scheduled recall is recorded and does not increase the memorized interval", async () => {
-  const item = { id: "pinyin-b", title: "拼音·b", type: "pinyin", learned: true, stage: 2, nextReview: "2020-01-01" };
-  const h = harness({ items: { [item.id]: item } });
-  h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(item.id, "pinyin");
-  const sound = h.click(h.get("py-check-hint")); h.audio().emit("ended"); await sound;
-  await h.click(h.get("py-check-independent"));
-  const event = Object.values(h.db().activity)[0];
-  assert.equal(event.result, "independent"); assert.equal(event.details.afterPractice, true);
-  assert.equal(h.db().items[item.id].stage, 0, "Hearing the model must schedule another near-term check");
+test("a hint during group recall is preserved as rehearsal evidence", async () => {
+  const h=harness();h.beginGroup("b","review");
+  const sound=h.click(h.get("py-check-hint"));h.audio().emit("ended");await sound;
+  await h.confirm();const entry=h.subject.getSession().entries[0];
+  assert.equal(entry.result,"independent");assert.equal(entry.details.afterPractice,true);assert.equal(h.requests.length,0);
 });
 
-test("a scheduled sound stays on its target even after returning to practice", async () => {
-  const item = { id: "pinyin-b", title: "拼音·b", type: "pinyin", learned: true, stage: 2, nextReview: "2020-01-01" };
-  const h = harness({ items: { [item.id]: item } });
-  h.subject.setSession({ items: [item], index: 0 }); h.subject.openReviewItem(item.id, "pinyin");
-  assert.equal(h.select(".pinyin-grid").hidden, true, "Scheduled recall must not expose a switch to an unrelated sound");
-  assert.equal(h.select(".tabs-mini").hidden, true);
-  h.click(h.select('[data-p="m"]')); h.click(h.select('[data-pt="finals"]'));
-  assert.equal(h.subject.getSelected(), "b", "Even stale card handlers cannot replace the scheduled target");
-  h.click(h.get("py-check-back"));
-  assert.equal(h.get("py-assessment").hidden, true);
-  assert.equal(h.select(".pinyin-grid").hidden, true);
-  assert.equal(h.select(".tabs-mini").hidden, true);
-  const sound = h.click(h.get("py-listen")); h.audio().emit("ended"); await sound;
-  h.click(h.get("py-read")); await h.click(h.get("py-check-independent"));
-  const events = Object.values(h.db().activity);
-  assert.equal(events.length, 1); assert.equal(events[0].id, item.id); assert.equal(events[0].details.afterPractice, true);
-  assert.equal(h.subject.getSession(), null);
+test("a scheduled sound stays on target after returning to its model", async () => {
+  const h=harness();h.beginGroup("b","review");
+  assert.equal(h.select(".pinyin-grid").hidden,true);assert.equal(h.select(".tabs-mini").hidden,true);
+  h.click(h.select('[data-p="m"]'));h.click(h.select('[data-pt="finals"]'));
+  assert.equal(h.subject.getSelected(),"b");
+  h.click(h.get("py-check-back"));assert.equal(h.get("py-assessment").hidden,true);
+  const sound=h.click(h.get("py-listen"));h.audio().emit("ended");await sound;
+  await h.confirm();const entry=h.subject.getSession().entries[0];
+  assert.equal(entry.id,"pinyin-b");assert.equal(entry.details.afterPractice,true);
 });
 
-test("repeated confirmations retain their evidence while abandoning an unconfirmed card records nothing", async () => {
-  const h = harness();
-  h.click(h.get("py-read")); await h.click(h.get("py-check-again"));
-  h.click(h.select('[data-p="b"]')); h.click(h.get("py-read")); await h.click(h.get("py-check-independent"));
-  const events = Object.values(h.db().activity);
-  assert.deepEqual(events.map(event => event.result), ["again", "independent"]);
-  assert.ok(events.every(event => event.id === "pinyin-b"));
-  assert.deepEqual(copy(h.subject.getPracticed()), ["b"], "Repeating one sound must not count as three different cards");
-  const other = harness(); other.click(other.get("py-read")); other.subject.navigate("write");
-  assert.equal(other.requests.length, 0); assert.deepEqual(other.db().activity, {});
-});
-
-test("leaving failed pinyin practice permits a new result for the same sound on a fresh page", async () => {
-  const h = harness(); h.click(h.get("py-read")); h.failSave();
-  await h.click(h.get("py-check-independent"));
-  const oldEvent = h.requests[0].body.operations.find(op => op.collection === "activity");
-  h.subject.navigate("write"); h.subject.navigate("pinyin"); h.click(h.select('[data-p="b"]'));
-  assert.equal(h.get("py-check-again").disabled, false);
-  h.click(h.get("py-read")); await h.click(h.get("py-check-again"));
-  const newEvent = h.requests[1].body.operations.find(op => op.collection === "activity");
-  assert.notEqual(newEvent.key, oldEvent.key); assert.equal(newEvent.value.id, "pinyin-b"); assert.equal(newEvent.value.result, "again");
-  assert.equal(Object.values(h.db().activity).length, 1);
-});
-
-test("an old pinyin save cannot navigate away from or unlock another round saving the same sound", async () => {
-  const h = harness(); h.click(h.get("py-read")); h.holdSaves(true);
-  const firstSave = h.click(h.get("py-check-independent")), first = await h.nextSave();
-  assert.equal(h.get("py-check-independent").disabled, true);
-  assert.equal(h.get("py-check-back").disabled, true);
-  assert.deepEqual(copy(h.subject.getPracticed()), [], "An in-flight save has not completed the card");
-  h.subject.navigate("write"); h.subject.navigate("pinyin"); h.click(h.select('[data-p="b"]'));
-  h.click(h.get("py-read"));
-  const newSave = h.click(h.get("py-check-supported")), newChoice = h.get("py-check-supported");
-  assert.equal(newChoice.disabled, true);
-  first.release(); await firstSave;
-  const second = await h.nextSave();
-  assert.equal(h.subject.getView(), "pinyin"); assert.equal(h.get("py-check-supported"), newChoice);
-  assert.equal(h.subject.getSelected(), "b");
-  assert.equal(newChoice.disabled, true, "The old callback must not unlock a new in-flight choice");
-  assert.equal(h.get("py-check-again").disabled, true);
-  second.release(); await newSave;
-  assert.equal(h.subject.getView(), "pinyin"); assert.equal(h.subject.getSelected(), "p");
-  assert.deepEqual(Object.values(h.db().activity).map(event => event.result), ["independent", "supported"]);
-});
-
-test("an old pinyin failure cannot freeze a newly reopened practice page", async () => {
-  const h = harness(); h.click(h.get("py-read")); h.holdSaves(true);
-  const save = h.click(h.get("py-check-independent")), first = await h.nextSave();
-  h.subject.navigate("write"); h.subject.navigate("pinyin");
-  const current = h.get("pinyin-content").innerHTML;
-  first.fail(); await save;
-  assert.equal(h.subject.getView(), "pinyin"); assert.equal(h.get("pinyin-content").innerHTML, current);
-  assert.equal(h.get("py-listen").disabled, false); assert.equal(h.get("py-check-independent").disabled, false);
-  assert.equal(Object.values(h.db().activity).length, 0);
+test("the final pending request locks navigation until its single save is acknowledged", async () => {
+  const h=harness();h.beginGroup();for(let i=0;i<9;i++)await h.confirm();h.holdSaves(true);
+  const saving=h.confirm(),request=await h.nextSave();
+  assert.equal(h.subject.getSession().saving,true);assert.equal(Object.keys(h.db().activity).length,0);
+  h.subject.navigate("write");assert.equal(h.subject.getView(),"home");
+  request.release();await saving;
+  assert.equal(h.subject.getSession(),null);assert.equal(Object.keys(h.db().activity).length,10);
+  assert.match(h.get("home-content").innerHTML,/收获一滴水/);
 });

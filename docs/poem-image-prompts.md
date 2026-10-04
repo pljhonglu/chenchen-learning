@@ -1,6 +1,6 @@
 # 古诗绘本插图提示词
 
-这35张插图使用 Codex 内置 `image_gen`，每首诗单独调用生成一张原创 PNG。面向5岁幼儿，采用简洁水彩绘本风格、单一场景、无文字，帮助记住诗中关键意象。
+这36张插图使用 Codex 内置 `image_gen`，每首诗单独调用生成一张原创 PNG。面向5岁幼儿，采用简洁水彩绘本风格、单一场景、无文字，帮助记住诗中关键意象。
 
 生成后保留内置工具默认路径的原图。网页使用缩至 960 像素宽、质量 84 的 WebP 编码版本，保持完整画面，文件为 `public/images/poems/poem-XX.webp`；编码使用 sharp，仅用于减小传输体积。对应的无障碍描述和看图提示见 `public/data/poem-illustrations.json`。
 
@@ -152,3 +152,15 @@ One large graceful friendly white goose floats on clear emerald-green water, cur
 
 
 首张《早发白帝城》的初次生成使用等价独立提示词，强调彩云、轻舟、两岸青山和一只小猿。其余每张将通用提示词与对应场景提示词拼接，不使用参考图。
+
+## poem-36 · 水调歌头·明月几时有
+
+使用内置 `image_gen` 生成；网页文件为 `public/images/poems/poem-36.webp`（960 × 640，WebP 质量 84）。
+
+完整提示词：
+
+```text
+Use case: illustration-story. Create one original wide 3:2 illustration (1536×1024) for a Chinese-poem learning card for a 5-year-old kindergarten child. Style: simple warm children's picture book, soft watercolor and matte gouache, rounded clear silhouettes, large simple subject groups, gentle pleasing colors, very sparse background, easy to read at small size. Limit to 2–4 main subject groups, avoid detailed textures and clutter. No writing, Chinese characters, labels, numbers, speech bubbles, border, collage, panels, watermark, or photorealism. Single coherent scene.
+
+Scene for Su Shi's “Shui Diao Ge Tou — When Will the Bright Moon Appear”: A kind Song-dynasty Chinese poet in a simple pale traditional robe stands safely in a quiet ancient Chinese courtyard beside a low window, looking up at one large softly glowing Mid-Autumn full moon. A few rounded distant blue hills and one tiny cozy house suggest loved ones far away sharing the same moonlight. Keep poet, full moon, and distant hills-with-house as three clear visual subject groups. Soft indigo and pale blue night with warm cream moonlight; peaceful, tender longing and reassuring warmth. No flying people, moon palace, fantasy creatures, wine vessel, extra characters, or lettering.
+```

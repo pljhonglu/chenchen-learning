@@ -234,8 +234,8 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 	if err != nil {
 		return progress{}, err
 	}
-	if len(payload) > maxProgressBytes {
-		return progress{}, &patchError{http.StatusRequestEntityTooLarge, "payload too large", "stored progress exceeds 5 MiB"}
+	if len(payload) > maxStoredProgressBytes {
+		return progress{}, &patchError{http.StatusRequestEntityTooLarge, "payload too large", "stored progress exceeds 32 MiB"}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO progress (id, payload, updated_at)
 		VALUES (1, ?, ?)

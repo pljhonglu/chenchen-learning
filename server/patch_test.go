@@ -255,7 +255,7 @@ func TestInvalidPatchIsAtomic(t *testing.T) {
 func TestPatchTotalStorageLimitRollsBack(t *testing.T) {
 	app := testApp(t)
 	initial, err := app.store.patch(context.Background(), []progressOperation{
-		operation("set", "customPoems", "large", fmt.Sprintf(`{"text":%q}`, strings.Repeat("a", maxProgressBytes-200_000))),
+		operation("set", "customPoems", "large", fmt.Sprintf(`{"text":%q}`, strings.Repeat("a", maxStoredProgressBytes-200_000))),
 	})
 	if err != nil {
 		t.Fatal(err)
