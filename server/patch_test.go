@@ -152,7 +152,8 @@ func TestConcurrentCreatePreservesAlreadyReviewedCourse(t *testing.T) {
 	state := decodeState(t, stored.Payload)
 	items := decodeState(t, state["items"])
 	poems := decodeState(t, state["customPoems"])
-	if string(items["course"]) != `{"nextReview":"2026-10-08","stage":3,"title":"课文"}` || string(poems["course"]) != `{"title":"家长更正后的标题"}` {
+	item := decodeState(t, items["course"])
+	if string(item["stage"]) != "3" || jsonString(item["nextReview"]) != "2026-10-08" || jsonString(item["title"]) != "课文" || item["learned"] != nil || string(poems["course"]) != `{"title":"家长更正后的标题"}` {
 		t.Fatalf("concurrent create overwrote existing data: %s", stored.Payload)
 	}
 }

@@ -40,7 +40,7 @@ docker restart "$name" >/dev/null
 refresh_address
 wait_ready
 curl -fsS "$base/api/progress" \
-  | python3 -c 'import json,sys; d=json.load(sys.stdin); items=d["payload"]["items"]; ids=set(json.loads(sys.argv[1])); assert d["found"] and items["smoke"]["learned"] and set(items) == ids | {"smoke"} and all(items[id]["learned"] for id in ids) and d["updatedAt"] >= 1000; assert items["poem-01"]["stage"] == 4 and items["poem-01"]["nextReview"] == "2026-11-15"' "$poem_ids"
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); items=d["payload"]["items"]; ids=set(json.loads(sys.argv[1])); assert d["found"] and items["smoke"]["learned"] and set(items) == ids | {"smoke"} and all("learned" not in items[id] for id in ids) and d["updatedAt"] >= 1000; assert items["poem-01"]["stage"] == 4 and items["poem-01"]["nextReview"] == "2026-11-15"' "$poem_ids"
 curl -fsS -X PATCH "$base/api/progress" -H 'Content-Type: application/json' \
   --data '{"operations":[{"op":"merge","collection":"items","key":"smoke","value":{"stage":1,"nextReview":"2026-10-02"}}]}' \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] and d["payload"]["items"]["smoke"]["stage"] == 1 and d["updatedAt"] > 1000'

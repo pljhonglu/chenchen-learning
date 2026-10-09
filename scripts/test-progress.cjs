@@ -9,7 +9,7 @@ const sourcePath = path.join(__dirname, '../public/app.js');
 const source = fs.readFileSync(sourcePath, 'utf8');
 const instrumented = source.replace(/\}\)\(\);\s*$/, `
 globalThis.subject = {
- loadState, getItem, saveStudyGroup, syncNow, completePractice,
+ loadState, getItem, saveStudyGroup, syncNow, completePractice, persistStudyDraft, currentStudyPhase,
  navigate, bindSessionExit, openReviewItem, startStudyGroup, renderHome, studyCatalog,
  writingCharacters, openWriteCharacter, initializePage, renderPoems, renderPoemDetail, openPoemFromList,
  setPoemFilter: value => poemFilter=value,
@@ -31,7 +31,7 @@ assert.doesNotMatch(source, /\b(?:localStorage|sessionStorage|indexedDB)\b/,
   'Course content and progress must never be persisted in the browser');
 const copy = value => JSON.parse(JSON.stringify(value));
 const flush = () => new Promise(resolve => setImmediate(resolve));
-const emptyState = () => ({items:{},activity:{},customPoems:{},customCharacters:{},hiddenCourses:{},garden:{groups:{}}});
+const emptyState = () => ({items:{},activity:{},customPoems:{},customCharacters:{},hiddenCourses:{},garden:{groups:{}},studySessions:{}});
 const course = (id,type='poem',extra={}) => ({id,type,title:id,learned:true,stage:0,nextReview:'2026-10-01',
   createdAt:'2026-09-30T12:00:00Z',updatedAt:'2026-09-30T12:00:00Z',...extra});
 
@@ -39,6 +39,7 @@ function environment(initial = {}) {
   let now = new Date('2026-10-01T01:30:00+08:00').getTime();
   let database = {...emptyState(),...copy(initial)};
   let holdRequests = false;
+  let writingCatalogUnavailable = false;
   let timerId = 0;
   const requests = [], scrolls = [], timers = new Map(), elements = new Map();
   const element = id => {
@@ -48,7 +49,7 @@ function environment(initial = {}) {
       querySelectorAll:()=>[],querySelector:selector=>element(selector),
       setAttribute:()=>{},removeAttribute:()=>{},addEventListener(name,handler){this.listeners[name]=handler;},
       focus:()=>{},setSelectionRange:()=>{},
-      showModal(){this.open=true;},close(){this.open=false;},reset(){this.value='';},appendChild(){},
+      showModal(){this.open=true;},close(){this.open=false;},reset(){this.value='';},appendChild(){},replaceChildren(){this.innerHTML='';},
       getContext:()=>({}),getBoundingClientRect:()=>({left:0,top:0,width:600,height:600}),
     });
     return elements.get(id);
@@ -60,21 +61,34 @@ function environment(initial = {}) {
   // The current UI only reads progress and saves complete learning groups.
   // SQLite atomicity and legacy content-management operations have Go tests.
   function serverResponse(request) {
+    if(request.url==='/data/writing-strokes.json') return writingCatalogUnavailable ? {status:503,data:{error:'unavailable'}} : {status:200,data:JSON.parse(fs.readFileSync(path.join(__dirname,'../public/data/writing-strokes.json'),'utf8'))};
     if (request.method==='GET') return {status:200,data:{found:true,payload:copy(database),updatedAt:database.updatedAt||0}};
     if(request.method==='POST') {
+      if(request.url==='/api/study-sessions') {
+        const draft=copy(request.body),previous=database.studySessions[draft.id];
+        const day=context.window.ChenchenStudyGroups.day(new FakeDate());
+        if(previous) {
+          assert.deepEqual(draft.items,previous.items,'Saved plan cannot change');
+          assert(draft.entries.length>=previous.entries.length,'Saved results cannot disappear');
+        }
+        draft.entries=draft.entries.map((entry,index)=>previous?.entries[index] || {...entry,day,at:new FakeDate().toISOString()});
+        draft.createdAt=previous?.createdAt || new FakeDate().toISOString();
+        database.studySessions[draft.id]=draft;
+        return {status:200,data:{ok:true,payload:copy(database),updatedAt:now}};
+      }
       assert.equal(request.url,'/api/study-groups');
       const group=request.body;
       if(database.garden.groups[group.id]) return {status:200,data:{ok:true,payload:copy(database)}};
       const count={poem:5,pinyin:10,write:5,english:5,math:1,decomp:1}[group.type];
-      if(group.entries.length!==count) return {status:400,data:{error:'invalid_group_size'}};
-      if(group.mode==='review' && group.entries.some(entry=>!database.items[entry.id]?.learned)) return {status:409,data:{error:'entry_not_found'}};
+      if(group.entries.length<1 || group.entries.length>count) return {status:400,data:{error:'invalid_group_size'}};
+      if(group.mode==='review' && group.entries.some(entry=>database.hiddenCourses[entry.id] || group.type!=='poem' && !database.items[entry.id]?.learned)) return {status:409,data:{error:'entry_not_found'}};
       const next=copy(database),day=context.window.ChenchenStudyGroups.day(new FakeDate());
       group.entries.forEach((entry,index)=>{
-        next.activity[`${group.id}-${index}`]={...copy(entry),schemaVersion:2,day,at:new FakeDate().toISOString()};
+        next.activity[`${group.id}-${index}`]={...copy(entry),schemaVersion:2,day:next.studySessions[group.id]?.entries[index]?.day || day,at:next.studySessions[group.id]?.entries[index]?.at || new FakeDate().toISOString()};
         next.items[entry.id]={...(next.items[entry.id]||{}),id:entry.id,type:entry.type,title:entry.title,learned:true};
       });
       next.garden.groups[group.id]={id:group.id,day,type:group.type,count:group.entries.length,contentIds:group.entries.map(entry=>entry.id),waterAwarded:1};
-      database=next;return {status:200,data:{ok:true,payload:copy(database),updatedAt:now}};
+      delete next.studySessions[group.id];database=next;return {status:200,data:{ok:true,payload:copy(database),updatedAt:now}};
     }
     assert.fail(`Unexpected progress mutation: ${request.method}`);
   }
@@ -99,8 +113,8 @@ function environment(initial = {}) {
         request.settled=true;
         const error=new Error('Request aborted');error.name='AbortError';reject(error);
       },{once:true});
-      assert.ok(['/api/progress','/api/study-groups'].includes(url));requests.push(request);
-      if(!holdRequests) queueMicrotask(()=>request.reply());
+      assert.ok(['/api/progress','/api/study-groups','/api/study-sessions','/data/writing-strokes.json'].includes(url));requests.push(request);
+      if(!holdRequests || url==='/data/writing-strokes.json') queueMicrotask(()=>request.reply());
     }),
   });
   for(const name of ['localStorage','sessionStorage','indexedDB']) {
@@ -115,7 +129,7 @@ function environment(initial = {}) {
   vm.runInContext(instrumented,context,{filename:sourcePath});
   context.subject.setView('poems');context.subject.setPoems([]);
   return {context,subject:context.subject,requests,scrolls,timers,elements,element,db:()=>copy(database),
-    alterServer:change=>change(database),hold:value=>{holdRequests=value;},
+    alterServer:change=>change(database),hold:value=>{holdRequests=value;},catalogUnavailable:value=>{writingCatalogUnavailable=value;},
     at:date=>{now=new Date(`${date}T01:30:00+08:00`).getTime();},connect:()=>context.subject.syncNow(),
     async nextRequest(){await flush();const request=requests.find(request=>!request.settled);assert.ok(request,'Expected pending request');return request;},
   };
@@ -123,8 +137,8 @@ function environment(initial = {}) {
 
 // The real media modules have separate playback tests. This probe observes the
 // detail page's lifetime without fetching assets or simulating SVG rendering.
-function writingMediaProbe(e) {
-  const viewers=[],voices=[];
+function writingMediaProbe(e, settings = {}) {
+  const viewers=[],voices=[],practices=[];
   e.context.window.ChenchenWritingAudio={create(){
     const voice={destroyed:false,stops:0,stop(){this.stops++;},destroy(){this.destroyed=true;this.stop();},
       playStroke:()=>Promise.resolve(),playReading:()=>Promise.resolve()};
@@ -142,7 +156,36 @@ function writingMediaProbe(e) {
     viewer.ready=Promise.resolve().then(()=>{viewer.notify('ready');return !viewer.destroyed;});
     return viewer;
   }};
-  return {viewers,voices};
+  e.context.window.ChenchenWritingPractice={create(options){
+    const practice={destroyed:false,character:options.character,options,paused:false,restarts:0,
+      current:{status:'loading',total:4,completed:0,totalMistakes:0,hintsUsed:0,outlineShown:!!options.showOutline},
+      state(status,overrides={}) {
+        Object.assign(this.current,overrides,{status});
+        options.onState?.({...this.current});
+      },
+      getState(){return {...this.current};},
+      pause(){if(['complete','error'].includes(this.current.status))return false;this.paused=true;this.state('paused');return true;},
+      resume(){if(['complete','error'].includes(this.current.status))return false;this.paused=false;this.state('active');return true;},
+      restart(next={}){this.restarts++;this.paused=false;this.state('active',{completed:0,totalMistakes:0,hintsUsed:0,outlineShown:next.showOutline??this.current.outlineShown});return Promise.resolve(true);},
+      showHint(){this.state('active',{hintsUsed:this.current.hintsUsed+1});return Promise.resolve(true);},
+      destroy(){this.destroyed=true;},
+      fail(){this.state('error');options.onError?.('stroke-data-unavailable');},
+      // Deliberately deliver even stale/error callbacks to verify page guards.
+      complete(overrides={}) {
+        if(!this.destroyed && this.current.status==='active')this.state('complete',{completed:this.current.total});
+        return options.onComplete?.({engine:'hanzi-writer-3.7.3',method:'stroke-quiz',totalStrokes:this.current.total,completedStrokes:this.current.total,
+          totalMistakes:this.current.totalMistakes,hintsUsed:this.current.hintsUsed,outlineShown:this.current.outlineShown,...overrides});
+      },
+    };
+    practices.push(practice);practice.state('loading');
+    practice.ready=Promise.resolve().then(()=>{
+      if(practice.destroyed)return false;
+      if(settings.failPractice){practice.fail();return false;}
+      practice.state('active');return true;
+    });
+    return practice;
+  }};
+  return {viewers,voices,practices};
 }
 
 // The real playback module runs here; only the browser's media element is fake.
@@ -339,13 +382,14 @@ test('selecting a character opens its detail and returning stops media without c
   t.navigate('write');t.openWriteCharacter('write-char-6728');await flush();
   assert.equal(t.getView(),'write-detail');assert.equal(t.getWritingId(),'write-char-6728');
   const html=e.element('write-detail-content').innerHTML;
-  assert.match(html,/木 字描红画布/);assert.match(html,/id="write-back"/);
+  assert.match(html,/id="write-practice-layer"/);assert.match(html,/id="write-back"/);
+  assert.doesNotMatch(html,/<canvas\b|家长确认|id="write-(?:finish|paper|check-independent)"/);
   assert.doesNotMatch(html,/data-write-id=/,'The detail page must not repeat the character library');
   assert.equal(media.viewers.length,1);assert.equal(media.viewers[0].character,'木');
   e.element('write-strokes-play').onclick();assert.equal(media.viewers[0].playing,true);
   e.element('write-back').onclick();
   assert.equal(t.getView(),'write');assert.equal(t.getSession(),null);
-  assert.equal(media.viewers[0].destroyed,true);assert.equal(media.voices[0].destroyed,true);
+  assert.equal(media.viewers[0].destroyed,true);assert.equal(media.voices[0].destroyed,true);assert.equal(media.practices[0].destroyed,true);
   assert.equal(Object.keys(t.loadState().activity).length,0);assert.deepEqual(e.db().items,{});
   assert.ok(e.requests.every(request=>request.method==='GET'),'Leaving an unfinished detail must not save completion');
 });
@@ -358,7 +402,7 @@ test('returning from a scheduled writing detail exits the session without advanc
   assert.equal(t.getView(),'write-detail');assert.equal(t.getSession(),session);
   e.element('write-back').onclick();
   assert.equal(t.getView(),'write');assert.equal(t.getSession(),null);
-  assert.equal(media.viewers[0].destroyed,true);assert.equal(media.voices[0].destroyed,true);
+  assert.equal(media.viewers[0].destroyed,true);assert.equal(media.voices[0].destroyed,true);assert.equal(media.practices[0].destroyed,true);
   assert.deepEqual(e.db(),before);assert.equal(t.getItem(item.id).stage,0);
 });
 
@@ -402,26 +446,31 @@ test('free poem cards keep reading available but never show completion ratings',
   assert.ok(e.requests.every(request=>request.method==='GET'));
 });
 
-test('home passes only complete due groups and a review starts with the oldest due item',async()=>{
+test('home offers even one due item without future filler',async()=>{
   const poems=[...samplePoems(),...samplePoems().slice(0,2).map((poem,i)=>({...poem,id:`poem-fill-${i}`}))];
   const items=Object.fromEntries(poems.map(poem=>[poem.id,course(poem.id,'poem',{nextReview:'2026-10-04'})]));
   const e=environment({items}),t=e.subject;t.setPoems(poems);await e.connect();t.setView('home');await t.renderHome();
   assert.equal(e.context.lastGardenHooks.reviewGroups.length,0);
   e.alterServer(state=>{state.items['poem-02'].nextReview='2026-09-28';});await t.syncNow();await t.renderHome();
-  assert.equal(e.context.lastGardenHooks.reviewGroups.length,1);assert.equal(e.context.lastGardenHooks.reviewGroups[0].items.length,5);
+  assert.equal(e.context.lastGardenHooks.reviewGroups.length,1);assert.equal(e.context.lastGardenHooks.reviewGroups[0].items.length,1);
   await t.startStudyGroup('poem','review');await flush();
-  assert.equal(t.getSession().items[0].id,'poem-02');assert.equal(t.getSession().items.filter(item=>item.afterPractice).length,4);
+  assert.equal(t.getSession().items[0].id,'poem-02');assert.equal(t.getSession().items.filter(item=>item.afterPractice).length,0);
   t.navigate('poems');assert.equal(t.getSession(),null);
-  assert.ok(e.requests.every(request=>request.method==='GET'));
+  assert.ok(e.requests.filter(request=>request.method==='POST').every(request=>request.url==='/api/study-sessions'));
 });
 
-test('the learning button generates a fixed group and exiting a partial group writes nothing',async()=>{
+test('a daily plan saves its prefix and resumes after leaving or reloading',async()=>{
   const e=environment(),t=e.subject;await e.connect();await t.startStudyGroup('write','learn');await flush();
-  const group=t.getSession();assert.equal(group.items.length,5);assert.equal(group.index,0);assert.equal(t.getView(),'write-detail');
+  const group=t.getSession();assert.equal(group.items.length,2);assert.equal(group.index,0);assert.equal(t.getView(),'write-detail');
   const item=group.items[0];await t.completePractice(item.id,'remember',{type:'write',title:item.title,skill:'hanzi-writing',details:{afterPractice:true}});
   assert.equal(group.entries.length,1);assert.equal(t.getSession().index,1);
   t.navigate('write');assert.equal(t.getSession(),null);assert.equal(Object.keys(t.loadState().activity).length,0);
-  assert.ok(e.requests.every(request=>request.method==='GET'));
+  assert.equal(e.db().studySessions[group.id].entries.length,1);
+  const resumed=environment(e.db());await resumed.connect();await resumed.subject.startStudyGroup('write','learn');await flush();
+  assert.equal(resumed.subject.getSession().id,group.id);assert.equal(resumed.subject.getSession().index,1);
+  assert.equal(resumed.subject.getWritingId(),group.items[1].id);
+  assert.equal(Object.keys(resumed.db().garden.groups).length,0);
+  assert.ok(e.requests.filter(request=>request.method==='POST').every(request=>request.url==='/api/study-sessions'));
 });
 
 test('pending and failed whole-group saves do not claim water or update the local snapshot',async()=>{
@@ -473,7 +522,7 @@ test('a lost group acknowledgement retries the same ID and evidence even across 
 
 test('a definite review deletion conflict cannot recreate content and permits a fresh start',async()=>{
   const group=makeGroup('poem','review'),items=Object.fromEntries(group.items.map(item=>[item.id,course(item.id)]));
-  const e=environment({items}),t=e.subject;await e.connect();e.alterServer(state=>{delete state.items[group.items[0].id];});
+  const e=environment({items}),t=e.subject;await e.connect();e.alterServer(state=>{delete state.items[group.items[0].id];state.hiddenCourses[group.items[0].id]=true;});
   await beginCompleted(e,group).save;
   assert.equal(Object.keys(e.db().activity).length,0);assert.equal(Object.keys(e.db().garden.groups).length,0);
   assert.equal(t.getSession().definiteFailure,true);t.navigate('poems');assert.equal(t.getSession(),null);
@@ -489,11 +538,11 @@ test('an uncertain whole-group save prevents navigation and duplicate completion
 test('poem ratings and immediate audio exposure remain distinct inside the temporary group',async()=>{
   for(const result of ['independent','supported','again']) {
     const e=environment(),t=e.subject,poems=samplePoems();t.setPoems(poems);await e.connect();
-    t.setSession({id:'poem-rating',type:'poem',mode:'learn',title:'古诗',count:5,items:poems.map(poem=>({id:poem.id,type:'poem',title:poem.title})),index:0,entries:[]});
+    t.setSession({id:'poem-rating',type:'poem',mode:'review',title:'古诗',count:5,items:poems.map(poem=>({id:poem.id,type:'poem',title:poem.title})),index:0,entries:[]});
     t.openReviewItem('poem-01','poem');await flush();
     await e.element(`poem-check-${result}`).onclick();const entry=t.getSession().entries[0];
     assert.equal(entry.result,result);assert.equal(entry.source,'parent');assert.equal(entry.skill,'poem-recitation');assert.equal(entry.details.observedExposure,false);
-    assert.ok(e.requests.every(request=>request.method==='GET'));
+    assert.ok(e.requests.filter(request=>request.method==='POST').every(request=>request.url==='/api/study-sessions'));
   }
   const e=environment(),t=e.subject,poems=samplePoems();t.setPoems(poems);await e.connect();const media=poemMediaProbe(e);
   t.setSession({items:poems.map(poem=>({id:poem.id,type:'poem',title:poem.title})),index:0});t.openReviewItem('poem-01','poem');await flush();
@@ -501,20 +550,90 @@ test('poem ratings and immediate audio exposure remain distinct inside the tempo
   assert.equal(t.getSession().entries[0].details.observedExposure,true);assert.equal(Object.keys(t.loadState().activity).length,0);
 });
 
-test('writing review distinguishes the dictation prompt from seeing the model before confirmation',async()=>{
-  for(const rehearsed of [false,true]) {
-    const e=environment(),t=e.subject;await e.connect();writingMediaProbe(e);
-    const ids=['write-char-6728','write-char-6c34','write-char-4e00','write-char-4e8c','write-char-4e09'];
-    t.setSession({id:'write-review',type:'write',mode:'review',title:'汉字',count:5,items:ids.map(id=>({id,type:'write'})),index:0,entries:[]});t.openReviewItem(ids[0],'write');await flush();
-    assert.equal(e.element('write-assessment').hidden,false);await e.element('write-check-prompt').onclick();
-    if(rehearsed){e.element('write-check-back').onclick();e.element('write-finish').onclick();e.element('write-paper').onclick();}
-    await e.element('write-check-independent').onclick();const entry=t.getSession().entries[0];
-    assert.equal(entry.result,'independent');assert.equal(entry.details.afterPractice,rehearsed);assert.equal(entry.details.method,'paper');assert.equal(entry.skill,'hanzi-writing');
-    assert.equal(Object.keys(t.loadState().activity).length,0);
+function beginWritingReview(e,media,extra={}) {
+  const ids=['write-char-6728','write-char-6c34','write-char-4e00'];
+  e.subject.setSession({id:'write-review',type:'write',mode:'review',title:'汉字',count:ids.length,
+    items:ids.map(id=>({id,type:'write'})),index:0,entries:[],...extra});
+  e.subject.openReviewItem(ids[0],'write');
+  return media.practices.at(-1);
+}
+
+test('writing review automatically records an unassisted stroke quiz without parent confirmation',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
+  const practice=beginWritingReview(e,media);await flush();
+  const html=e.element('write-detail-content').innerHTML;
+  assert.match(html,/id="write-practice-layer"/);
+  assert.doesNotMatch(html,/家长确认|纸上|id="write-(?:finish|paper|check-independent|assessment)"/);
+  assert.equal(practice.options.showOutline,false,'Review must start without the character model');
+  assert.match(html,/<[^>]*id="write-words-panel"[^>]*\bhidden\b[^>]*>/,'Word examples also reveal the answer');
+  await e.element('write-pronounce').onclick();
+  assert.equal(t.getSession().entries.length,0,'Hearing the prompt does not complete writing');
+  await practice.complete();await flush();const entry=t.getSession().entries[0];
+  assert.equal(entry.result,'independent');assert.equal(entry.source,'automatic');assert.equal(entry.skill,'hanzi-writing');
+  assert.equal(entry.details.method,'stroke-quiz');assert.equal(entry.details.engine,'hanzi-writer-3.7.3');
+  assert.equal(entry.details.totalStrokes,4);assert.equal(entry.details.completedStrokes,4);
+  assert.equal(entry.details.afterPractice,false);assert.equal(entry.details.outlineShown,false);
+  assert.equal(Object.keys(t.loadState().activity).length,0,'One character checkpoints the group; it does not award completion');
+});
+
+test('mistakes and every form of writing help produce supported evidence',async()=>{
+  for(const assistance of ['mistake','hint','auto-hint','words','demo','restart','outline']) {
+    const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
+    let practice=beginWritingReview(e,media);await flush();
+    if(assistance==='hint')await e.element('write-hint').onclick();
+    if(assistance==='auto-hint')practice.state('active',{hintsUsed:1,totalMistakes:3});
+    if(assistance==='words')e.element('write-show-words').onclick();
+    if(assistance==='demo'){
+      e.element('write-strokes-play').onclick();media.viewers.at(-1).notify('complete');
+      assert.equal(t.getSession().entries.length,0,'A played demonstration must not complete the quiz');
+    }
+    if(assistance==='restart'){await e.element('write-clear').onclick();practice=media.practices.at(-1);}
+    await practice.complete(assistance==='mistake'?{totalMistakes:1}:assistance==='outline'?{outlineShown:true}:{});await flush();
+    const entry=t.getSession().entries[0];
+    assert.equal(entry.result,'supported',`${assistance}: assisted writing must not become independent evidence`);
+    assert.equal(entry.source,'automatic');
+    if(['hint','auto-hint','words','demo','restart'].includes(assistance)) assert.equal(entry.details.afterPractice,true,`${assistance}: practice exposure must be retained`);
+    if(assistance==='words')assert.equal(practice.options.showOutline,false,'Word reveal alone must not change initial quiz mode');
   }
 });
 
-test('free poem playback remains exposure after leaving the card, but a failed start or a new day does not',async()=>{
+test('duplicate writing completion and callbacks from a departed page cannot advance another character',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
+  const first=beginWritingReview(e,media);await flush();
+  const completion=first.complete(),duplicate=first.complete();await Promise.all([completion,duplicate]);await flush();
+  assert.equal(t.getSession().entries.length,1);assert.equal(t.getSession().index,1);
+  await first.complete();await flush();assert.equal(t.getSession().entries.length,1);
+  const second=media.practices.at(-1);t.navigate('write');assert.equal(second.destroyed,true);
+  await second.complete();await flush();assert.equal(t.getSession(),null);
+  assert.equal(Object.values(e.db().studySessions)[0].entries.length,1);
+  assert.equal(Object.keys(e.db().activity).length,0);assert.equal(Object.keys(e.db().garden.groups).length,0);
+});
+
+test('writing cannot complete during a demonstration or after a data loading error',async()=>{
+  for(const mode of ['demo','error']) {
+    const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e,{failPractice:mode==='error'});
+    const practice=beginWritingReview(e,media);await flush();
+    if(mode==='demo')e.element('write-strokes-play').onclick();
+    await practice.complete();await flush();
+    assert.equal(t.getSession().entries.length,0,`${mode}: unavailable input must never count as completed writing`);
+    assert.ok(e.requests.every(request=>request.method==='GET'));
+    if(mode==='error'){
+      assert.equal(e.element('write-retry').hidden,false);
+      assert.equal(e.element('write-hint').disabled,true);
+    }
+  }
+});
+
+test('free writing uses automatic feedback without creating a learning record',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e),before=e.db();
+  t.openWriteCharacter('write-char-6728');await flush();const practice=media.practices.at(-1);
+  assert.equal(practice.options.showOutline,true);
+  await practice.complete();await flush();
+  assert.equal(t.getSession(),null);assert.deepEqual(e.db(),before);
+  assert.ok(e.requests.every(request=>request.method==='GET'));
+});
+
+test('seeing the free poem text counts as exposure even if playback fails, and expires next day',async()=>{
   for(const scenario of ['interrupted','failed','next-day']) {
     const e=environment(),t=e.subject,poems=samplePoems();t.setPoems(poems);await e.connect();const media=poemMediaProbe(e);
     await t.openPoemFromList('poem-01');e.element('btn-speak').onclick();
@@ -524,30 +643,101 @@ test('free poem playback remains exposure after leaving the card, but a failed s
     t.setSession({type:'poem',mode:'review',items:poems.map(poem=>({id:poem.id,type:'poem'})),index:0});
     t.openReviewItem('poem-01','poem');await flush();await e.element('poem-check-independent').onclick();
     const entry=t.getSession().entries[0];assert.equal(entry.result,'independent');
-    assert.equal(entry.details.observedExposure,scenario==='interrupted');
-    assert.equal(Object.keys(t.loadState().activity).length,0);assert.ok(e.requests.every(request=>request.method==='GET'));
+    assert.equal(entry.details.observedExposure,scenario!=='next-day');
+    assert.equal(Object.keys(t.loadState().activity).length,0);assert.ok(e.requests.filter(request=>request.method==='POST').every(request=>request.url==='/api/study-sessions'));
   }
 });
 
 test('free character models remain rehearsal evidence for same-day blind review only',async()=>{
   for(const nextDay of [false,true]) {
-    const e=environment(),t=e.subject;await e.connect();writingMediaProbe(e);
+    const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
     t.openWriteCharacter('write-char-6728');await flush();t.navigate('write');
     if(nextDay)e.at('2026-10-02');
     t.setSession({type:'write',mode:'review',items:[{id:'write-char-6728',type:'write'},{id:'write-char-6c34',type:'write'}],index:0});
-    t.openReviewItem('write-char-6728','write');await flush();await e.element('write-check-independent').onclick();
-    const entry=t.getSession().entries[0];assert.equal(entry.result,'independent');assert.equal(entry.details.afterPractice,!nextDay);
-    assert.equal(Object.keys(t.loadState().activity).length,0);assert.ok(e.requests.every(request=>request.method==='GET'));
+    t.openReviewItem('write-char-6728','write');await flush();await media.practices.at(-1).complete();await flush();
+    const entry=t.getSession().entries[0];assert.equal(entry.result,nextDay?'independent':'supported');assert.equal(entry.details.afterPractice,!nextDay);
+    assert.equal(Object.keys(t.loadState().activity).length,0);assert.ok(e.requests.filter(request=>request.method==='POST').every(request=>request.url==='/api/study-sessions'));
   }
 });
 
-test('custom character details without pronunciation keep the visible model and stage evidence only',async()=>{
-  const id='custom-char-da',character={id,c:'龘',strokes:'48画',tip:'老师教的字'};
-  const e=environment({customCharacters:{[id]:character}}),t=e.subject;await e.connect();writingMediaProbe(e);
+test('custom characters without local stroke data remain browsable but never enter automatic study plans',async()=>{
+  const unavailable={id:'custom-char-da',c:'龘',strokes:'48画',tip:'老师教的字'};
+  const available={id:'custom-classroom-mu',c:'木',strokes:'4画',tip:'老师教的字'};
+  const characters=[unavailable,available];
+  const e=environment({customCharacters:Object.fromEntries(characters.map(ch=>[ch.id,ch])),items:Object.fromEntries(characters.map(ch=>[ch.id,course(ch.id,'write')]))}),t=e.subject;
+  await e.connect();writingMediaProbe(e);t.navigate('write');
+  assert.match(e.element('write-content').innerHTML,/data-write-id="custom-char-da"/,'Missing data must not erase saved custom content');
+  t.openWriteCharacter(unavailable.id);await flush();assert.equal(t.getWritingId(),unavailable.id);
+  t.navigate('write');
+  const catalog=await t.studyCatalog();
+  assert.ok(!catalog.some(item=>item.id===unavailable.id));assert.ok(catalog.some(item=>item.id===available.id));
+  await t.startStudyGroup('write','review');await flush();
+  assert.deepEqual(copy(t.getSession().items.map(item=>item.id)),[available.id]);
+  assert.equal(t.getSession().entries.length,0);assert.equal(Object.keys(e.db().activity).length,0);
+});
+
+test('an unavailable writing catalog cannot start or complete a group and can be retried',async()=>{
+  const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);e.catalogUnavailable(true);
+  await t.startStudyGroup('write','learn');await flush();
+  assert.equal(t.getSession(),null);assert.equal(media.practices.length,0);
+  assert.ok(e.requests.every(request=>request.method==='GET'),'Missing stroke data must not fabricate a study plan or completed evidence');
+  assert.equal(Object.keys(e.db().activity).length,0);assert.equal(Object.keys(e.db().garden.groups).length,0);
+  e.catalogUnavailable(false);await t.startStudyGroup('write','learn');await flush();
+  assert.equal(t.getSession().type,'write');assert.equal(t.getSession().entries.length,0);assert.equal(media.practices.length,1);
+  assert.equal(e.requests.filter(request=>request.url==='/data/writing-strokes.json').length,2,'The failed catalog request must be retried');
+});
+
+test('custom characters without pronunciation use a visible model and only supported evidence',async()=>{
+  const id='custom-char-chen',character={id,c:'辰',strokes:'7画',tip:'老师教的字'};
+  const e=environment({customCharacters:{[id]:character}}),t=e.subject;await e.connect();const media=writingMediaProbe(e);
   t.setSession({type:'write',mode:'review',items:[{id,type:'write'},{id:'write-char-6728',type:'write'}],index:0});t.openReviewItem(id,'write');await flush();
-  assert.notEqual(e.element('write-assessment').hidden,false);assert.match(e.element('write-detail-content').innerHTML,/龘 字描红画布/);
-  e.element('write-finish').onclick();e.element('write-paper').onclick();assert.equal(e.element('write-check-prompt').hidden,true);
-  await e.element('write-check-independent').onclick();assert.equal(t.getSession().entries[0].details.afterPractice,true);assert.equal(Object.keys(t.loadState().activity).length,0);
+  const practice=media.practices.at(-1);assert.equal(practice.options.showOutline,true);
+  assert.match(e.element('write-detail-content').innerHTML,/id="write-practice-layer"/);
+  await practice.complete();await flush();
+  const entry=t.getSession().entries[0];assert.equal(entry.result,'supported');assert.equal(entry.source,'automatic');
+  assert.equal(entry.details.afterPractice,true);assert.equal(entry.details.outlineShown,true);assert.equal(Object.keys(t.loadState().activity).length,0);
+});
+
+test('revealing a poem answer is saved as exposure and mixed writing plans still begin with recall',async()=>{
+  const e=environment(),t=e.subject,poems=samplePoems();t.setPoems(poems);await e.connect();
+  t.setSession({type:'poem',mode:'review',items:poems.map(p=>({id:p.id,type:'poem',title:p.title,phase:'review'})),index:0});
+  t.openReviewItem(poems[0].id,'poem');await flush();
+  assert.match(e.element('poem-detail-content').innerHTML,/id="poem-body" hidden/);
+  e.element('poem-reveal').onclick();assert.equal(e.element('poem-body').hidden,false);
+  await e.element('poem-check-independent').onclick();
+  assert.equal(t.getSession().entries[0].details.observedExposure,true);
+  t.navigate('write');const media=writingMediaProbe(e);
+  t.setSession({id:'mixed-writing',type:'write',mode:'learn',items:[{id:'write-char-6728',type:'write',title:'木',phase:'review'},{id:'write-char-6c34',type:'write',title:'水',phase:'learn'}],index:0});
+  t.openReviewItem('write-char-6728','write');await flush();
+  assert.equal(media.practices.at(-1).options.showOutline,false);
+  await media.practices.at(-1).complete();await flush();
+  assert.equal(t.getSession().entries[0].details.afterPractice,false);
+  assert.equal(t.getSession().entries[0].result,'independent');
+  assert.equal(media.practices.at(-1).options.showOutline,true,'The next learn-phase character shows its model');
+});
+test('a fully checkpointed draft resumes directly into one final commit',async()=>{
+  const group=makeGroup(),state=emptyState();
+  state.studySessions[group.id]={id:group.id,type:group.type,mode:group.mode,items:group.items,entries:group.entries.map(entry=>({...entry,day:'2026-09-30',at:'2026-09-30T10:00:00Z'})),createdAt:'2026-09-30T10:00:00Z'};
+  const e=environment(state);await e.connect();await e.subject.startStudyGroup('poem','learn');
+  assert.equal(e.subject.getSession(),null);
+  assert.equal(Object.keys(e.db().activity).length,5);
+  assert.equal(Object.values(e.db().activity)[0].day,'2026-09-30');
+  assert.equal(Object.keys(e.db().studySessions).length,0);
+  assert.equal(Object.keys(e.db().garden.groups).length,1);
+});
+test('a stale device can adopt the server answer prefix after a conflict',async()=>{
+  const e=environment(),t=e.subject;await e.connect();await t.startStudyGroup('write','learn');await flush();
+  const group=t.getSession(),first=group.items[0],second=group.items[1];
+  const saved={id:first.id,type:'write',title:first.title,skill:'hanzi-writing',result:'supported',source:'parent',details:{afterPractice:true},day:'2026-10-01',at:'2026-10-01T01:00:00Z'};
+  e.alterServer(state=>{state.studySessions[group.id].entries=[saved];});
+  e.hold(true);
+  const completion=t.completePractice(first.id,'remember',{type:'write',title:first.title,skill:'hanzi-writing'});
+  (await e.nextRequest()).reply({status:409,data:{error:'study_session_conflict',message:'另一个设备已保存',payload:e.db()}});
+  await completion;
+  assert.equal(group.draftConflict,true);assert.match(e.element('home-content').innerHTML,/继续服务器已保存的进度/);
+  e.hold(false);await e.element('study-checkpoint-retry').onclick({currentTarget:e.element('study-checkpoint-retry')});await flush();
+  assert.equal(t.getSession().index,1);assert.equal(t.getWritingId(),second.id);
+  assert.equal(t.getSession().entries[0].result,'supported');
 });
 
 async function main(){

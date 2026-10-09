@@ -1907,6 +1907,24 @@ button[hidden],*[hidden] {
   height:100%;
 }
 
+.write-practice-layer {
+  position:absolute;
+  inset:0;
+  touch-action:none;
+  user-select:none;
+  cursor:crosshair;
+}
+
+.write-practice-layer svg {
+  display:block;
+  width:100%;
+  height:100%;
+  touch-action:none;
+}
+
+.write-instruction { text-align:center; color:#718068; font-size:13px; }
+.write-show-words { display:block; margin:10px auto; }
+
 .write-shape-loading {
   position:absolute;
   inset:0;
@@ -2036,6 +2054,7 @@ button[hidden],*[hidden] {
 
 .write-main-controls {
   justify-content:center;
+  flex-wrap:wrap;
   gap:12px;
   margin:14px 0 8px;
 }

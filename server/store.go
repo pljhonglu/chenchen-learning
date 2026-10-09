@@ -24,10 +24,11 @@ const progressSchema = `CREATE TABLE IF NOT EXISTS progress (
 )`
 
 type progressStore struct {
-	db           *sql.DB
-	path         string
-	builtinPoems []classroomPoem
-	now          func() time.Time // Optional clock for server-owned garden transactions.
+	db                *sql.DB
+	path              string
+	builtinPoems      []classroomPoem
+	writingCharacters map[string]bool  // Available bundled stroke data; nil disables asset migration in legacy tests/tools.
+	now               func() time.Time // Optional clock for server-owned garden transactions.
 }
 
 type progress struct {
@@ -91,10 +92,6 @@ func scanProgress(row rowScanner) (progress, error) {
 }
 
 func (s *progressStore) get(ctx context.Context) (progress, error) {
-	if len(s.builtinPoems) == 0 {
-		return scanProgress(s.db.QueryRowContext(ctx,
-			"SELECT payload, updated_at FROM progress WHERE id = 1"))
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return progress{}, err
@@ -106,6 +103,10 @@ func (s *progressStore) get(ctx context.Context) (progress, error) {
 		return progress{}, err
 	}
 	stored, err = s.ensureBuiltinPoems(ctx, tx, stored, time.Now())
+	if err != nil {
+		return progress{}, err
+	}
+	stored, err = s.pruneUnavailableWritingSessions(ctx, tx, stored, s.gardenNow())
 	if err != nil {
 		return progress{}, err
 	}
@@ -141,11 +142,9 @@ func (s *progressStore) put(ctx context.Context, payload json.RawMessage, update
 	if err != nil {
 		return progress{}, "", err
 	}
-	if len(s.builtinPoems) > 0 {
-		payload, err = s.retainPoemRemovals(payload, previous)
-		if err != nil {
-			return progress{}, "", err
-		}
+	payload, err = s.retainPoemRemovals(payload, previous)
+	if err != nil {
+		return progress{}, "", err
 	}
 	if len(payload) > maxStoredProgressBytes {
 		return progress{}, "", &patchError{http.StatusRequestEntityTooLarge, "payload too large", "stored progress exceeds 32 MiB"}

@@ -68,10 +68,8 @@ func (s *progressStore) retainPoemRemovals(payload json.RawMessage, previous pro
 	}
 	changed := false
 	for id, tombstone := range removed {
-		if s.isBuiltinPoem(id) {
-			hidden[id] = tombstone
-			changed = true
-		}
+		hidden[id] = tombstone
+		changed = true
 	}
 	if !changed {
 		return payload, nil
@@ -84,9 +82,6 @@ func (s *progressStore) retainPoemRemovals(payload json.RawMessage, previous pro
 // transaction as every read/update, so a stale browser cannot reset progress.
 // Tombstones make a parent's explicit removal survive reads and restarts.
 func (s *progressStore) ensureBuiltinPoems(ctx context.Context, tx *sql.Tx, stored progress, now time.Time) (progress, error) {
-	if len(s.builtinPoems) == 0 {
-		return stored, nil
-	}
 	state := make(map[string]json.RawMessage)
 	if stored.Found {
 		if err := json.Unmarshal(stored.Payload, &state); err != nil || state == nil {
@@ -109,7 +104,36 @@ func (s *progressStore) ensureBuiltinPoems(ctx context.Context, tx *sql.Tx, stor
 	today := now.In(time.FixedZone("Asia/Shanghai", 8*60*60)).Format("2006-01-02")
 	timestamp := now.UTC().Format(time.RFC3339Nano)
 	changed := false
-	for _, poem := range s.builtinPoems {
+	poems := append([]classroomPoem{}, s.builtinPoems...)
+	known := make(map[string]bool)
+	for _, poem := range poems {
+		known[poem.ID] = true
+	}
+	custom, err := gardenCollection(state, "customPoems")
+	if err != nil {
+		return progress{}, err
+	}
+	for id, raw := range custom {
+		if known[id] {
+			continue
+		}
+		var value map[string]json.RawMessage
+		if json.Unmarshal(raw, &value) != nil {
+			return progress{}, errors.New("stored custom poem is invalid")
+		}
+		poems = append(poems, classroomPoem{ID: id, Title: jsonString(value["title"])})
+		known[id] = true
+	}
+	for id, raw := range items {
+		if known[id] {
+			continue
+		}
+		var value map[string]json.RawMessage
+		if json.Unmarshal(raw, &value) == nil && jsonString(value["type"]) == "poem" {
+			poems = append(poems, classroomPoem{ID: id, Title: jsonString(value["title"])})
+		}
+	}
+	for _, poem := range poems {
 		if _, removed := hidden[poem.ID]; removed {
 			if _, exists := items[poem.ID]; exists {
 				delete(items, poem.ID)
@@ -137,8 +161,9 @@ func (s *progressStore) ensureBuiltinPoems(ctx context.Context, tx *sql.Tx, stor
 				set(key, value)
 			}
 		}
-		if string(item["learned"]) != "true" {
-			set("learned", true)
+		if _, exists := item["learned"]; exists {
+			delete(item, "learned")
+			itemChanged = true
 		}
 		var nextReview string
 		_ = json.Unmarshal(item["nextReview"], &nextReview)
@@ -146,7 +171,9 @@ func (s *progressStore) ensureBuiltinPoems(ctx context.Context, tx *sql.Tx, stor
 			set("nextReview", today)
 		}
 		if itemChanged {
-			set("updatedAt", timestamp)
+			if _, present := item["updatedAt"]; !present {
+				set("updatedAt", timestamp)
+			}
 			items[poem.ID], _ = json.Marshal(item)
 			changed = true
 		}

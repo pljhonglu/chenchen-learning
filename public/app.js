@@ -109,7 +109,7 @@
       }
       if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("服务器返回了无效的进度数据");
       if (!res.ok) {
-        const error = new Error(data.error || "server_unavailable");
+        const error = new Error(data.message || data.error || "server_unavailable");
         error.status = res.status;
         error.data = data;
         throw error;
@@ -119,7 +119,7 @@
       if (method === "GET" && !(data.found === true && hasPayload || data.found === false && (data.payload === null || data.payload === undefined))) {
         throw new Error("服务器进度格式不正确，请稍后重试");
       }
-      if (["PATCH", "POST"].includes(method) && !(data.ok === true && hasPayload)) throw new Error("服务器尚未确认保存，请重试");
+      if (["PATCH", "POST", "DELETE"].includes(method) && !(data.ok === true && hasPayload)) throw new Error("服务器尚未确认保存，请重试");
       return data;
     } catch (error) {
       if (controller.signal.aborted) {
@@ -135,7 +135,7 @@
 
   function isRecord(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
   function validPayload(value) {
-    return isRecord(value) && isRecord(value.items) && ["activity", "customPoems", "customCharacters", "hiddenCourses"].every(key=>value[key] === undefined || isRecord(value[key]));
+    return isRecord(value) && isRecord(value.items) && ["activity", "customPoems", "customCharacters", "hiddenCourses", "studySessions"].every(key=>value[key] === undefined || isRecord(value[key]));
   }
 
   function acceptServerState(data) {
@@ -189,7 +189,7 @@
     const s = loadState();
     const today = todayStr();
     return Object.values(s.items).filter(
-      (it) => it.learned && it.nextReview && it.nextReview <= today
+      (it) => (it.type === "poem" || it.learned) && it.nextReview && it.nextReview <= today
     ).sort((a, b) => a.nextReview.localeCompare(b.nextReview) || (a.createdAt || "").localeCompare(b.createdAt || ""));
   }
 
@@ -238,7 +238,8 @@
       startStudy:() => startStudyGroup("english", "learn"),
       groupStartHtml:() => groupStartHtml("english"),
       completeGroup:entries => completeEnglishGroup(entries),
-      groupSaving:() => !!reviewSession?.saving,
+      checkpointEnglishGroup,
+      groupSaving:() => !!(reviewSession?.saving || reviewSession?.draftSaving),
       isActive:() => currentView === "english",
       onHome:() => navigate("home"),
       onExit:() => navigate("english"),
@@ -370,15 +371,27 @@
     });
   }
 
+  let writingCatalogPromise = null;
+  function availableWritingCharacters() {
+    if (!writingCatalogPromise) writingCatalogPromise = fetch("/data/writing-strokes.json").then(async response=>{
+      if (!response.ok) throw new Error("汉字笔画目录暂时没有打开，请重试。");
+      const manifest = await response.json();
+      if (!isRecord(manifest.characters) || !Object.keys(manifest.characters).length) throw new Error("汉字笔画目录暂时没有打开，请重试。");
+      return new Set(Object.keys(manifest.characters));
+    }).catch(error=>{writingCatalogPromise=null;throw error;});
+    return writingCatalogPromise;
+  }
+
   async function studyCatalog() {
-    const catalogs = await Promise.allSettled([ensurePoems(),getEnglishModule().catalog()]);
+    const catalogs = await Promise.allSettled([ensurePoems(),getEnglishModule().catalog(),availableWritingCharacters()]);
     const english = catalogs[1].status === "fulfilled" ? catalogs[1].value : [];
+    const writable = catalogs[2].status === "fulfilled" ? catalogs[2].value : new Set();
     return [
       ...POEMS.map(item=>({id:item.id,type:"poem",title:item.title})),
       {id:"math-addsub-10",type:"math",title:"10以内加减法"},
       {id:"math-decomp-10",type:"decomp",title:"10以内分解组合"},
       ...[...INITIALS,...FINALS].map(symbol=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`})),
-      ...writingCharacters().map(item=>({id:item.id,type:"write",title:`汉字·${item.c}`})),
+      ...writingCharacters().filter(item=>writable.has(item.c)).map(item=>({id:item.id,type:"write",title:`汉字·${item.c}`})),
       ...english,
     ];
   }
@@ -387,40 +400,116 @@
     return Object.values(loadState().garden?.groups || {}).filter(group=>group.day===todayStr() && group.waterAwarded).length;
   }
 
+
+  function currentStudyPhase() {
+    return reviewSession?.items[reviewSession.index]?.phase || reviewSession?.mode || "learn";
+  }
+
   function groupStartHtml(type) {
     const config = window.ChenchenStudyGroups.CONFIG[type];
-    const remaining = Math.max(0,3-waterEarnedToday());
-    return `<section class="study-start-card"><div><p class="eyebrow">一组一个小收获</p><h3>${config.count} ${config.unit}，一起学一组</h3><p>${remaining ? `整组完成获得 1 滴水 · 今天还可获得 ${remaining} 滴` : "今天的水滴已领完，仍可完成学习并记录"}</p><small>退出后从头开始。单独点卡片只浏览，不留学习记录。</small></div><button class="btn btn-primary study-start-button" data-start-study="${type}">▶ 开始学习</button></section>`;
+    const draft = window.ChenchenStudyGroups.pending(loadState(),type);
+    const amount = ["math","decomp"].includes(type) ? "最多 10 题，复习容易出错的知识点" : `每次最多 ${config.count} ${config.unit}，到期内容优先`;
+    return `<section class="study-start-card"><div><p class="eyebrow">每天一点点，记得更久</p><h3>${amount}</h3><p>${type==="poem" ? "学过的古诗，按每首的复习日期再想一想。" : "先复习今天到期的内容，再学一点新的。"}</p><small>${draft ? "上次的进度已保存，可以接着完成。" : "完成的项目会保存进度，休息后可以继续。"}</small></div><button class="btn btn-primary study-start-button" data-start-study="${type}">▶ ${draft ? "继续上次学习" : type==="poem" ? "开始复习" : "开始学习"}</button></section>`;
   }
 
   function bindStudyStart(root) {
     root.querySelectorAll("[data-start-study]").forEach(button=>button.onclick=()=>startStudyGroup(button.dataset.startStudy,"learn"));
   }
 
+  async function persistStudyDraft(group) {
+    const items = group.items.map(({id,type,title,phase,source,afterPractice})=>({id,type,title,phase,source,afterPractice}));
+    const body = JSON.stringify({id:group.id,type:group.type,mode:group.mode,items,entries:group.entries,
+      progress:{openedDay:todayStr(),...(group.practice ? {practice:group.practice,questionResults:group.practice.questionResults || []} : {})}});
+    group.draftSaving = true;
+    try {
+      await queueServerTask(async()=>{
+        const response = await apiFetch("/api/study-sessions",{method:"POST",body});
+        acceptServerState(response);
+      });
+      group.draftFailed = false;
+      group.draftConflict = false;
+      return true;
+    } catch(error) {
+      group.draftFailed = true;
+      group.draftConflict = error.status===409;
+      if (validPayload(error.data?.payload)) acceptServerState(error.data);
+      throw error;
+    } finally {group.draftSaving=false;}
+  }
+
+  function openStudyPosition(group) {
+    if (reviewSession!==group) return;
+    showingCelebration = false;
+    if (group.index>=group.items.length) return saveStudyGroup(group);
+    if (group.resumed && group.resumeExposure!==false) {
+      observedExposure(group.type,group.items[group.index].id,true);
+    }
+    if (group.type==="english") {
+      showView("english");
+      return getEnglishModule().open({group});
+    }
+    openReviewItem(group.items[group.index].id,group.type);
+  }
+
+
+  async function discardStudyDraft(group) {
+    const response=await apiFetch("/api/study-sessions?id="+encodeURIComponent(group.id),{method:"DELETE"});
+    acceptServerState(response);
+    reviewSession=null;
+    navigate("home");
+  }
+
+  function showCheckpointRetry(group, retry, message) {
+    showingCelebration=true;
+    showView("home");
+    const root=document.getElementById("home-content");
+    root.innerHTML=`<div class="card celebration"><h2>${group.draftConflict ? "学习进度已更新" : "正在记住这次进度"}</h2><p role="status">${escapeHtml(message || "还没确认保存，请重试；已经完成的答案不会重复记录。")}</p><button class="btn btn-primary" id="study-checkpoint-retry">${group.draftConflict ? "继续服务器已保存的进度" : "重试保存进度"}</button>${group.draftConflict ? '<p>如果计划里的内容已被移除，可以放弃这份未完成计划后重新安排。</p><button class="text-btn" id="study-draft-discard">放弃这份未完成计划</button>' : ""}</div>`;
+    document.getElementById("study-checkpoint-retry").onclick=async event=>{
+      event.currentTarget.disabled=true;
+      if(group.draftConflict) {
+        reviewSession=null;showingCelebration=false;
+        return startStudyGroup(group.type,group.mode);
+      }
+      try {await retry();}
+      catch(error) {showCheckpointRetry(group,retry,error.message);}
+    };
+    const discard=document.getElementById("study-draft-discard");
+    if(group.draftConflict && discard) discard.onclick=async()=>{
+      discard.disabled=true;
+      try {await discardStudyDraft(group);}
+      catch(error){showCheckpointRetry(group,retry,error.message);}
+    };
+  }
+
   let studyStarting = false;
   async function startStudyGroup(type, mode = "learn") {
-    if (studyStarting || reviewSession?.saving) return;
+    if (studyStarting || reviewSession?.saving || reviewSession?.draftSaving) return;
     studyStarting = true;
     const generation = practiceGeneration;
     try {
       if (!await syncNow()) throw new Error("暂时连不上服务器，请重试。");
+      if (type === "write") await availableWritingCharacters();
       const catalog = await studyCatalog();
       if (generation !== practiceGeneration) return;
-      const group = type ? window.ChenchenStudyGroups.select(catalog,loadState(),type,mode,todayStr()) : window.ChenchenStudyGroups.reviews(catalog,loadState(),todayStr())[0];
-      if (!group) {toast(mode === "review" ? "暂时没有可组成完整一组的到期内容，今天可以休息啦。" : "当前可用内容不足一组，先看看卡片，或换个学科学习吧。");return;}
-      reviewSession = {...group,id:globalThis.crypto?.randomUUID?.() || `group-${Date.now()}-${Math.random().toString(36).slice(2)}`,index:0,entries:[],saving:false};
-      if (group.type === "english") {
-        showView("english");
-        await getEnglishModule().open({group:reviewSession});
-      } else openReviewItem(group.items[0].id,group.type);
+      const plan = type ? window.ChenchenStudyGroups.select(catalog,loadState(),type,mode,todayStr()) : window.ChenchenStudyGroups.reviews(catalog,loadState(),todayStr())[0];
+      if (!plan) {toast("今天安排的内容已经完成啦，可以休息，也可以自由看看卡片。");return;}
+      const group = reviewSession = {...plan,id:plan.id || globalThis.crypto?.randomUUID?.() || `group-${Date.now()}-${Math.random().toString(36).slice(2)}`,index:plan.index || 0,entries:plan.entries || [],saving:false};
+      const begin=async()=>{await persistStudyDraft(group);return openStudyPosition(group);};
+      try {await begin();}
+      catch(error) {
+        if (error.data?.error==="study_session_exists") {
+          reviewSession=null;
+          toast("另一处已开始这一学科，进度已同步，请点继续学习。");
+        } else showCheckpointRetry(group,begin,error.message);
+      }
     } catch(error) {toast(error.message || "学习组暂时没有打开，请再试一次。");}
     finally {studyStarting=false;}
   }
 
   function sessionBanner() {
     if (!reviewSession) return "";
-    const item = reviewSession.items[reviewSession.index];
-    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title}${reviewSession.mode === "review" ? "复习" : "学习"} · ${["math","decomp"].includes(reviewSession.type) ? "10 题一组" : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${item?.afterPractice ? "顺便温习 · 原定复习日期不变" : waterEarnedToday() >= 3 ? "今天水滴已领完，本组仍会记录学习" : "整组完成，收获 1 滴水"}</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
+    const phase=currentStudyPhase();
+    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title} · ${["math","decomp"].includes(reviewSession.type) ? `${reviewSession.count} 题` : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${phase==="review" ? "到期复习 · 先自己想一想" : "新内容 · 先学一学"} · 休息后可继续</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
   }
 
   function bindSessionExit() {
@@ -432,22 +521,37 @@
   let pendingPracticeAttempt = null;
   async function completePractice(id, result, meta) {
     const group = reviewSession;
-    if (!group || group.saving || group.items[group.index]?.id !== id) return true;
+    if (!group || group.saving || group.draftSaving || group.draftFailed || group.items[group.index]?.id !== id) return true;
     const selected = group.items[group.index];
     const entries = meta.entries || [{id,type:meta.type,title:meta.title || selected.title,skill:meta.skill || "general",result:ASSESSMENT_RESULT[result] || result,source:meta.source || "parent",details:meta.details || {}}];
     group.entries.push(...entries.map(entry=>({...entry,details:{...entry.details,...(selected.afterPractice ? {afterPractice:true} : {})}})));
-    group.index++;
-    if (group.index < group.items.length) {
-      const next = group.items[group.index];
-      openReviewItem(next.id,next.type);
-    } else await saveStudyGroup(group);
+    const nextIndex=group.index+1;
+    const advance=async()=>{
+      await persistStudyDraft(group);
+      group.index=nextIndex;
+      group.resumed=false;
+      return openStudyPosition(group);
+    };
+    try {await advance();}
+    catch(error) {showCheckpointRetry(group,advance,error.message);}
+    return true;
+  }
+
+  async function checkpointEnglishGroup(entries, nextIndex) {
+    const group=reviewSession;
+    if (!group || group.type!=="english") throw new Error("本组已经关闭，请重新打开。");
+    group.entries=entries;
+    try {await persistStudyDraft(group);}
+    catch(error) {if(group.draftConflict) showCheckpointRetry(group,()=>checkpointEnglishGroup(entries,nextIndex),error.message);throw error;}
+    group.index=nextIndex;
+    group.resumed=false;
     return true;
   }
 
   async function completeEnglishGroup(entries) {
     const group = reviewSession;
     if (!group || group.type !== "english") return;
-    group.entries = entries.map(entry=>({...entry,details:{...entry.details,...(group.items.find(item=>item.id===entry.id)?.afterPractice ? {afterPractice:true} : {})}}));
+    group.entries = entries;
     await saveStudyGroup(group);
   }
 
@@ -481,7 +585,8 @@
         document.getElementById("study-save-status").textContent = "本组未保存，部分课堂内容可能已经更改。可以返回首页，重新开始一组。";
         const back = document.createElement("button");
         back.className = "btn btn-ghost"; back.textContent = "返回首页";
-        back.onclick = ()=>navigate("home");root.appendChild(back);
+        back.textContent = "放弃失效计划，返回首页";
+        back.onclick = async()=>{back.disabled=true;try{await discardStudyDraft(group);}catch(error){back.disabled=false;toast(error.message);}};root.appendChild(back);
       }
     }
   }
@@ -546,7 +651,7 @@
 
   function poemStatus(id) {
     const it = getItem(id);
-    if (!it || !it.learned) return { label: "已暂停复习", cls: "" };
+    if (!it?.nextReview) return { label: "今天再想一想", cls: "due" };
     const today = todayStr();
     if (it.nextReview && it.nextReview <= today)
       return { label: "再想一想", cls: "due" };
@@ -577,7 +682,7 @@
       const today = todayStr();
       list = list.filter((p) => {
         const it = getItem(p.id);
-        return it?.learned && it.nextReview <= today;
+        return !it?.nextReview || it.nextReview <= today;
       });
     }
 
@@ -676,6 +781,8 @@
 
     const it = getItem(id);
     const enrolled = !!reviewSession && reviewSession.type === "poem";
+    const recall = enrolled && currentStudyPhase() === "review";
+    if (!recall) observedExposure("poem",id,true);
 
     el.innerHTML = `
       ${sessionBanner()}<div class="poem-detail card">
@@ -695,7 +802,8 @@
         </div>
         <div class="poem-reading${POEM_ILLUSTRATIONS[id] ? " has-picture" : ""}">
           ${poemIllustration(poem, true)}
-          <div class="poem-body" id="poem-body">${body}</div>
+          <div class="poem-body" id="poem-body" ${recall ? "hidden" : ""}>${body}</div>
+          ${recall ? `<div id="poem-recall-prompt"><p>看到题目，试着自己背一背。</p><button class="btn btn-ghost" id="poem-reveal">想不起来，看看原文</button></div>` : ""}
         </div>
         <div class="speak-bar">
           <button type="button" class="btn btn-speak" id="btn-speak">▶ 朗读</button>
@@ -704,6 +812,11 @@
       </div>`;
 
     document.getElementById("back-poems").onclick = () => navigate("poems");
+    if (recall) document.getElementById("poem-reveal").onclick = () => {
+      observedExposure("poem",id,true);
+      document.getElementById("poem-body").hidden=false;
+      document.getElementById("poem-recall-prompt").hidden=true;
+    };
     if (enrolled) bindAssessment("poem-check",id,async result => {
       const r = REVIEW_RESULT[result];
       if (await completePractice(id,r,{type:"poem",title:displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""),requireClassroom:enrolled,
@@ -750,12 +863,14 @@
 
   // ---------- Math ----------
   const MATH_ROUND_SIZE = 10;
+  let mathRoundSize = MATH_ROUND_SIZE;
   let mathQuestions = [];
   let mathQuestionKeys = [];
   let mathMode = "addsub";
   let mathScore = { ok: 0, total: 0 };
   let currentQ = null;
   let mathQuestionAnswered = false;
+  let mathSaving = false;
 
   function randInt(a, b) {
     return a + Math.floor(Math.random() * (b - a + 1));
@@ -789,30 +904,8 @@
   }
 
   function genBondItem() {
-    const n = randInt(2, 10);
-    const left = randInt(0, n);
-    const right = n - left;
-    const mode = Math.random() < 0.5 ? "decomp" : "compose";
-    let blanks;
-    const r = Math.random();
-    if (mode === "decomp") {
-      if (r < 0.4) blanks = { whole: false, left: false, right: true };
-      else if (r < 0.75) blanks = { whole: false, left: true, right: false };
-      else blanks = { whole: false, left: true, right: true };
-    } else {
-      if (r < 0.5) blanks = { whole: true, left: false, right: false };
-      else if (r < 0.75) blanks = { whole: false, left: true, right: false };
-      else blanks = { whole: false, left: false, right: true };
-    }
-    return {
-      n,
-      left,
-      right,
-      mode,
-      blanks,
-      answers: { whole: null, left: null, right: null },
-      status: "open",
-    };
+    const questions = window.ChenchenMath.pool("decomp");
+    return questions[randInt(0,questions.length-1)];
   }
 
   function firstBlankSlot(item) {
@@ -834,8 +927,8 @@
   }
 
   function genBondSheet() {
-    bondQIndex += 1;
-    const item = reviewSession && mathQuestions[mathCompleted] ? mathQuestions[mathCompleted] : genBondItem();
+    bondQIndex = reviewSession?.practice ? reviewSession.practice.index + 1 : bondQIndex + 1;
+    const item = reviewSession?.practice ? JSON.parse(JSON.stringify(mathQuestions[reviewSession.practice.index])) : genBondItem();
     return {
       item,
       qIndex: bondQIndex,
@@ -905,14 +998,14 @@
   function bindBondSheet(panel) {
     panel.querySelectorAll(".nb-box").forEach((btn) => {
       btn.onclick = () => {
-        if (!bondSheet || bondSheet.checked) return;
+        if (mathSaving || !bondSheet || bondSheet.checked) return;
         bondSheet.activeSlot = btn.dataset.slot;
         renderBondPanel();
       };
     });
     panel.querySelectorAll(".nb-pad button[data-n]").forEach((btn) => {
       btn.onclick = () => {
-        if (!bondSheet || !bondSheet.activeSlot || bondSheet.checked) return;
+        if (mathSaving || !bondSheet || !bondSheet.activeSlot || bondSheet.checked) return;
         const item = bondSheet.item;
         const slot = bondSheet.activeSlot;
         if (!item?.blanks[slot]) return;
@@ -936,7 +1029,7 @@
   }
 
   function checkBondSheet() {
-    if (!bondSheet || bondSheet.checked) return;
+    if (mathSaving || !bondSheet || bondSheet.checked) return;
     const item = bondSheet.item;
     const need = ["whole", "left", "right"].filter(s=>item.blanks[s]);
     if (!need.every(s=>item.answers[s] !== null && item.answers[s] !== undefined)) {
@@ -959,13 +1052,8 @@
       document.getElementById("math-fb").textContent = "答对啦！✿";
     } else {
       item.status = "bad";
-      // Keep a usable part in open-ended questions, then correct only its partner.
-      let answerLeft = item.left;
-      if (item.blanks.left && item.blanks.right) {
-        if (left >= 0 && left <= item.n) answerLeft = left;
-        else if (right >= 0 && right <= item.n) answerLeft = item.n - right;
-      }
-      const answerRight = item.n - answerLeft;
+      const answerLeft = item.left;
+      const answerRight = item.right;
       item.solution = {whole:item.n,left:answerLeft,right:answerRight};
       renderBondPanel();
       document.getElementById("math-fb").textContent = `正确答案：${item.n} = ${answerLeft} + ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。`;
@@ -1011,33 +1099,88 @@
     resetPracticeAttempt();
     stopSpeechSafe();
     if (forceMode) mathMode = forceMode;
-    mathScore = { ok: 0, total: 0 };
-    mathCompleted = 0;
-    bondQIndex = 0;
-    mathQuestions = []; mathQuestionKeys = [];
-    if (reviewSession) {
-      while (mathQuestions.length < MATH_ROUND_SIZE) {
-        const question = mathMode === "decomp" ? genBondItem() : genAddSub();
-        const key = mathMode === "decomp" ? `${question.n}:${question.left}:${question.right}:${question.mode}:${Object.values(question.blanks).map(Number).join("")}` : `${question.meta.a}${question.meta.op}${question.meta.b}`;
-        if (!mathQuestionKeys.includes(key)) {mathQuestionKeys.push(key);mathQuestions.push(question);}
-      }
+    mathSaving = false;
+    const existing = reviewSession?.practice;
+    const practice = reviewSession ? window.ChenchenMath.restore(existing,mathMode) : null;
+    if (existing && !practice) {
+      document.getElementById("math-content").innerHTML = '<div class="card"><p>这一组的题目记录无法恢复，请返回首页重试。</p></div>';
+      return;
     }
+    if (reviewSession) reviewSession.practice = practice || window.ChenchenMath.plan(mathMode,loadState(),todayStr(),MATH_ROUND_SIZE);
+    mathRoundSize = reviewSession ? reviewSession.practice.questions.length : MATH_ROUND_SIZE;
+    if (reviewSession) reviewSession.count = mathRoundSize;
+    const results = reviewSession?.practice?.questionResults || [];
+    mathScore = {ok:results.filter(result=>result.correct).length,total:results.length};
+    mathCompleted = results.length;
+    bondQIndex = 0;
+    mathQuestions = reviewSession?.practice?.questions || [];
+    mathQuestionKeys = mathQuestions.map(question=>question.key);
     const el = document.getElementById("math-content");
-    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml(mathMode === "decomp" ? "decomp" : "math")}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / ${MATH_ROUND_SIZE} 题</span></div>
+    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml(mathMode === "decomp" ? "decomp" : "math")}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">${mathCompleted} / ${mathRoundSize} 题</span></div>
       ${reviewSession ? "" : `<div class="tabs-mini"><button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button><button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button></div>`}
-      <p class="practice-instruction">做 ${MATH_ROUND_SIZE} 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
-      <div class="btn-row practice-controls"><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div></div>`;
+      <p class="practice-instruction">做 ${mathRoundSize} 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
+      <div class="btn-row practice-controls"><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div><div id="math-save-error" role="status" hidden><span id="math-save-message"></span><button class="btn btn-ghost" id="math-save-retry" hidden>重试保存这一题</button></div></div>`;
     bindStudyStart(el);
     el.querySelectorAll("[data-m]").forEach(btn=>btn.onclick=()=>renderMath(btn.dataset.m));
     document.getElementById("math-next").onclick = advanceMathQuestion;
-    nextMathQ();
+    if (reviewSession?.practice?.index >= mathRoundSize) renderMathFinish();
+    else nextMathQ();
     bindSessionExit();
+    if (reviewSession && !practice) persistMathProgress();
+  }
+
+  function mathControls(locked) {
+    const root = document.getElementById("math-content");
+    root.querySelectorAll("button").forEach(button=>{
+      if (button.id === "math-save-retry") return;
+      button.disabled = locked || (mathQuestionAnswered && (button.dataset.v !== undefined || button.dataset.n !== undefined || button.dataset.slot !== undefined));
+    });
+    const next = document.getElementById("math-next");
+    if (next) next.disabled = locked || !mathQuestionAnswered;
+  }
+
+  async function persistMathProgress(then) {
+    if (!reviewSession) { then?.(); return true; }
+    const group = reviewSession;
+    mathSaving = true; mathControls(true);
+    const status = document.getElementById("math-save-error");
+    const retry = document.getElementById("math-save-retry");
+    if (status) status.hidden = false;
+    if (retry) retry.hidden = true;
+    const message = document.getElementById("math-save-message");
+    if (message) message.textContent = "正在保存本题进度…";
+    try {
+      await persistStudyDraft(group);
+      if (reviewSession !== group || currentView !== "math") return true;
+      mathSaving = false;
+      if (status) status.hidden = true;
+      mathControls(false);
+      then?.();
+      return true;
+    } catch(error) {
+      if (reviewSession !== group || currentView !== "math") return false;
+      if (group.draftConflict) {
+        showCheckpointRetry(group,()=>persistMathProgress(then),error.message);
+        return false;
+      }
+      if (message) message.textContent = "本题还没确认保存，请保持页面打开并重试。";
+      if (retry) { retry.hidden = false; retry.disabled = false; retry.onclick = ()=>persistMathProgress(then); }
+      return false;
+    }
   }
 
   function advanceMathQuestion() {
-    if (!mathQuestionAnswered || currentView !== "math") return;
+    if (mathSaving || !mathQuestionAnswered || currentView !== "math") return;
+    if (reviewSession?.practice) {
+      reviewSession.practice.index++;
+      return persistMathProgress(()=>{
+        mathQuestionAnswered = false;
+        if (mathCompleted >= mathRoundSize) renderMathFinish();
+        else nextMathQ();
+      });
+    }
     mathQuestionAnswered = false;
-    if (mathCompleted >= MATH_ROUND_SIZE) renderMathFinish();
+    if (mathCompleted >= mathRoundSize) renderMathFinish();
     else nextMathQ();
   }
 
@@ -1045,24 +1188,29 @@
     if (mathQuestionAnswered) return;
     mathQuestionAnswered = true;
     mathCompleted++;
+    if (reviewSession?.practice) {
+      const answer = mathMode === "decomp" ? bondSheet.item.answers[Object.keys(bondSheet.item.blanks).find(slot=>bondSheet.item.blanks[slot])] : currentQ.attempt;
+      window.ChenchenMath.record(reviewSession.practice,answer);
+    }
     const progress = document.getElementById("math-progress");
-    if(progress) progress.textContent = `${mathCompleted} / ${MATH_ROUND_SIZE} 题`;
+    if(progress) progress.textContent = `${mathCompleted} / ${mathRoundSize} 题`;
     const next = document.getElementById("math-next");
     if(next) {
       next.hidden = false;
       next.disabled = false;
-      next.textContent = (correct ? "" : "我看懂了，") + (mathCompleted >= MATH_ROUND_SIZE ? "完成啦 ✿" : "下一题 →");
+      next.textContent = (correct ? "" : "我看懂了，") + (mathCompleted >= mathRoundSize ? "完成啦 ✿" : "下一题 →");
     }
+    if (reviewSession) persistMathProgress();
   }
 
   function renderMathFinish() {
     stopSpeechSafe();
     const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
-    const result = mathScore.ok >= MATH_ROUND_SIZE ? "independent" : mathScore.ok > 0 ? "supported" : "again";
+    const result = mathScore.ok >= mathRoundSize ? "independent" : mathScore.ok > 0 ? "supported" : "again";
     const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法",
-      enroll:true,source:"automatic",skill:"math-solving",details:{correct:mathScore.ok,total:MATH_ROUND_SIZE,mode:mathMode,questionKeys:mathQuestionKeys}};
+      enroll:true,source:"automatic",skill:"math-solving",details:{correct:mathScore.ok,total:mathRoundSize,mode:mathMode,questionKeys:mathQuestionKeys,questionResults:(reviewSession?.practice?.questionResults || []).map(({key,knowledgeId,correct})=>({key,knowledgeId,correct}))}};
     const panel = document.getElementById("math-panel");
-    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${MATH_ROUND_SIZE} 道题，真棒！</h3><p>${assessmentBadge(result)}</p><p>首次答对 ${mathScore.ok} / ${MATH_ROUND_SIZE} 题</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "保存这一组，休息一下" : "自由练习完成，休息一下"}</button></div>`;
+    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${mathRoundSize} 道题，真棒！</h3><p>${assessmentBadge(result)}</p><p>首次答对 ${mathScore.ok} / ${mathRoundSize} 题</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "保存这一组，休息一下" : "自由练习完成，休息一下"}</button></div>`;
     document.querySelector("#math-content .practice-controls").hidden = true;
     document.getElementById("finish-math").onclick = async () => {
       if (!reviewSession) {navigate("home");return;}
@@ -1078,13 +1226,21 @@
     if (next) { next.disabled = true; next.hidden = true; }
     if (mathMode === "decomp") {
       bondSheet = genBondSheet();
+      const saved = reviewSession?.practice?.questionResults[reviewSession.practice.index];
+      if (saved) {
+        const item = bondSheet.item,slot = Object.keys(item.blanks).find(slot=>item.blanks[slot]);
+        item.answers[slot] = saved.answer; item.status = saved.correct ? "ok" : "bad";
+        item.solution = {whole:item.n,left:item.left,right:item.right};
+        bondSheet.checked = true; bondSheet.activeSlot = null;
+      }
       renderBondPanel();
+      if (saved) restoreMathAnswer(saved);
       return;
     }
-    currentQ = reviewSession ? mathQuestions[mathCompleted] : genAddSub();
+    currentQ = reviewSession?.practice ? JSON.parse(JSON.stringify(mathQuestions[reviewSession.practice.index])) : genAddSub();
     const panel = document.getElementById("math-panel");
     if (!panel) return;
-    const opts = choicesFor(currentQ.answer);
+    const opts = currentQ.choices || choicesFor(currentQ.answer);
     panel.innerHTML = `
       <div class="counting-aid" aria-label="用小圆点数一数"><span>${Array.from({length:currentQ.meta.a},()=>'<i></i>').join("") || '<b>0</b>'}</span><b>${currentQ.meta.op}</b><span class="second-dots">${Array.from({length:currentQ.meta.b},()=>'<i></i>').join("") || '<b>0</b>'}</span></div>
       <div class="math-q">${escapeHtml(currentQ.text)}</div>
@@ -1097,38 +1253,54 @@
 
     panel.querySelectorAll(".math-opts button").forEach((btn) => {
       btn.onclick = () => {
-        if (btn.disabled || mathQuestionAnswered) return;
+        if (btn.disabled || mathSaving || mathQuestionAnswered) return;
         const v = Number(btn.dataset.v);
+        currentQ.attempt = v;
         const correct = v === currentQ.answer;
         mathScore.total++;
-        const fb = document.getElementById("math-fb");
-        panel.querySelectorAll(".math-opts button").forEach((b) => {
-          b.disabled = true;
-          if (Number(b.dataset.v) === currentQ.answer) {
-            b.classList.add("correct");
-            b.innerHTML = `<span>${b.dataset.v}</span><span class="math-option-mark" aria-hidden="true">✓</span>`;
-            b.setAttribute("aria-label", `${b.dataset.v}，正确答案`);
-          }
-        });
-        const {a,b,op} = currentQ.meta;
-        const equation = panel.querySelector(".math-q");
-        equation.classList.add("is-answered");
-        equation.innerHTML = `<span>${a} ${op} ${b} =</span>${mathAnswerHtml(v,currentQ.answer)}`;
-        if (correct) {
-          mathScore.ok++;
-          fb.innerHTML = mathVerdictHtml(true);
-        } else {
-          btn.classList.add("wrong");
-          btn.innerHTML = `<span>${v}</span><span class="math-option-mark" aria-hidden="true">×</span>`;
-          btn.setAttribute("aria-label", `${v}，这次不对`);
-          fb.innerHTML = `${mathVerdictHtml(false)}<span class="sr-only">正确答案是 ${currentQ.answer}：${a} ${op} ${b} = ${currentQ.answer}。看懂了，再点下一题。</span>`;
-        }
-        fb.className = "feedback math-feedback-visual";
+        if (correct) mathScore.ok++;
+        showArithmeticAnswer(v);
         finishMathQuestion(correct);
       };
     });
+    const saved = reviewSession?.practice?.questionResults[reviewSession.practice.index];
+    if (saved) { showArithmeticAnswer(saved.answer); restoreMathAnswer(saved); }
   }
 
+  function restoreMathAnswer(saved) {
+    mathQuestionAnswered = true;
+    const next = document.getElementById("math-next");
+    next.hidden = false; next.disabled = false;
+    next.textContent = (saved.correct ? "" : "我看懂了，") + (mathCompleted >= mathRoundSize ? "完成啦 ✿" : "下一题 →");
+  }
+
+  function showArithmeticAnswer(v) {
+    const panel = document.getElementById("math-panel");
+    const btn = [...panel.querySelectorAll(".math-opts button")].find(button=>Number(button.dataset.v)===v);
+    const correct = v === currentQ.answer;
+    const fb = document.getElementById("math-fb");
+    panel.querySelectorAll(".math-opts button").forEach((b) => {
+      b.disabled = true;
+      if (Number(b.dataset.v) === currentQ.answer) {
+        b.classList.add("correct");
+        b.innerHTML = `<span>${b.dataset.v}</span><span class="math-option-mark" aria-hidden="true">✓</span>`;
+        b.setAttribute("aria-label", `${b.dataset.v}，正确答案`);
+      }
+    });
+    const {a,b,op} = currentQ.meta;
+    const equation = panel.querySelector(".math-q");
+    equation.classList.add("is-answered");
+    equation.innerHTML = `<span>${a} ${op} ${b} =</span>${mathAnswerHtml(v,currentQ.answer)}`;
+    if (correct) {
+      fb.innerHTML = mathVerdictHtml(true);
+    } else {
+      btn.classList.add("wrong");
+      btn.innerHTML = `<span>${v}</span><span class="math-option-mark" aria-hidden="true">×</span>`;
+      btn.setAttribute("aria-label", `${v}，这次不对`);
+      fb.innerHTML = `${mathVerdictHtml(false)}<span class="sr-only">正确答案是 ${currentQ.answer}：${a} ${op} ${b} = ${currentQ.answer}。看懂了，再点下一题。</span>`;
+    }
+    fb.className = "feedback math-feedback-visual";
+  }
   // ---------- Pinyin ----------
   const INITIALS = [
     "b","p","m","f","d","t","n","l","g","k","h",
@@ -1241,7 +1413,7 @@
         toast("已记录，试试下一张。");
       } finally { saving = false; }
     });
-    if (reviewSession?.mode === "review" && target === pySelected && !pyPracticed.has(target)) beginCheck(false);
+    if (currentStudyPhase() === "review" && target === pySelected && !pyPracticed.has(target)) beginCheck(false);
     bindSessionExit();
   }
 
@@ -1401,14 +1573,17 @@
   let selectedWriteId = null;
   let writingListScroll = 0;
   let writingDemo = null;
+  let writingPractice = null;
   let writingVoice = null;
   let writingGeneration = 0;
 
   function stopWritingDemo() {
     writingGeneration++;
     writingDemo?.destroy();
+    writingPractice?.destroy();
     writingVoice?.destroy();
     writingDemo = null;
+    writingPractice = null;
     writingVoice = null;
   }
 
@@ -1458,39 +1633,29 @@
     stopSpeechSafe();
     const token = writingGeneration;
     const el = document.getElementById("write-detail-content");
-    const all = writingCharacters();
-    const ch = all.find(it=>it.id===selectedWriteId) || all[0];
+    const ch = writingCharacters().find(it=>it.id===selectedWriteId) || writingCharacters()[0];
     selectedWriteId = ch.id;
-    const startsWithBlindCheck = !!(ch.pinyin && reviewSession?.mode === "review" && reviewSession?.items[reviewSession.index]?.type === "write");
-    if (!startsWithBlindCheck) observedExposure("write",ch.id,true);
+    const group = reviewSession;
+    const startsWithBlindCheck = !!(ch.pinyin && currentStudyPhase() === "review" && group?.items[group.index]?.type === "write");
     const words = ch.words || [];
-    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">听一听，描一描</p><h2>汉字描一描</h2></div><span class="practice-count">${reviewSession ? "一笔一画，慢慢写" : "自由描写 · 不留学习记录"}</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字${escapeHtml(ch.c)}的读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div class="char" id="write-font-outline" hidden>${escapeHtml(ch.c)}</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="${escapeHtml(ch.c)} 字笔顺示范"></div><canvas id="write-canvas" hidden width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas><button id="write-clear" class="write-erase" hidden aria-label="擦掉，重新描">↶ 擦掉</button></div>${words.length ? `<div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p>` : ""}<div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔顺准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-primary" id="write-finish" ${reviewSession ? "" : "hidden"}>写好啦 ✓</button></div><div class="write-paper-confirm" id="write-paper-confirm" hidden><p>已经在纸上写过这个字了吗？</p><div class="btn-row"><button class="btn btn-primary" id="write-paper">在纸上写好啦 ✓</button><button class="text-btn" id="write-keep-drawing">我再描一描</button></div></div><div class="write-assessment" id="write-assessment" hidden><p class="assessment-prompt">不看范字，试着在纸上写一写</p><button class="btn btn-ghost" id="write-check-prompt">◖)) 听字音</button>${assessmentButtons("write-check","家长确认 · 独立书写")}<button class="text-btn" id="write-check-back">回去练一练</button></div></div>`;
+    let assisted = !startsWithBlindCheck, finished = false, watching = false, readingRequest = 0, practiceRun = 0;
+    let demoReady = false, demoFailed = false, demoRun = 0;
+    let practiceState = {status:"loading",completed:0,total:0,hintsUsed:0};
+    if (!startsWithBlindCheck) observedExposure("write",ch.id,true);
+    const active = () => token === writingGeneration && currentView === "write-detail";
+    const markAssisted = () => { assisted = true; observedExposure("write",ch.id,true); };
+    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">一笔一画，慢慢写</p><h2>汉字写一写</h2></div><span class="practice-count">${group ? "写完自动记录" : "自由练习 · 不留学习记录"}</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><p class="write-instruction" id="write-instruction">${startsWithBlindCheck ? "听读音，试着自己写。需要时可以点提示。" : "沿着浅色字形写，每写完一笔松开手指。"}</p><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="笔顺示范"></div><div id="write-practice-layer" class="write-practice-layer" hidden aria-label="汉字逐笔书写区"></div></div><div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔画准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-ghost" id="write-hint" disabled>提示这一笔</button><button class="text-btn" id="write-clear" disabled>↶ 重新写</button><button class="btn btn-primary" id="write-retry" hidden>重试加载</button></div>${words.length ? `<button class="text-btn write-show-words" id="write-show-words" ${startsWithBlindCheck ? "" : "hidden"}>看看词语</button><div id="write-words-panel" ${startsWithBlindCheck ? "hidden" : ""}><div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p></div>` : ""}</div>`;
     document.getElementById("write-back").onclick = returnToWriteLibrary;
-    const canvas = document.getElementById("write-canvas");
-    const ctx = canvas.getContext("2d");
-    ctx.strokeStyle = "#668753"; ctx.lineWidth = 14; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    let drawing = false, moved = false, watching = false, glyphMode = "loading", demoStatus = "loading", readingRequest = 0;
+    const stage = document.getElementById("write-stage");
+    const loading = document.getElementById("write-shape-loading");
+    const layer = document.getElementById("write-stroke-layer");
+    const practiceLayer = document.getElementById("write-practice-layer");
     const status = document.getElementById("write-stroke-status");
     const playButton = document.getElementById("write-strokes-play");
-    const pronounceButton = document.getElementById("write-pronounce");
-    const finishButton = document.getElementById("write-finish");
+    const hintButton = document.getElementById("write-hint");
     const eraseButton = document.getElementById("write-clear");
-    const paperConfirm = document.getElementById("write-paper-confirm");
-    const layer = document.getElementById("write-stroke-layer");
-    const stage = document.getElementById("write-stage");
-    const shapeLoading = document.getElementById("write-shape-loading");
-    const fontOutline = document.getElementById("write-font-outline");
-    const showGlyph = mode => {
-      glyphMode = mode;
-      shapeLoading.hidden = mode !== "loading";
-      fontOutline.hidden = mode !== "fallback";
-      layer.hidden = mode !== "svg";
-      canvas.hidden = mode === "loading" || watching;
-      eraseButton.hidden = mode === "loading" || watching || !moved;
-      if (mode === "loading") drawing = false;
-      stage.setAttribute("aria-busy",String(mode === "loading"));
-    };
-    const active = () => token === writingGeneration && currentView === "write-detail";
+    const retryButton = document.getElementById("write-retry");
+    const pronounceButton = document.getElementById("write-pronounce");
     const readingButtons = [pronounceButton,...el.querySelectorAll("[data-write-word]")];
     writingVoice = window.ChenchenWritingAudio?.create() || null;
     const voice = writingVoice;
@@ -1498,126 +1663,176 @@
       readingRequest++; voice?.stop();
       readingButtons.forEach(button=>button.classList.remove("is-reading"));
     };
-    const trace = (reset = true) => {
-      watching = false; drawing = false; canvas.hidden = glyphMode === "loading"; finishButton.disabled = false; eraseButton.hidden = !moved;
-      if (reset) { writingDemo?.restart(); layer.classList.remove("is-copy-guide"); }
-      else layer.classList.add("is-copy-guide");
+    const progressText = () => practiceState.total
+      ? `已完成 ${practiceState.completed} / ${practiceState.total} 笔，接着写第 ${practiceState.completed+1} 笔。`
+      : "笔画准备中…";
+    const updateControls = () => {
+      const busy = practiceState.status === "loading";
+      const failed = practiceState.status === "error";
+      stage.setAttribute("aria-busy",String(busy));
+      loading.hidden = !busy;
+      practiceLayer.hidden = busy || failed || watching;
+      layer.hidden = !watching;
+      hintButton.disabled = watching || practiceState.status !== "active" || finished;
+      eraseButton.disabled = busy || failed || (finished && !!group);
+      playButton.disabled = !demoReady || (finished && !!group);
+      playButton.textContent = watching ? "■ 停下" : demoFailed ? "↻ 重试笔顺" : "▶ 看笔顺";
+      if (demoFailed && !busy && !(finished && group)) playButton.disabled = false;
+      retryButton.hidden = !failed;
+      status.classList.toggle("is-playing",watching);
     };
-    const watch = () => {
-      observedExposure("write",ch.id,true);
-      stopSpeechSafe(); stopReading(); drawing = false; watching = true; canvas.hidden = true; finishButton.disabled = true; eraseButton.hidden = true; paperConfirm.hidden = true; layer.classList.remove("is-copy-guide");
+    const returnToPractice = () => {
+      watching = false;
+      writingPractice?.resume();
+      updateControls();
+      if (!finished && practiceState.status !== "error") status.textContent = progressText();
     };
     const setupDemo = () => {
+      const run = ++demoRun;
       writingDemo?.destroy();
-      showGlyph("loading");
-      layer.classList.remove("is-copy-guide");
+      layer.replaceChildren();
+      demoReady = demoFailed = false;
+      if (!window.ChenchenWritingStrokes) {demoFailed=true;updateControls();return;}
+      try {
+        writingDemo = window.ChenchenWritingStrokes.create({
+          target:layer,character:ch.c,
+          playStroke:(index,signal)=>voice?.playStroke(index,signal),
+          onState(state) {
+            if (!active() || run !== demoRun || state.status === "destroyed") return;
+            demoReady = ["ready","playing","paused","complete"].includes(state.status);
+            if (watching && state.status === "playing") status.textContent = `示范第 ${state.stroke || state.completed+1} 笔 / 共 ${state.total} 笔`;
+            if (watching && state.status === "complete") returnToPractice();
+            updateControls();
+          },
+          onError() {
+            if (!active() || run !== demoRun) return;
+            demoFailed = true; demoReady = false;
+            if (watching) returnToPractice();
+            updateControls();
+            status.textContent = "示范暂时没有打开，可以继续写，或重试笔顺。";
+          },
+        });
+      } catch (_) {demoFailed=true;updateControls();}
+    };
+    const setupPractice = () => {
+      const run = ++practiceRun;
+      writingPractice?.destroy();
+      practiceLayer.replaceChildren();
+      finished = false;
+      practiceState = {status:"loading",completed:0,total:0,hintsUsed:0};
+      updateControls();
+      const current = () => active() && run === practiceRun;
       const unavailable = () => {
-        demoStatus = "error"; showGlyph("fallback"); trace(false);
-        playButton.disabled = false; playButton.textContent = "↻ 重试笔顺";
-        status.textContent = "笔顺暂时没有打开，仍可以照着描一描。";
+        if (!current()) return;
+        practiceState = {...practiceState,status:"error"};
+        updateControls();
+        status.textContent = "这个字的笔画暂时没有准备好，请重试或返回字库。";
       };
-      if (!window.ChenchenWritingStrokes || !voice) {
-        unavailable(); return;
-      }
-      try { writingDemo = window.ChenchenWritingStrokes.create({
-        target:layer, character:ch.c,
-        playStroke:(index,signal)=>voice.playStroke(index,signal),
-        onState(state) {
-          if (!active() || state.status === "destroyed") return;
-          demoStatus = state.status;
-          const busy = state.status === "playing", loading = state.status === "loading";
-          playButton.disabled = loading;
-          playButton.textContent = busy ? "■ 停下" : state.status === "error" ? "↻ 重试笔顺" : state.completed ? "▶ 再看一遍" : "▶ 看笔顺";
-          if (["ready","playing","paused","complete"].includes(state.status)) showGlyph("svg");
-          status.classList.toggle("is-playing",busy);
-          if (busy) status.textContent = `第 ${state.stroke || state.completed + 1} 画 / 共 ${state.total} 画`;
-          else if (state.status === "complete") {
-            if (watching) trace(false);
-            status.textContent = "轮到你啦，照着字形描一描。";
-          } else if (state.status === "ready" || state.status === "paused") status.textContent = `${ch.c} · ${state.total} 画，跟着笔顺描一描。`;
-          else if (loading) status.textContent = "笔顺准备中…";
-        },
-        onError(code) {
-          if (!active()) return;
-          showGlyph(code === "stroke-data-unavailable" ? "fallback" : "svg");
-          trace(false); status.classList.remove("is-playing");
-          status.textContent = code === "stroke-playback-unavailable" ? "声音或笔顺没有打开，再点一次试试。" : "这个字的笔顺暂时没有打开，仍可以照着描。";
-          playButton.disabled = false;
-        },
-      }); } catch (_) { unavailable(); }
+      if (!window.ChenchenWritingPractice) {unavailable();return;}
+      try {
+        writingPractice = window.ChenchenWritingPractice.create({
+          target:practiceLayer,character:ch.c,showOutline:!startsWithBlindCheck,
+          onState(state) {
+            if (!current() || state.status === "destroyed") return;
+            const previous = practiceState;
+            practiceState = state;
+            if (state.hintsUsed > previous.hintsUsed) markAssisted();
+            updateControls();
+            if (!watching && !finished && state.status === "active" &&
+                (previous.status !== state.status || previous.completed !== state.completed || previous.hintsUsed !== state.hintsUsed)) {
+              status.textContent = state.hintsUsed > previous.hintsUsed ? "跟着提示，试着写这一笔。" : progressText();
+            }
+          },
+          onMistake(data) {
+            if (!current() || finished || watching) return;
+            status.textContent = data.isBackwards
+              ? "这一笔方向反了，换个方向再试试。"
+              : "这一笔还没对上，再试一次；也可以点提示。";
+          },
+          onCorrectStroke() {
+            if (!current() || finished || watching) return;
+            status.textContent = "这一笔写对了！";
+          },
+          async onComplete(summary) {
+            if (!current() || finished || watching || practiceState.status === "error") return;
+            if (!Number.isInteger(summary.totalStrokes) || summary.totalStrokes < 1 ||
+                summary.completedStrokes !== summary.totalStrokes) return;
+            finished = true;
+            stopReading();
+            updateControls();
+            const afterPractice = observedExposure("write",ch.id) || !!group?.items[group.index]?.afterPractice;
+            const supported = assisted || afterPractice || summary.outlineShown || summary.hintsUsed > 0 || summary.totalMistakes > 0;
+            const result = supported ? "supported" : "independent";
+            status.textContent = supported ? "写好啦！在帮助下完成了全部笔画。" : "写好啦！自己完成了全部笔画。";
+            if (!group || reviewSession !== group) return;
+            const details = {...summary,character:ch.c,afterPractice,assisted:supported};
+            const entry = {id:ch.id,type:"write",title:`汉字·${ch.c}`,source:"automatic",skill:"hanzi-writing",result,details};
+            const id = group.items[group.index]?.id || ch.id;
+            await completePractice(id,REVIEW_RESULT[result],{...entry,entries:[entry],enroll:true});
+          },
+          onError:unavailable,
+        });
+      } catch (_) {unavailable();}
     };
     setupDemo();
+    setupPractice();
     playButton.onclick = () => {
-      if (demoStatus === "playing") {writingDemo.stop();trace();return;}
-      if (demoStatus === "error" && glyphMode !== "svg") {stopReading();setupDemo();return;}
-      watch(); writingDemo?.play();
+      if (!active() || (finished && group)) return;
+      if (watching) {writingDemo?.stop();returnToPractice();return;}
+      if (demoFailed) {setupDemo();return;}
+      if (!demoReady) return;
+      markAssisted();
+      stopSpeechSafe();stopReading();
+      writingPractice?.pause();
+      watching = true;
+      updateControls();
+      void writingDemo?.play();
     };
-    const read = async (id,text,button) => {
+    hintButton.onclick = () => {
+      if (hintButton.disabled || !active()) return;
+      markAssisted();
+      stopReading();
+      void writingPractice?.showHint();
+    };
+    eraseButton.onclick = () => {
+      if (eraseButton.disabled || !active()) return;
+      markAssisted();
+      stopReading();
+      if (watching) {writingDemo?.stop();watching=false;}
+      finished = false;
+      void writingPractice?.restart({showOutline:!startsWithBlindCheck});
+      updateControls();
+    };
+    retryButton.onclick = () => {
+      if (!active() || practiceState.status !== "error") return;
+      setupPractice();
+    };
+    const showWords = words.length ? document.getElementById("write-show-words") : null;
+    if (showWords) showWords.onclick = () => {
+      markAssisted();
+      document.getElementById("write-words-panel").hidden = false;
+      showWords.hidden = true;
+    };
+    const read = async (id,button) => {
+      if (!active()) return;
       stopSpeechSafe();
-      if (watching) {writingDemo?.stop();trace();}
+      if (watching) {writingDemo?.stop();returnToPractice();}
       stopReading();
       const request = readingRequest;
-      const readStatus = document.getElementById("write-assessment").hidden === false ? document.getElementById("write-check-error") : status;
       button.classList.add("is-reading");
-      readStatus.textContent = readStatus === status ? `听一听：${text}` : "";
       try {
         if (!voice?.playReading) throw new Error("Reading unavailable");
         await voice.playReading(id);
-        if (active() && request === readingRequest) readStatus.textContent = readStatus === status ? "跟着读一读，再描一描。" : "";
       } catch (error) {
-        if (active() && request === readingRequest) readStatus.textContent = error.name === "AbortError" ? "" : "声音没有打开，再点一下试试。";
-      } finally { if (active() && request === readingRequest) button.classList.remove("is-reading"); }
+        if (active() && request === readingRequest && error.name !== "AbortError") status.textContent = "声音没有打开，再点一下试试。";
+      } finally {if(active() && request===readingRequest)button.classList.remove("is-reading");}
     };
-    pronounceButton.onclick = () => {if(ch.pinyin) return read(`char-${ch.c.codePointAt(0).toString(16)}`,ch.c,pronounceButton);};
+    pronounceButton.onclick = () => {if(ch.pinyin)return read(`char-${ch.c.codePointAt(0).toString(16)}`,pronounceButton);};
     el.querySelectorAll("[data-write-word]").forEach(button=>button.onclick=()=>{
       const word = words[Number(button.dataset.writeWord)];
-      return read(`word-${Array.from(word.text).map(c=>c.codePointAt(0).toString(16)).join("-")}`,word.text,button);
+      markAssisted();
+      return read(`word-${Array.from(word.text).map(c=>c.codePointAt(0).toString(16)).join("-")}`,button);
     });
-    const position = event => { const r=canvas.getBoundingClientRect(); return [(event.clientX-r.left)*600/r.width,(event.clientY-r.top)*600/r.height]; };
-    canvas.onpointerdown = event => { if(watching || glyphMode === "loading")return;event.preventDefault();drawing=true;canvas.setPointerCapture(event.pointerId);ctx.beginPath();ctx.moveTo(...position(event));paperConfirm.hidden=true; };
-    canvas.onpointermove = event => { if(!drawing || watching || glyphMode === "loading")return;event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;eraseButton.hidden=false; };
-    canvas.onpointerup = canvas.onpointercancel = () => { drawing=false; };
-    eraseButton.onclick = () => {ctx.clearRect(0,0,600,600);moved=false;trace();paperConfirm.hidden=true;};
-    let writingAfterPractice = true;
-    let writingMethod = "trace";
-    const beginWritingCheck = (method, afterPractice = true) => {
-      writingDemo?.stop(); stopReading();
-      writingMethod = method;
-      writingAfterPractice = afterPractice || observedExposure("write",ch.id);
-      if (afterPractice) observedExposure("write",ch.id,true);
-      paperConfirm.hidden = true;
-      document.getElementById("write-assessment").hidden = false;
-      el.querySelector(".write-practice").classList.add("is-assessing");
-      document.getElementById("write-check-prompt").hidden = !ch.pinyin;
-    };
-    const finish = async result => {
-      if (!reviewSession) return;
-      writingDemo?.stop(); stopReading();
-      const id = reviewSession?.items[reviewSession.index]?.id || ch.id;
-      const entry = {id:ch.id,type:"write",title:`汉字·${ch.c}`,source:"parent",skill:"hanzi-writing",result,details:{character:ch.c,method:writingMethod,afterPractice:writingAfterPractice}};
-      const meta = {...entry,enroll:true};
-      if (id === "write-basic") {meta.entries=[entry];meta.retireWritingGroup=true;}
-      if(!await completePractice(id,REVIEW_RESULT[result],meta) && active()) returnToWriteLibrary();
-    };
-    finishButton.onclick = () => {
-      if (watching) return;
-      if (moved) return beginWritingCheck("trace");
-      paperConfirm.hidden = false;
-      paperConfirm.scrollIntoView?.({block:"nearest"});
-    };
-    document.getElementById("write-keep-drawing").onclick = () => {paperConfirm.hidden=true;};
-    document.getElementById("write-paper").onclick = () => {if(!paperConfirm.hidden) beginWritingCheck("paper");};
-    document.getElementById("write-check-back").onclick = () => {
-      stopReading();
-      writingAfterPractice = true;
-      observedExposure("write",ch.id,true);
-      document.getElementById("write-assessment").hidden = true;
-      el.querySelector(".write-practice").classList.remove("is-assessing");
-    };
-    document.getElementById("write-check-prompt").onclick = () => read(`char-${ch.c.codePointAt(0).toString(16)}`,ch.c,document.getElementById("write-check-prompt"));
-    bindAssessment("write-check",reviewSession?.items[reviewSession.index]?.id || ch.id,finish);
-    if (startsWithBlindCheck) beginWritingCheck("paper",false);
-
     bindSessionExit();
   }
 
@@ -1642,7 +1857,7 @@
 
   // ---------- Init ----------
   function navigate(v) {
-    if (reviewSession && (reviewSession.saving || !reviewSession.definiteFailure && reviewSession.entries.length >= reviewSession.items.length)) {toast("这一组正在确认保存，请保持页面打开并重试。");return;}
+    if (reviewSession && (reviewSession.saving || reviewSession.draftSaving || reviewSession.draftFailed || !reviewSession.definiteFailure && reviewSession.entries.length >= reviewSession.items.length)) {toast("这一组正在确认保存，请保持页面打开并重试。");return;}
     if (!stateReady) { toast("先连接服务器，再开始复习。"); return; }
     const restorePoemScroll = v === "poems" && currentView === "poem-detail";
     showingCelebration = false;
@@ -1678,7 +1893,7 @@
   }
   document.addEventListener("DOMContentLoaded", () => {
     bindNav();
-    window.addEventListener("beforeunload",event=>{if(reviewSession && (reviewSession.saving || !reviewSession.definiteFailure && reviewSession.entries.length>=reviewSession.items.length)){event.preventDefault();event.returnValue="";}});
+    window.addEventListener("beforeunload",event=>{if(reviewSession && (reviewSession.saving || reviewSession.draftSaving || reviewSession.draftFailed || !reviewSession.definiteFailure && reviewSession.entries.length>=reviewSession.items.length)){event.preventDefault();event.returnValue="";}});
     showView("home");
     initializePage();
   });

@@ -421,7 +421,7 @@ func TestEmptyGardenKeepsLegacyPUTCompatibility(t *testing.T) {
 
 func TestStudyGroupRejectsInvalidWholeGroupWithoutPartialWrites(t *testing.T) {
 	mutations := map[string]func(*studyGroupRequest){
-		"short":          func(g *studyGroupRequest) { g.Entries = g.Entries[:4] },
+		"empty":          func(g *studyGroupRequest) { g.Entries = nil },
 		"duplicate":      func(g *studyGroupRequest) { g.Entries[1].ID = g.Entries[0].ID },
 		"unknown":        func(g *studyGroupRequest) { g.Type = "other" },
 		"wrong skill":    func(g *studyGroupRequest) { g.Entries[0].Skill = "hanzi-recognition" },

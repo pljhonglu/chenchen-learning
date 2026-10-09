@@ -38,7 +38,7 @@ func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		origin = "*"
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, PATCH, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, PATCH, POST, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Add("Vary", "Origin")
 	if r.Method == http.MethodOptions {
@@ -62,6 +62,12 @@ func (app *application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok": true, "service": "chenchen-learning", "storage": "sqlite", "db": app.store.path,
 		})
+	case "/api/study-sessions":
+		if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+			methodNotAllowed(w, "POST, DELETE, OPTIONS")
+			return
+		}
+		app.studySessionRequest(w, r.WithContext(ctx))
 	case "/api/study-groups", "/api/garden/water":
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w, "POST, OPTIONS")

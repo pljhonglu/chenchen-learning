@@ -166,7 +166,19 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 		if err != nil {
 			return progress{}, err
 		}
-		if operation.Collection == "items" && s.isBuiltinPoem(operation.Key) {
+		poemItem := s.isBuiltinPoem(operation.Key)
+		if operation.Collection == "items" {
+			var oldItem map[string]json.RawMessage
+			_ = json.Unmarshal(entries[operation.Key], &oldItem)
+			poemItem = poemItem || jsonString(oldItem["type"]) == "poem"
+			custom, err := loadCollection("customPoems")
+			if err != nil {
+				return progress{}, err
+			}
+			_, customPoem := custom[operation.Key]
+			poemItem = poemItem || customPoem
+		}
+		if operation.Collection == "items" && poemItem {
 			hidden, err := loadCollection("hiddenCourses")
 			if err != nil {
 				return progress{}, err
@@ -242,8 +254,12 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 		ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`, string(payload), updatedAt); err != nil {
 		return progress{}, err
 	}
+	stored, err = s.ensureBuiltinPoems(ctx, tx, progress{Payload: payload, UpdatedAt: updatedAt, Found: true}, s.gardenNow())
+	if err != nil {
+		return progress{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return progress{}, err
 	}
-	return progress{Payload: payload, UpdatedAt: updatedAt, Found: true}, nil
+	return stored, nil
 }

@@ -50,7 +50,7 @@ function makeDOM() {
 }
 function harness(options = {}) {
   const root = makeDOM(), database = { ...emptyState(), ...copy(options.state || {}) };
-  const commits = [], reviews = [], plays = [], exits = [], syncs = [], scrolls = [];
+  const commits = [], checkpoints = [], reviews = [], plays = [], exits = [], syncs = [], scrolls = [];
   let active = true, pendingAudio = null, callbacks, audioStatus = "idle", currentDay = today;
   const changeAudioState = value => { audioStatus = value; callbacks?.onState(value); };
   const audio = {
@@ -72,6 +72,8 @@ function harness(options = {}) {
     loadState: () => database, todayStr: () => currentDay, isActive: () => active,
     groupStartHtml:()=>'<button data-start-study="english">开始学习</button>',
     startStudy:()=>exits.push("start-group"),
+    groupSaving:()=>options.groupSaving?.() || false,
+    checkpointEnglishGroup:(entries,nextIndex)=>{checkpoints.push({entries:copy(entries),nextIndex});return options.checkpoint ? options.checkpoint(entries,nextIndex,checkpoints.length) : Promise.resolve();},
     completeGroup:entries=>{commits.push(copy(entries));return options.commit ? options.commit(entries,commits.length) : Promise.resolve();},
     syncNow: async () => { syncs.push(true); return options.sync ? options.sync() : true; },
     newItem: (id, meta) => ({ id, ...meta, learned: true, stage: 0, nextReview: today }),
@@ -122,13 +124,13 @@ function harness(options = {}) {
   const makeGroup=(id="english-cat",mode="learn")=>({id:"english-test-group",type:"english",mode,count:5,items:[curriculum.items.find(item=>item.id===id),...curriculum.items.filter(item=>item.id!==id&&item.source==="classroom").slice(0,4)]});
   const openGroup=(id,mode)=>app.open({group:makeGroup(id,mode)});
   async function finishRest() {
-    while(app.inspect()?.index < 5) {
+    while(app.inspect()?.index < app.inspect()?.items.length) {
       const item=app.inspect().items[app.inspect().index];
       await reachRecall(item.id,false,true);
       await click("english-next");
     }
   }
-  return {openGroup,makeGroup,finishRest, app, audio, root, database, commits, reviews, plays, exits, syncs, scrolls, button, click, clickData, answer, reachRecall,
+  return {openGroup,makeGroup,finishRest, app, audio, root, database, commits, checkpoints, reviews, plays, exits, syncs, scrolls, button, click, clickData, answer, reachRecall,
     at: day => {currentDay=day;},
     scrollTo: top => { context.scrollY = top; }, getScroll: () => context.scrollY,
     leave: () => { active = false; app.stop(); } };
@@ -236,7 +238,7 @@ test("automatic English feedback uses the same completion labels as other subjec
 });
 
 
-test("the English library start button delegates fixed group creation to the shared app", async () => {
+test("the English library start button delegates group creation to the shared app", async () => {
   const h=harness();await h.app.open();
   await h.clickData("data-start-study","english");
   assert.deepEqual(h.exits,["start-group"]);assert.equal(h.commits.length,0);
@@ -250,16 +252,18 @@ test("catalog lookup is complete and cannot interrupt the active group's audio",
   await h.audio.complete();assert.ok(h.root.querySelectorAll("[data-english-choice]").every(choice=>!choice.disabled));h.leave();
 });
 
-test("five words are fixed in a group and only the fifth completion calls the shared save hook", async () => {
+test("every completed word checkpoints its prefix and the last completion saves the group", async () => {
   const h=harness();await h.openGroup();const group=h.app.inspect();const ids=group.items.map(item=>item.id);
   assert.equal(ids.length,5);assert.equal(new Set(ids).size,5);
   for(let i=0;i<5;i++) {
     await h.reachRecall(ids[i],false,true);await h.click("english-next");
     assert.equal(h.commits.length,i===4?1:0);
+    assert.equal(h.checkpoints.length,i+1);assert.equal(h.checkpoints[i].nextIndex,i+1);
+    assert.deepEqual(h.checkpoints[i].entries.map(entry=>entry.id),ids.slice(0,i+1));
   }
   assert.deepEqual(h.commits[0].map(entry=>entry.id),ids);
   assert.ok(h.commits[0].every(entry=>entry.type==="english"&&entry.skill==="english-listening"));
-  await h.click("english-next");assert.equal(h.commits.length,1,"Repeated completion cannot resubmit the group");h.leave();
+  await h.button("english-next").onclick();assert.equal(h.commits.length,1,"Repeated completion cannot resubmit the group");h.leave();
 });
 
 test("new extension exposure remains supported and speaking is never graded", async () => {
@@ -298,7 +302,7 @@ test("partially heard free cards remain same-day exposure across navigation into
   const h=harness();await h.app.open({itemId:"english-cat"});
   assert.equal(h.audio.pending,true);await h.click("english-back");h.app.stop();
   assert.equal(h.commits.length,0);await h.openGroup("english-cat","review");
-  await h.reachRecall("english-cat",false,true);await h.click("english-next");
+  await h.audio.complete();await h.answer("english-cat");await h.click("english-next");
   const entry=h.app.inspect().entries[0];
   assert.equal(entry.result,"supported");assert.equal(entry.details.firstTryCorrect,true);
   assert.equal(entry.details.observedExposure,true);assert.equal(entry.details.exposureFirst,true);
@@ -307,7 +311,7 @@ test("partially heard free cards remain same-day exposure across navigation into
 
 test("free-card exposure expires on the next Beijing day and never changes the first listening answer", async () => {
   const h=harness();await h.app.open({itemId:"english-cat"});h.app.stop();h.at("2026-10-02");
-  await h.openGroup("english-cat","review");await h.reachRecall("english-cat",false,true);await h.click("english-next");
+  await h.openGroup("english-cat","review");await h.audio.complete();await h.answer("english-cat");await h.click("english-next");
   const entry=h.app.inspect().entries[0];
   assert.equal(entry.result,"independent");assert.equal(entry.details.observedExposure,false);
   assert.equal(entry.details.exposureFirst,false);assert.equal(h.commits.length,0);h.leave();
@@ -315,15 +319,147 @@ test("free-card exposure expires on the next Beijing day and never changes the f
 
 test("free audio that failed before playing is not remembered as an exposure", async () => {
   const h=harness({delayAudioStart:true});await h.app.open({itemId:"english-cat"});await h.audio.complete(false);h.app.stop();
-  await h.openGroup("english-cat","review");await h.reachRecall("english-cat",false,true);await h.click("english-next");
+  await h.openGroup("english-cat","review");await h.audio.complete();await h.answer("english-cat");await h.click("english-next");
   const entry=h.app.inspect().entries[0];assert.equal(entry.result,"independent");assert.equal(entry.details.observedExposure,false);
   assert.equal(h.commits.length,0);h.leave();
 });
 
-test("leaving after four completed words discards the whole partial group", async () => {
+test("a saved prefix resumes without replaying completed words", async () => {
   const h=harness();await h.openGroup();const ids=h.app.inspect().items.map(item=>item.id);
   for(let i=0;i<4;i++){await h.reachRecall(ids[i],false,true);await h.click("english-next");}
   assert.equal(h.app.inspect().entries.length,4);assert.equal(h.commits.length,0);
+  const group=h.makeGroup();group.entries=copy(h.checkpoints.at(-1).entries);group.index=4;group.resumed=true;
   h.app.stop();await h.app.open();assert.equal(h.app.inspect(),null);assert.equal(h.commits.length,0);
-  await h.openGroup();assert.equal(h.app.inspect().index,0);assert.equal(h.app.inspect().entries.length,0);h.leave();
+  await h.app.open({group});assert.equal(h.app.inspect().index,4);assert.equal(h.app.inspect().entries.length,4);
+  assert.equal(h.app.inspect().items[4].id,ids[4]);assert.equal(h.app.inspect().result.observedExposure,true);
+  await h.reachRecall(ids[4],false,true);await h.click("english-next");
+  assert.deepEqual(h.commits[0].map(entry=>entry.id),ids);assert.equal(h.checkpoints.length,5);h.leave();
+});
+
+
+test("a one-word due review ends after its first correct listening answer", async () => {
+  const h=harness(),group=h.makeGroup("english-cat","learn");
+  group.items=[{...group.items[0],phase:"review"}];group.count=1;
+  await h.app.open({group});
+  assert.match(h.root.innerHTML,/英语复习 1 \/ 1/);
+  assert.equal(h.app.inspect().steps.length,1);
+  await h.audio.complete();await h.answer("english-cat");await h.click("english-next");
+  assert.equal(h.checkpoints.length,1);assert.equal(h.commits.length,1);
+  assert.equal(h.commits[0][0].result,"independent");
+  assert.equal(h.commits[0][0].details.sentencePracticed,false);
+  assert.equal(h.commits[0][0].details.speaking,"listened");
+  assert.equal(h.plays.some(keys=>keys.includes("english-cat-sentence")),false);
+  h.leave();
+});
+
+test("a failed review switches to supported practice without replacing its first answer", async () => {
+  const h=harness(),group=h.makeGroup("english-cat","review");
+  group.items=[{...group.items[0],phase:"review"}];
+  await h.app.open({group});await h.reachRecall("english-cat",true,true);await h.click("english-next");
+  const entry=h.commits[0][0];
+  assert.equal(entry.result,"supported");assert.equal(entry.details.firstTryCorrect,false);
+  assert.equal(entry.details.attempts,2);assert.equal(entry.details.sentencePracticed,true);
+  assert.equal(h.checkpoints.length,1);h.leave();
+});
+
+test("mixed groups use each item's phase and reset review exposure after a resumed item", async () => {
+  const h=harness(),group=h.makeGroup("english-cat","learn");
+  group.items=group.items.slice(0,3).map((item,index)=>({...item,phase:index===2?"learn":"review"}));group.resumed=true;
+  await h.app.open({group});
+  for(let i=0;i<2;i++) {
+    assert.equal(h.app.inspect().steps.length,1);
+    await h.audio.complete();await h.answer(group.items[i].id);await h.click("english-next");
+  }
+  assert.equal(h.app.inspect().entries[0].details.observedExposure,true);
+  assert.equal(h.app.inspect().entries[1].details.observedExposure,false);
+  assert.equal(h.app.inspect().entries[1].result,"independent");
+  assert.equal(h.app.inspect().steps.length,4);
+  await h.reachRecall(group.items[2].id,false,true);await h.click("english-next");
+  assert.equal(h.commits[0].length,3);assert.equal(h.checkpoints.length,3);h.leave();
+});
+
+test("a failed checkpoint keeps the current item and retries identical evidence", async () => {
+  const first=deferred();
+  const h=harness({checkpoint:(_entries,_index,count)=>count===1?first.promise:Promise.resolve()});
+  const group=h.makeGroup("english-cat","review");group.items=group.items.slice(0,2);
+  await h.app.open({group});await h.audio.complete();await h.answer("english-cat");
+  const pending=h.click("english-next");
+  assert.equal(h.app.inspect().index,0);assert.equal(h.app.inspect().entries.length,0);
+  assert.equal(h.button("english-next").disabled,true);assert.equal(h.commits.length,0);
+  first.reject(new Error("连接中断"));await pending;
+  assert.equal(h.app.inspect().index,0);assert.equal(h.button("english-next").disabled,false);
+  assert.equal(h.button("english-save-error").textContent,"连接中断");
+  await h.click("english-next");
+  assert.deepEqual(h.checkpoints[1],h.checkpoints[0]);
+  assert.equal(h.app.inspect().index,1);assert.equal(h.app.inspect().entries.length,1);
+  assert.equal(h.commits.length,0);h.leave();
+});
+
+test("the final word waits for its checkpoint before submitting the completed group", async () => {
+  const checkpoint=deferred();
+  const h=harness({checkpoint:()=>checkpoint.promise}),group=h.makeGroup("english-cat","review");
+  group.items=group.items.slice(0,1);
+  await h.app.open({group});await h.audio.complete();await h.answer("english-cat");
+  const pending=h.click("english-next");assert.equal(h.commits.length,0);
+  checkpoint.resolve();await pending;
+  assert.equal(h.commits.length,1);assert.equal(h.app.inspect().index,1);h.leave();
+});
+
+test("restoring a completely checkpointed group offers submission without replaying words", async () => {
+  const h=harness(),group=h.makeGroup("english-cat","review");
+  group.items=group.items.slice(0,1);group.entries=[{id:"english-cat",type:"english",skill:"english-listening",result:"independent",source:"automatic",details:{firstTryCorrect:true}}];group.index=1;
+  await h.app.open({group});assert.equal(h.plays.length,0);assert.equal(h.checkpoints.length,0);
+  await h.click("english-complete");assert.deepEqual(h.commits[0],group.entries);h.leave();
+});
+
+test("navigation while a checkpoint is pending cannot reopen the old word or overwrite the new view", async () => {
+  const checkpoint=deferred();const h=harness({checkpoint:()=>checkpoint.promise});
+  await h.openGroup("english-cat","review");await h.audio.complete();await h.answer("english-cat");
+  const pending=h.click("english-next");h.leave();h.root.innerHTML="<p>another view</p>";
+  checkpoint.resolve();await pending;
+  assert.equal(h.app.inspect(),null);assert.equal(h.root.innerHTML,"<p>another view</p>");assert.equal(h.commits.length,0);
+});
+
+
+test("a mismatched saved prefix reports an error instead of skipping or replaying words", async () => {
+  const h=harness(),group=h.makeGroup("english-cat","review");
+  group.entries=[{id:"english-water",details:{}}];group.index=1;
+  await h.app.open({group});assert.match(h.root.innerHTML,/进度暂时无法恢复/);
+  assert.equal(h.plays.length,0);assert.equal(h.checkpoints.length,0);assert.equal(h.commits.length,0);h.leave();
+});
+
+
+test("exiting a review while its checkpoint is pending keeps the round until it can safely leave", async () => {
+  const checkpoint=deferred();let serverSaving=true;
+  const h=harness({checkpoint:()=>checkpoint.promise,groupSaving:()=>serverSaving}),group=h.makeGroup("english-cat","review");
+  group.items=group.items.slice(0,2);
+  await h.app.open({group});await h.audio.complete();await h.answer("english-cat");
+  const pending=h.click("english-next"),active=h.app.inspect();
+  await h.click("english-exit");assert.equal(h.app.inspect(),active);assert.deepEqual(h.exits,[]);
+  checkpoint.resolve();await pending;assert.equal(h.app.inspect().index,1);
+  await h.click("english-exit");assert.equal(h.app.inspect(),active,"The app's save lock also protects the round");
+  serverSaving=false;await h.click("english-exit");
+  assert.equal(h.app.inspect(),null);assert.deepEqual(h.exits,["exit"]);assert.equal(h.checkpoints[0].entries[0].result,"independent");
+});
+
+test("a failed checkpoint cannot clear the round through the exit button before retry", async () => {
+  const h=harness({checkpoint:(_entries,_index,count)=>count===1?Promise.reject(new Error("Offline")):Promise.resolve()});
+  await h.openGroup("english-cat","review");await h.audio.complete();await h.answer("english-cat");await h.click("english-next");
+  const active=h.app.inspect();await h.click("english-exit");assert.equal(h.app.inspect(),active);assert.deepEqual(h.exits,[]);
+  await h.click("english-next");await h.click("english-exit");
+  assert.equal(h.app.inspect(),null);assert.deepEqual(h.exits,["exit"]);assert.deepEqual(h.checkpoints[0],h.checkpoints[1]);
+});
+
+
+test("next-day draft recovery allows the unfinished review word to show independent recall", async () => {
+  const h=harness(),group=h.makeGroup("english-cat","review");
+  group.items=group.items.slice(0,2);
+  group.entries=[{id:group.items[0].id,type:"english",title:"cat · 猫",skill:"english-listening",result:"supported",source:"automatic",details:{firstTryCorrect:false}}];
+  group.index=1;group.resumed=true;group.resumeExposure=false;
+  h.at("2026-10-02");await h.app.open({group});
+  assert.equal(h.app.inspect().index,1);assert.equal(h.app.inspect().result.observedExposure,false);
+  await h.audio.complete();await h.answer(group.items[1].id);await h.click("english-next");
+  assert.deepEqual(h.commits[0][0],group.entries[0],"The previously saved result stays unchanged");
+  const entry=h.commits[0][1];assert.equal(entry.result,"independent");
+  assert.equal(entry.details.observedExposure,false);assert.equal(entry.details.exposureFirst,false);h.leave();
 });

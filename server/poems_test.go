@@ -48,7 +48,7 @@ func TestPoemsAutomaticallyStartReviewAndInitializationIsIdempotent(t *testing.T
 	}
 	for _, poem := range app.store.builtinPoems {
 		item := decodeState(t, items[poem.ID])
-		if string(item["learned"]) != "true" || string(item["type"]) != `"poem"` || string(item["stage"]) != "0" {
+		if item["learned"] != nil || string(item["type"]) != `"poem"` || string(item["stage"]) != "0" {
 			t.Fatalf("initial review item: %s", items[poem.ID])
 		}
 	}
@@ -81,11 +81,13 @@ func TestPoemMigrationPreservesProgressAndUsesShanghaiReviewDate(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, oldItems := progressItems(t, stored), progressItems(t, before)
-	if !reflect.DeepEqual(decodeState(t, items["poem-01"]), decodeState(t, oldItems["poem-01"])) {
+	oldActive := decodeState(t, oldItems["poem-01"])
+	delete(oldActive, "learned")
+	if !reflect.DeepEqual(decodeState(t, items["poem-01"]), oldActive) {
 		t.Fatalf("active review was reset: %s", items["poem-01"])
 	}
 	paused := decodeState(t, items["poem-02"])
-	if string(paused["learned"]) != "true" || string(paused["stage"]) != "3" || string(paused["nextReview"]) != `"2026-11-08"` || string(paused["createdAt"]) != `"old"` {
+	if paused["learned"] != nil || string(paused["stage"]) != "3" || string(paused["nextReview"]) != `"2026-11-08"` || string(paused["createdAt"]) != `"old"` {
 		t.Fatalf("existing stage or dates changed: %s", items["poem-02"])
 	}
 	if len(items) != len(app.store.builtinPoems)+1 || string(items["math"]) != string(oldItems["math"]) || string(decodeState(t, stored.Payload)["future"]) != `{"preserve":true}` {
@@ -96,7 +98,7 @@ func TestPoemMigrationPreservesProgressAndUsesShanghaiReviewDate(t *testing.T) {
 			continue
 		}
 		newItem := decodeState(t, items[poem.ID])
-		if string(newItem["nextReview"]) != `"2026-10-01"` || string(newItem["stage"]) != "0" || string(newItem["learned"]) != "true" {
+		if string(newItem["nextReview"]) != `"2026-10-01"` || string(newItem["stage"]) != "0" || newItem["learned"] != nil {
 			t.Fatalf("new poem %s did not start today's review: %s", poem.ID, items[poem.ID])
 		}
 	}

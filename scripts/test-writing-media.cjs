@@ -95,7 +95,7 @@ assert.equal(documented.length, 150, 'Curriculum document must list all 150 char
 assert.equal(new Set(documented).size, 150, 'Duplicate character in curriculum document');
 assert.deepEqual(documented.sort(), Array.from(characters).sort(), 'Documented characters differ from selectable characters');
 const readme = fs.readFileSync(path.join(__dirname, '../README.md'), 'utf8');
-const writingReadme = readme.match(/## 汉字描一描\s*\n([\s\S]*?)(?=\n## |$)/)?.[1];
+const writingReadme = readme.match(/## 汉字[^\n]*\n([\s\S]*?)(?=\n## |$)/)?.[1];
 assert.ok(writingReadme, 'Writing README section is missing');
 assert.match(writingReadme, /150\s*个生活常用字/, 'README must describe the expanded character collection');
 assert.doesNotMatch(writingReadme, /\b60\s*(?:个\s*)?(?:生活常用字|常用字|字)/, 'README still describes a 60-character collection');
@@ -162,11 +162,12 @@ for (const match of scriptTags) {
 }
 const renderer = scripts.findIndex(src => /^vendor\/hanzi-writer-.*\.js$/.test(src));
 const player = scripts.indexOf('writing-strokes.js');
+const practice = scripts.indexOf('writing-practice.js');
 const voice = scripts.indexOf('writing-audio.js');
 const vocabularyIndex = scripts.indexOf('writing-vocabulary.js');
 const appIndex = scripts.indexOf('app.js');
-assert.ok(renderer >= 0 && player > renderer && appIndex > player && voice >= 0 && appIndex > voice && vocabularyIndex >= 0 && appIndex > vocabularyIndex, 'Writing scripts must load their dependencies before app.js');
-for (const index of [renderer, player, voice, vocabularyIndex, appIndex]) assert.doesNotMatch(scriptTags[index][0], /\sasync(?:\s|=|>)/i, 'Dependent writing scripts cannot use unordered async loading');
+assert.ok(renderer >= 0 && player > renderer && appIndex > player && practice > renderer && appIndex > practice && voice >= 0 && appIndex > voice && vocabularyIndex >= 0 && appIndex > vocabularyIndex, 'Writing scripts must load their dependencies before app.js');
+for (const index of [renderer, player, practice, voice, vocabularyIndex, appIndex]) assert.doesNotMatch(scriptTags[index][0], /\sasync(?:\s|=|>)/i, 'Dependent writing scripts cannot use unordered async loading');
 
 // Observe actual loader configuration with local files. This catches accidental
 // fallback to Hanzi Writer's built-in CDN without coupling to source formatting.

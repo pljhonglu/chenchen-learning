@@ -26,6 +26,7 @@ jobs:
         run: go test -race ./...
       - name: Check browser JavaScript
         run: |
+          node --check public/math-model.js
           node --check public/app.js
           node --check public/speech.js
           node --check public/english.js
@@ -33,6 +34,7 @@ jobs:
           node --check public/writing-vocabulary.js
           node --check public/writing-audio.js
           node --check public/writing-strokes.js
+          node --check public/writing-practice.js
           node --check public/pinyin-data.js
           node --check public/pinyin-audio.js
           node --check public/learning-model.js
@@ -41,6 +43,7 @@ jobs:
           node --check public/garden.js
           node --check public/garden-scene.js
           node scripts/test-progress.cjs
+          node scripts/test-math-model.cjs
           node scripts/test-math.cjs
           node scripts/test-speech.cjs
           node scripts/test-poem-media.cjs
@@ -49,6 +52,7 @@ jobs:
           node scripts/test-english-media.cjs
           node scripts/test-writing-audio.cjs
           node scripts/test-writing-strokes.cjs
+          node scripts/test-writing-practice.cjs
           node scripts/test-writing-media.cjs
           node scripts/test-pinyin.cjs
           node scripts/test-pinyin-audio.cjs

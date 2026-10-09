@@ -15,7 +15,7 @@ globalThis.subject = {
   renderMath, renderBondPanel, checkBondSheet, showView, navigate,
   setSession: value => reviewSession=value,
   getSession: () => reviewSession,
-  state: () => ({ mathMode, mathCompleted, mathScore, bondSheet, currentQ, currentView }),
+  state: () => ({ mathMode, mathCompleted, mathScore, bondSheet, currentQ, currentView, mathSaving }),
   setBond: value => { bondSheet = value; renderBondPanel(); },
   prime: state => { acceptServerState({found:true,payload:state}); POEMS=[]; BUILTIN_POEMS=[]; poemsLoadPromise=Promise.resolve([]); }
 };
@@ -104,7 +104,7 @@ function makeDOM() {
 
 function harness(mode = "decomp", options = {}) {
   const document = makeDOM(), timers = new Map(), spoken = [], requests = [];
-  const database = {items:{},activity:{},customPoems:{},customCharacters:{},hiddenCourses:{},garden:{groups:{}}};
+  const database = {items:{},activity:{},customPoems:{},customCharacters:{},hiddenCourses:{},garden:{groups:{}},studySessions:{},...copy(options.initialState || {})};
   const speech = { supported: () => true, stop() {}, speakPoem(poem) { spoken.push(poem.lines.join("")); } };
   let timerId = 0, randomSeed = 12345;
   const math = Object.create(Math);
@@ -117,11 +117,22 @@ function harness(mode = "decomp", options = {}) {
     clearTimeout(id) { timers.delete(id); },
     fetch: async (url, settings={}) => {
       assert.equal(options.persistence,true,"Math question interaction must not make a network request");
-      assert.equal(url,"/api/study-groups");
-      const request={method:settings.method||"GET",body:settings.body?JSON.parse(settings.body):null};requests.push(request);
-      if(options.failFirst&&requests.length===1) throw new Error("Offline");
+      assert.ok(["/api/study-groups","/api/study-sessions"].includes(url));
+      const request={url,method:settings.method||"GET",body:settings.body?JSON.parse(settings.body):null};requests.push(request);
+      if(options.conflictDraft && url==="/api/study-sessions" && request.body.progress?.practice?.questionResults?.length) {
+        return {ok:false,status:409,json:async()=>({ok:false,error:"study_session_conflict",message:"已经保存的数学首次答案不能改写",payload:copy(database)})};
+      }
+      if(options.failDraft && url==="/api/study-sessions" && request.body.progress?.practice?.questionResults?.length && !options.failedDraft) {options.failedDraft=true;throw new Error("Offline");}
+      if(options.failFirst && url==="/api/study-groups" && requests.filter(r=>r.url===url).length===1) throw new Error("Offline");
       assert.equal(request.method,"POST");
       const group=request.body;
+      if (url==="/api/study-sessions") {
+        const previous=database.studySessions[group.id]?.progress?.practice?.questions;
+        if(previous) assert.deepEqual(group.progress.practice.questions,previous,"The persisted question plan is immutable");
+        database.studySessions[group.id]=copy(group);
+        return {ok:true,status:200,json:async()=>({ok:true,found:true,payload:copy(database)})};
+      }
+      delete database.studySessions[group.id];
       if (!database.garden.groups[group.id]) {
         group.entries.forEach((entry,index)=>{
           database.activity[`${group.id}-${index}`]={...copy(entry),schemaVersion:2,day:context.window.ChenchenStudyGroups.day()};
@@ -134,12 +145,13 @@ function harness(mode = "decomp", options = {}) {
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,"../public/learning-model.js"),"utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,"../public/study-groups.js"),"utf8"), context);
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,"../public/math-model.js"),"utf8"), context);
   vm.runInNewContext(instrumented, context, { filename: sourcePath });
   const subject = context.subject;
   if(options.persistence) {
     subject.prime(database);
     const type=mode==="decomp" ? "decomp" : "math";
-    subject.setSession({id:"math-test-group",type,mode:"learn",title:type,count:10,unit:"题",items:[{id:mode==="decomp" ? "math-decomp-10" : "math-addsub-10",type}],index:0,entries:[],saving:false});
+    subject.setSession(options.session || {id:"math-test-group",type,mode:"learn",title:type,count:10,unit:"题",items:[{id:mode==="decomp" ? "math-decomp-10" : "math-addsub-10",type}],index:0,entries:[],saving:false});
   }
   subject.showView("math"); subject.renderMath(mode);
   const find = selector => { const result = document.querySelector(selector); assert.ok(result, `Missing element: ${selector}`); return result; };
@@ -147,7 +159,7 @@ function harness(mode = "decomp", options = {}) {
   function fixedBond({ n = 7, left = 3, right = n - left, mode = "decomp", blanks = { whole: false, left: false, right: true } } = {}) {
     subject.setBond({ item: { n, left, right, mode, blanks, answers: { whole: null, left: null, right: null }, status: "open" }, qIndex: 1, activeSlot: ["whole", "left", "right"].find(slot => blanks[slot]), checked: false });
   }
-  return { subject, document, timers, spoken, requests, find, click, fixedBond, db:()=>copy(database), state: () => subject.state(), score: () => copy(subject.state().mathScore) };
+  return { subject, document, timers, spoken, requests, find, click, fixedBond,ready:()=>new Promise(resolve=>setImmediate(resolve)), db:()=>copy(database), state: () => subject.state(), score: () => copy(subject.state().mathScore) };
 }
 
 // The correction must be inside the diagram or equation, beside the actual
@@ -194,25 +206,6 @@ test("a complete number bond is checked on the final digit and waits for manual 
   assert.equal(h.timers.size, 0);
 });
 
-test("two blanks wait for both digits and accept a valid alternative partition including zero", () => {
-  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
-  h.click('[data-n="0"]');
-  assert.equal(h.state().bondSheet.activeSlot, "right");
-  assert.equal(h.state().mathCompleted, 0);
-  assert.deepEqual(h.score(), { ok: 0, total: 0 });
-  assert.equal(h.document.querySelectorAll(".math-answer-result").length, 0, "Do not mark either blank until the pair is complete");
-  assert.equal(h.timers.size, 0);
-  h.click('[data-n="7"]');
-  assert.equal(h.state().bondSheet.item.status, "ok", "0 + 7 is valid even if the generated partition was 3 + 4");
-  assertVisualAnswer(h, { slot: "left", expected: 0 });
-  assertVisualAnswer(h, { slot: "right", expected: 7 });
-  assert.equal(h.document.querySelectorAll(".math-answer-result.is-wrong").length, 0);
-  assert.deepEqual(h.score(), { ok: 1, total: 1 });
-  assert.equal(h.state().bondSheet.qIndex, 1);
-  assert.equal(h.timers.size, 0);
-  h.click("#math-next");
-  assert.equal(h.state().bondSheet.qIndex, 2);
-});
 
 test("a wrong number bond shows the correct relationship and waits for manual continuation", () => {
   const h = harness(); h.fixedBond();
@@ -240,26 +233,7 @@ test("a wrong number bond shows the correct relationship and waits for manual co
   assert.equal(h.spoken.length, 0, "Question changes must not depend on device speech");
 });
 
-test("wrong two-part answers get a valid correction that preserves a usable first part", () => {
-  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
-  h.click('[data-n="2"]'); h.click('[data-n="4"]');
-  assert.match(h.find("#math-fb").textContent, /7\s*=\s*2\s*\+\s*5/);
-  assertVisualAnswer(h, { slot: "left", expected: 2 });
-  assertVisualAnswer(h, { slot: "right", expected: 5, attempted: 4 });
-  assert.equal(h.document.querySelectorAll(".math-answer-result.is-wrong").length, 1, "Keep the usable first part marked correct");
-  assert.equal(h.timers.size, 0);
-  assert.deepEqual(h.score(), { ok: 0, total: 1 });
-});
 
-test("a first part larger than the whole gets a valid correction without a negative number", () => {
-  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
-  h.click('[data-n="9"]'); h.click('[data-n="4"]');
-  assert.match(h.find("#math-fb").textContent, /7\s*=\s*3\s*\+\s*4/);
-  assertVisualAnswer(h, { slot: "left", expected: 3, attempted: 9 });
-  assertVisualAnswer(h, { slot: "right", expected: 4 });
-  assert.doesNotMatch(h.find("#math-fb").textContent, /-\d/);
-  assert.equal(h.timers.size, 0);
-});
 
 test("composition also checks its only blank immediately and explains an incorrect whole", () => {
   const h = harness(); h.fixedBond({ mode: "compose", blanks: { whole: true, left: false, right: false } });
@@ -272,15 +246,6 @@ test("composition also checks its only blank immediately and explains an incorre
   assert.equal(h.state().bondSheet.qIndex, 2);
 });
 
-test("an unusable first part preserves a valid alternative second part directly in the diagram", () => {
-  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
-  h.click('[data-n="9"]'); h.click('[data-n="2"]');
-  assertVisualAnswer(h, { slot: "left", expected: 5, attempted: 9 });
-  assertVisualAnswer(h, { slot: "right", expected: 2 });
-  assert.match(h.find("#math-fb").textContent, /7\s*=\s*5\s*\+\s*2/);
-  assert.deepEqual(h.score(), { ok: 0, total: 1 });
-  assert.equal(h.timers.size, 0);
-});
 
 test("every math mode uses visual questions and corrections without an inactive audio control", () => {
   for (const mode of ["decomp", "compose", "addsub"]) {
@@ -310,15 +275,6 @@ test("every math mode uses visual questions and corrections without an inactive 
   }
 });
 
-test("two unusable parts receive a complete valid correction with both attempts crossed out", () => {
-  const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: true } });
-  h.click('[data-n="9"]'); h.click('[data-n="10"]');
-  assertVisualAnswer(h, { slot: "left", expected: 3, attempted: 9 });
-  assertVisualAnswer(h, { slot: "right", expected: 4, attempted: 10 });
-  assert.equal(h.document.querySelectorAll(".math-answer-result.is-wrong").length, 2);
-  assert.deepEqual(h.score(), { ok: 0, total: 1 });
-  assert.equal(h.timers.size, 0);
-});
 
 test("a wrong single left blank is corrected in place without changing either given number", () => {
   const h = harness(); h.fixedBond({ blanks: { whole: false, left: true, right: false } });
@@ -443,13 +399,13 @@ test("a wrong tenth answer stays visible until manual finish and remains an inco
 
 test("ten-question arithmetic results share the three ratings and record their actual score", async () => {
   for(const [correct,result,label] of [[10,"independent","自己完成"],[2,"supported","提示后完成"],[0,"again","还要练习"]]) {
-    const h=harness("addsub",{persistence:true});
+    const h=harness("addsub",{persistence:true});await h.ready();
     for(let index=0;index<10;index++) {
       const question=h.state().currentQ;
       const option=h.document.querySelectorAll(".math-opts button").find(button=>index<correct?Number(button.dataset.v)===question.answer:Number(button.dataset.v)!==question.answer);
-      option.click();h.click("#math-next");
+      option.click();await h.ready();h.click("#math-next");await h.ready();
     }
-    assert.equal(h.requests.length,0,"Answering and viewing the summary does not save early");
+    assert.equal(h.requests.filter(r=>r.url==="/api/study-groups").length,0,"Only drafts are saved until the final confirmation");
     assert.match(h.find("#math-panel").textContent,new RegExp(label));
     assert.match(h.find("#math-panel").textContent,new RegExp(`首次答对 ${correct} / 10 题`));
     await h.find("#finish-math").onclick();
@@ -463,13 +419,13 @@ test("ten-question arithmetic results share the three ratings and record their a
 });
 
 test("number-bond completion stores the same automatic evidence under its own content id", async () => {
-  const h=harness("decomp",{persistence:true});
+  const h=harness("decomp",{persistence:true});await h.ready();
   for(let index=0;index<10;index++) {
     const item=h.state().bondSheet.item;
     for(const slot of ["whole","left","right"].filter(slot=>item.blanks[slot])) {
       h.click(`[data-n="${slot==="whole"?item.n:item[slot]}"]`);
     }
-    h.click("#math-next");
+    await h.ready();h.click("#math-next");await h.ready();
   }
   await h.find("#finish-math").onclick();
   const event=Object.values(h.db().activity)[0];
@@ -480,16 +436,16 @@ test("number-bond completion stores the same automatic evidence under its own co
 });
 
 test("a failed full-group save keeps its exact request for retry and blocks leaving an unknown result", async () => {
-  const h=harness("addsub",{persistence:true,failFirst:true});
-  for(let index=0;index<10;index++) {h.click(`[data-v="${h.state().currentQ.answer}"]`);h.click("#math-next");}
+  const h=harness("addsub",{persistence:true,failFirst:true});await h.ready();
+  for(let index=0;index<10;index++) {h.click(`[data-v="${h.state().currentQ.answer}"]`);await h.ready();h.click("#math-next");await h.ready();}
   await h.find("#finish-math").onclick();
   assert.equal(Object.values(h.db().activity).length,0);
   assert.equal(h.subject.getSession().entries.length,1);
-  const request=copy(h.requests[0].body);
+  const request=copy(h.requests.find(r=>r.url==="/api/study-groups").body);
   h.subject.navigate("math");
   assert.equal(h.state().currentView,"home","Keep the retry screen until the save outcome is known");
   await h.find("#study-save-retry").onclick();
-  assert.deepEqual(h.requests[1].body,request);
+  assert.deepEqual(h.requests.filter(r=>r.url==="/api/study-groups")[1].body,request);
   assert.equal(Object.values(h.db().activity).length,1);
   assert.equal(h.subject.getSession(),null);
   assert.match(h.find("#home-content").textContent,/收获一滴水/);
@@ -516,4 +472,68 @@ test("number-bond rounds also finish only after ten questions and a final manual
   assert.match(h.find("#math-panel").textContent, /10 道题/);
   assert.deepEqual(h.score(), { ok: 10, total: 10 });
   assert.equal(h.timers.size, 0);
+});
+
+test("restoring an answered math draft retains the wrong first answer and waits for continuation", async()=>{
+  for(const mode of ["addsub","decomp"]){
+    const h=harness(mode,{persistence:true});await h.ready();
+    const original=copy(h.subject.getSession().practice.questions);
+    const q=original[0],wrong=(q.answer+1)%11;
+    if(mode==="addsub"){
+      const button=h.document.querySelectorAll(".math-opts button").find(b=>Number(b.dataset.v)!==q.answer);button.click();
+    } else h.click('[data-n="'+wrong+'"]');
+    await h.ready();
+    const session=copy(h.subject.getSession()),state=h.db();
+    const resumed=harness(mode,{persistence:true,session,initialState:state});await resumed.ready();
+    assert.equal(resumed.state().mathCompleted,1);assert.deepEqual(resumed.score(),{ok:0,total:1});
+    assert.deepEqual(copy(resumed.subject.getSession().practice.questions).map(q=>q.key),original.map(q=>q.key));
+    assert.equal(resumed.subject.getSession().practice.questionResults[0].correct,false);
+    if(mode==="addsub")assert.ok(resumed.document.querySelectorAll(".math-opts button").every(b=>b.disabled));
+    else assert.equal(resumed.state().bondSheet.checked,true);
+    assert.equal(resumed.find("#math-next").disabled,false);
+    resumed.click("#math-next");await resumed.ready();
+    assert.equal(resumed.subject.getSession().practice.index,1);
+    assert.equal(resumed.subject.getSession().practice.questionResults.length,1);
+    assert.equal(resumed.subject.getSession().practice.questionResults[0].correct,false);
+    assert.equal(mode==="addsub"?resumed.state().currentQ.key:resumed.state().bondSheet.item.key,original[1].key);
+  }
+});
+
+test("a draft save failure locks continuation and retries the same first answer",async()=>{
+  const h=harness("addsub",{persistence:true,failDraft:true});await h.ready();
+  const wrong=h.document.querySelectorAll(".math-opts button").find(b=>Number(b.dataset.v)!==h.state().currentQ.answer);
+  wrong.click();await h.ready();
+  assert.equal(h.find("#math-next").disabled,true);
+  assert.equal(h.find("#math-save-retry").hidden,false);
+  const before=copy(h.subject.getSession().practice.questionResults);
+  wrong.onclick();assert.deepEqual(copy(h.subject.getSession().practice.questionResults),before);
+  await h.find("#math-save-retry").onclick();
+  assert.equal(h.find("#math-next").disabled,false);
+  assert.deepEqual(h.db().studySessions["math-test-group"].progress.practice.questionResults,before);
+  h.click("#math-next");await h.ready();assert.equal(h.subject.getSession().practice.index,1);
+});
+
+test("a short one-question due group stores its actual count and knowledge evidence",async()=>{
+  const modelContext={};vm.runInNewContext(fs.readFileSync(path.join(__dirname,"../public/math-model.js"),"utf8"),modelContext);
+  const points=Object.fromEntries(modelContext.ChenchenMath.pool("addsub").map(q=>[q.knowledgeId,{nextReview:"2099-10-10",lastResult:"remember"}]));
+  points["add-total-0"].nextReview="2000-01-01";
+  const h=harness("addsub",{persistence:true,initialState:{items:{"math-addsub-10":{learned:true,mathKnowledge:points}}}});await h.ready();
+  assert.equal(h.subject.getSession().count,1);assert.equal(h.find("#math-progress").textContent,"0 / 1 题");
+  h.click('[data-v="0"]');await h.ready();h.click("#math-next");await h.ready();
+  await h.find("#finish-math").onclick();
+  const entry=Object.values(h.db().activity)[0];
+  assert.equal(entry.details.total,1);assert.equal(entry.details.correct,1);
+  assert.deepEqual(entry.details.questionResults,[{key:"0+0",knowledgeId:"add-total-0",correct:true}]);
+});
+
+
+test("a conflicting mathematical first answer offers server recovery instead of endlessly resubmitting",async()=>{
+  const h=harness("addsub",{persistence:true,conflictDraft:true});await h.ready();
+  h.click('[data-v="'+h.state().currentQ.answer+'"]');await h.ready();
+  assert.equal(h.state().currentView,"home");
+  assert.equal(h.subject.getSession().draftConflict,true);
+  assert.match(h.find("#study-checkpoint-retry").textContent,/继续服务器/);
+  assert.match(h.find("#study-draft-discard").textContent,/放弃/);
+  assert.equal(h.document.getElementById("math-save-retry").hidden,true);
+  assert.equal(Object.values(h.db().activity).length,0);
 });

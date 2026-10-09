@@ -103,10 +103,10 @@
         </aside>
       </section>
       <section class="g-review-section" aria-labelledby="g-review-title"><div class="g-section-heading"><div><p class="g-kicker">把学过的，再想起来</p><h2 id="g-review-title">今天的复习</h2></div><button type="button" class="g-text-button" data-g-action="records">练习记录 <span aria-hidden="true">↗</span></button></div>
-        <p class="g-review-description">${data.earnedToday >= 3 ? "今天的水滴已经领好啦。继续完成整组仍会记录学习，可以先休息。" : "每次复习一组。学完获得一滴水，就可以休息。"}</p>
-        ${reviewGroups.length ? `<div class="g-review-grid">${reviewGroups.map(group => reviewCard(group)).join("")}</div>` : '<div class="g-review-empty"><span class="g-empty-leaf" aria-hidden="true">❧</span><div><h3>今天，慢慢来就好</h3><p>暂时没有可开始的到期复习组。可以休息，也可以到学科里开始一组学习。</p></div></div>'}
+        <p class="g-review-description">${data.earnedToday >= 3 ? "今天的水滴已经领好啦。继续完成整组仍会记录学习，可以先休息。" : "按到期时间复习，有几项就练几项。休息后可以接着完成。"}</p>
+        ${reviewGroups.length ? `<div class="g-review-grid">${reviewGroups.map(group => reviewCard(group)).join("")}</div>` : '<div class="g-review-empty"><span class="g-empty-leaf" aria-hidden="true">❧</span><div><h3>今天，慢慢来就好</h3><p>今天没有到期内容啦。可以休息，也可以到学科学一点新的。</p></div></div>'}
       </section>
-      <section class="g-subject-section" aria-label="去学科开始学习"><p>想学一点新的？</p><div class="g-subject-links">${["poem", "math", "pinyin", "write", "english"].map(type => `<button type="button" data-g-subject="${type}"><span aria-hidden="true">${TYPES[type].icon}</span>${TYPES[type].title}<small>${TYPES[type].count} ${TYPES[type].unit}一组</small><i aria-hidden="true">→</i></button>`).join("")}</div></section>
+      <section class="g-subject-section" aria-label="去学科开始学习"><p>按今天的安排，去学科练一练</p><div class="g-subject-links">${["poem", "math", "pinyin", "write", "english"].map(type => `<button type="button" data-g-subject="${type}"><span aria-hidden="true">${TYPES[type].icon}</span>${TYPES[type].title}<small>每次最多 ${TYPES[type].count} ${TYPES[type].unit}</small><i aria-hidden="true">→</i></button>`).join("")}</div></section>
     </div>`;
     // Updating balances must not replace the cast while it is performing.
     const focusedAction = document.activeElement?.getAttribute?.("data-g-action");
@@ -136,7 +136,7 @@
   function leave(context, action) { if (current(context)) { stop(); action(); } }
   function reviewCard(group) {
     const type = TYPES[group.type] || TYPES.poem;
-    return `<article class="g-review-card g-subject-${esc(group.type)}"><span class="g-review-icon" aria-hidden="true">${type.icon}</span><div><h3>${esc(group.title || type.title)}</h3><p>${Number(group.count) || type.count} ${esc(group.unit || type.unit)}一组 <span>· ${Number(group.dueCount) || 0} 项到期</span></p></div><button type="button" data-g-review="${esc(group.type)}" aria-label="开始${esc(group.title || type.title)}复习">开始复习 <span aria-hidden="true">→</span></button></article>`;
+    return `<article class="g-review-card g-subject-${esc(group.type)}"><span class="g-review-icon" aria-hidden="true">${type.icon}</span><div><h3>${esc(group.title || type.title)}</h3><p>${Number(group.count) || type.count} ${esc(group.unit || type.unit)} <span>· ${group.resumed ? `已保存 ${group.entries?.length || 0} 项` : `${Number(group.dueCount) || 0} 项到期`}</span></p></div><button type="button" data-g-review="${esc(group.type)}" aria-label="${group.resumed ? "继续" : "开始"}${esc(group.title || type.title)}复习">${group.resumed ? "继续上次" : "开始复习"} <span aria-hidden="true">→</span></button></article>`;
   }
   function celebrationHtml(gift) {
     return `<div class="g-gift-celebration" role="status"><div class="g-gift-rays" aria-hidden="true"></div><div class="g-gift-art" aria-hidden="true"></div><span class="sr-only">🎁</span><p>第 ${giftNumber(gift)} 份成长礼物</p><strong>${esc(stageAt(Number(gift.waterTotal) || giftNumber(gift) * 12).title)}</strong><button type="button" data-g-action="dismiss-gift">收好啦 <span aria-hidden="true">✓</span></button></div>`;

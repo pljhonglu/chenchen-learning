@@ -31,8 +31,8 @@ type studyEntry struct {
 	Result        string         `json:"result"`
 	Source        string         `json:"source"`
 	Details       map[string]any `json:"details"`
-	Day           string         `json:"day,omitempty"` // Never trusted; replaced at commit.
-	At            any            `json:"at,omitempty"`  // Never trusted; replaced at commit.
+	Day           string         `json:"day,omitempty"` // Server-owned first saved answer date.
+	At            any            `json:"at,omitempty"`  // Server-owned first saved answer time.
 }
 
 type studyGroupRequest struct {
@@ -100,14 +100,15 @@ func hasSavedStudyGroups(previous progress) (bool, error) {
 		return false, nil
 	}
 	var state struct {
-		Garden struct {
+		StudySessions map[string]json.RawMessage `json:"studySessions"`
+		Garden        struct {
 			Groups map[string]json.RawMessage `json:"groups"`
 		} `json:"garden"`
 	}
 	if err := json.Unmarshal(previous.Payload, &state); err != nil {
 		return false, err
 	}
-	return len(state.Garden.Groups) > 0, nil
+	return len(state.Garden.Groups) > 0 || len(state.StudySessions) > 0, nil
 }
 
 // Before the first completed group, legacy PUT remains compatible but cannot
@@ -122,11 +123,21 @@ func retainGarden(payload json.RawMessage, previous progress) (json.RawMessage, 
 			return nil, err
 		}
 	}
-	if raw, exists := old["garden"]; exists {
-		incoming["garden"] = raw
-	} else if _, exists := incoming["garden"]; exists {
-		delete(incoming, "garden")
-	} else {
+	changed := false
+	for _, field := range []string{"garden", "studySessions"} {
+		if raw, exists := old[field]; exists {
+			if !bytes.Equal(incoming[field], raw) {
+				changed = true
+			}
+			incoming[field] = raw
+		} else {
+			if _, exists := incoming[field]; exists {
+				changed = true
+			}
+			delete(incoming, field)
+		}
+	}
+	if !changed {
 		return payload, nil
 	}
 	return json.Marshal(incoming)
@@ -188,9 +199,10 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 	sizes := map[string]int{"poem": 5, "pinyin": 10, "write": 5, "english": 5, "math": 1, "decomp": 1}
 	skills := map[string]string{"poem": "poem-recitation", "pinyin": "pinyin-reading", "write": "hanzi-writing", "english": "english-listening", "math": "math-solving", "decomp": "math-solving"}
 	count, exists := sizes[group.Type]
-	if !exists || len(group.Entries) != count {
+	if !exists || len(group.Entries) < 1 || len(group.Entries) > count {
 		return bad("请完成这一学科规定数量的小练习")
 	}
+	count = len(group.Entries)
 	seen := make(map[string]bool)
 	content := make([]string, 0, count)
 	for _, entry := range group.Entries {
@@ -200,9 +212,14 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 			(entry.Result != "independent" && entry.Result != "supported" && entry.Result != "again") {
 			return bad("小组中的内容、数量或确认结果不完整")
 		}
-		automatic := group.Type == "math" || group.Type == "decomp" || group.Type == "english"
+		automatic := group.Type == "math" || group.Type == "decomp" || group.Type == "english" || group.Type == "write" && entry.Source == "automatic"
 		if automatic && entry.Source != "automatic" || !automatic && entry.Source != "parent" {
 			return bad("请使用该学科实际的确认方式")
+		}
+		if group.Type == "write" && entry.Source == "automatic" {
+			if err := validateAutomaticWriting(entry); err != nil {
+				return "", 0, err
+			}
 		}
 		for _, flag := range []string{"afterPractice", "observedExposure", "exposureFirst", "assisted"} {
 			if value, exists := entry.Details[flag]; exists {
@@ -222,11 +239,11 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 			QuestionKeys []string `json:"questionKeys"`
 		}
 		raw, err := json.Marshal(entry.Details)
-		if err != nil || json.Unmarshal(raw, &detail) != nil || detail.Total != 10 || detail.Correct == nil || *detail.Correct < 0 || *detail.Correct > 10 || len(detail.QuestionKeys) != 10 {
-			return bad("数学小组需要完整的十题首次作答结果")
+		if err != nil || json.Unmarshal(raw, &detail) != nil || detail.Total < 1 || detail.Total > 10 || detail.Correct == nil || *detail.Correct < 0 || *detail.Correct > detail.Total || len(detail.QuestionKeys) != detail.Total {
+			return bad("数学小组需要一到十题完整的首次作答结果")
 		}
 		result := "supported"
-		if *detail.Correct == 10 {
+		if *detail.Correct == detail.Total {
 			result = "independent"
 		} else if *detail.Correct == 0 {
 			result = "again"
@@ -234,13 +251,16 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 		if entry.Result != result {
 			return bad("数学确认结果与首次答对题数不一致")
 		}
+		if err := validateMathResults(group.Type, entry.Details); err != nil {
+			return "", 0, err
+		}
 		content = append([]string{}, detail.QuestionKeys...)
 		for _, key := range content {
 			if strings.TrimSpace(key) == "" || len(key) > 2000 {
 				return bad("数学题目编号不完整")
 			}
 		}
-		count = 10
+		count = detail.Total
 	}
 	sort.Strings(content)
 	raw, _ := json.Marshal(struct {
@@ -341,6 +361,14 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 			}
 			return false, nil
 		}
+		sessions, err := gardenCollection(state, "studySessions")
+		if err != nil {
+			return false, err
+		}
+		group, err = finalizeStudySession(group, state, sessions, now)
+		if err != nil {
+			return false, err
+		}
 		items, err := gardenCollection(state, "items")
 		if err != nil {
 			return false, err
@@ -367,7 +395,7 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 			}
 			var learned bool
 			_ = json.Unmarshal(item["learned"], &learned)
-			if _, removed := hidden[entry.ID]; removed || group.Mode == "review" && !learned {
+			if _, removed := hidden[entry.ID]; removed || group.Mode == "review" && (item == nil || group.Type != "poem" && !learned) {
 				return false, gardenError(http.StatusConflict, "entry_not_found", "有内容已移除或尚未加入复习，请返回首页重新开始")
 			}
 			if oldType := jsonString(item["type"]); oldType != "" && oldType != group.Type {
@@ -385,18 +413,35 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 			if string(detailRaw) != "null" {
 				_ = json.Unmarshal(detailRaw, &entry.Details)
 			}
-			if next := jsonString(item["nextReview"]); next > day {
-				entry.Details["afterPractice"] = true
+			entryDay := entry.Day
+			if entryDay == "" {
+				entryDay = day
 			}
-			entry.SchemaVersion, entry.Type, entry.Day, entry.At = 2, group.Type, day, at
+			if next := jsonString(item["nextReview"]); next > entryDay {
+				entry.Details["afterPractice"] = true
+				if group.Type == "write" && entry.Source == "automatic" {
+					entry.Result = "supported"
+				}
+			}
+			entry.SchemaVersion, entry.Type = 2, group.Type
+			if entry.Day == "" {
+				entry.Day, entry.At = day, at
+			}
 			activityKey := fmt.Sprintf("study-group:%s:%d", group.ID, index)
 			if _, exists := activity[activityKey]; exists {
 				return false, gardenError(http.StatusConflict, "activity_id_conflict", "这一组的记录编号已存在，请返回首页")
 			}
 			activity[activityKey], _ = json.Marshal(entry)
-			item["learned"] = json.RawMessage(`true`)
+			if group.Type == "poem" {
+				delete(item, "learned")
+			} else {
+				item["learned"] = json.RawMessage(`true`)
+			}
 			item["updatedAt"], _ = json.Marshal(at)
-			item["lastAssessment"], _ = json.Marshal(map[string]any{"result": entry.Result, "source": entry.Source, "skill": entry.Skill, "at": at})
+			item["lastAssessment"], _ = json.Marshal(map[string]any{"result": entry.Result, "source": entry.Source, "skill": entry.Skill, "at": entry.At})
+			if err := updateMathKnowledge(item, entry, group.Type); err != nil {
+				return false, err
+			}
 			items[entry.ID], _ = json.Marshal(item)
 			operations = append(operations, progressOperation{Op: "merge", Collection: "items", Key: entry.ID}, progressOperation{Op: "set", Collection: "activity", Key: activityKey})
 			contentIDs = append(contentIDs, entry.ID)
@@ -406,7 +451,7 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 		}
 		// Reconciliation deliberately supports older same-day delivery. A new
 		// group can never reschedule an item which is early at commit time.
-		for _, id := range contentIDs {
+		for index, id := range contentIDs {
 			raw := previousItems[id]
 			if raw == nil {
 				continue
@@ -415,7 +460,11 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 			if json.Unmarshal(raw, &old) != nil {
 				continue
 			}
-			if jsonString(old["nextReview"]) <= day {
+			entryDay := group.Entries[index].Day
+			if entryDay == "" {
+				entryDay = day
+			}
+			if jsonString(old["nextReview"]) <= entryDay {
 				continue
 			}
 			if json.Unmarshal(items[id], &current) != nil {
@@ -462,6 +511,8 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 		ledger.Groups[group.ID] = gardenGroup{ID: group.ID, Type: group.Type, Mode: group.Mode, Day: day, At: at, Count: count, ContentIDs: contentIDs, WaterAwarded: water, Signature: signature}
 		state["items"], _ = json.Marshal(items)
 		state["activity"], _ = json.Marshal(activity)
+		delete(sessions, group.ID)
+		state["studySessions"], _ = json.Marshal(sessions)
 		return true, nil
 	})
 }

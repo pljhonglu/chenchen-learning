@@ -148,23 +148,33 @@
     }
     function setupItem() {
       const item = current(), existing = progress(item);
-      round.steps = item.source === "extension" && !existing ? ["learn","listen","sentence","recall"] : ["listen","learn","sentence","recall"];
+      const reviewing = item.phase === "review";
+      round.steps = reviewing ? ["listen"] : item.source === "extension" && !existing ? ["learn","listen","sentence","recall"] : ["listen","learn","sentence","recall"];
       round.step = 0;
-      const observedExposure = exposure(item.id);
+      const observedExposure = exposure(item.id) || !!(round.group.resumed && round.group.resumeExposure !== false && round.index === round.resumeIndex);
       round.result = {attempts:0, firstTryCorrect:null, heardPrompt:false, assisted:false, speaking:"listened", usedHint:false, observedExposure, exposureFirst:round.steps[0] === "learn" || observedExposure};
       round.activityId = `english-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
-      round.saved = false; round.operations = null;
+      round.pendingEntries = null;
       const same = data.items.filter(i => i.theme === item.theme && i.id !== item.id);
       const other = data.items.filter(i => i.id !== item.id && !same.includes(i));
       round.choices = shuffle([item,...shuffle(same).concat(shuffle(other)).slice(0,2)]);
     }
     function start(group) {
-      if (saving || !group || group.items.length !== 5) return;
+      if (saving) return;
+      if (!group || !Array.isArray(group.items) || group.items.length < 1 || group.items.length > 5) throw new Error("这一组需要 1 到 5 个词，请返回重新生成。");
+      const items = group.items.map(selected => {
+        const item = data.items.find(candidate => candidate.id === selected.id);
+        return item ? {...item,phase:selected.phase || group.mode} : null;
+      });
+      if (items.some(item=>!item) || new Set(items.map(item=>item.id)).size !== items.length) throw new Error("这一组有词卡暂时无法打开，请返回重新生成。");
+      const entries = (group.entries || []).map(entry=>({...entry,details:{...entry.details}}));
+      const index = group.index ?? entries.length;
+      if (!Number.isInteger(index) || index < 0 || index > items.length || entries.length !== index || entries.some((entry,i)=>entry.id !== items[i].id)) throw new Error("这一组的进度暂时无法恢复，请返回重试。");
       generation++; detailItemId = null; audio.stop();
-      const items = group.items.map(selected=>data.items.find(item=>item.id===selected.id));
-      if (items.some(item=>!item)) throw new Error("这一组有词卡暂时无法打开，请返回重新生成。");
-      round = {items,index:0,entries:[],group};
-      setupItem(); scrollTo(0); renderStep();
+      round = {items,index,entries,group,resumeIndex:index};
+      scrollTo(0);
+      if (index === items.length) { renderCompleted(); return; }
+      setupItem(); renderStep();
     }
     function renderStep() {
       audio.stop(); generation++; audioError = "";
@@ -173,9 +183,12 @@
       let content;
       if (phase === "listen") content = `<button class="btn btn-primary english-listen-button" id="english-prompt">◖)) 听一听</button><div class="english-choices">${round.choices.map((choice,i) => `<button class="english-choice" data-english-choice="${escape(choice.id)}" aria-label="选择图片 ${i + 1}：${escape(choice.meaning)}" disabled>${art(choice)}<span>${i + 1}</span></button>`).join("")}</div><p class="english-feedback" id="english-feedback" role="status">先听声音，再选图片。</p><button class="btn btn-primary english-next" id="english-next" disabled>找到了，继续 →</button>`;
       else content = `<div class="english-practice-layout"><button class="english-main-picture" id="english-repeat-picture" aria-label="再听${phase === "sentence" ? "句子" : "单词"}">${art(item)}<span>◖)) ${phase === "recall" ? "需要提示时，点这里" : "点图片，再听一次"}</span></button><div class="english-practice-copy">${phase === "recall" ? `<p class="english-recall-title">轮到你啦</p><p>可以说单词，也可以试着说一句。</p>` : `<h2 lang="en">${escape(phase === "sentence" ? item.sentence : item.word)}</h2><p class="english-meaning">${escape(phase === "sentence" ? item.translation : item.meaning)}</p>`}<div class="btn-row"><button class="btn btn-ghost" id="english-word-hint">◖)) ${phase === "recall" ? "听单词提示" : "听单词"}</button><button class="btn btn-ghost" id="english-sentence-hint">◖)) ${phase === "recall" ? "听句子提示" : "听句子"}</button></div>${item.action && phase === "sentence" ? `<p class="english-action">${escape(item.action.zh)}</p>` : ""}<p class="english-turn" id="english-turn" role="status">${phase === "recall" ? "慢慢想，想不起来也没关系。" : "先听一听，稍后轮到你说。"}</p><button class="btn btn-primary english-next" id="english-next" ${phase === "recall" ? "" : "disabled"}>${phase === "recall" ? "我试着说了 ✓" : "我准备好了，继续 →"}</button>${phase === "recall" ? `<button class="text-btn english-listen-only" id="english-listen-only">今天先听听，也可以</button><p class="english-speech-note">记录一次开口尝试，不评判发音对错。</p>` : ""}</div></div>`;
-      root().innerHTML = `<div class="english-round-top"><button class="text-btn" id="english-exit">← 先休息</button><span>英语${round.group.mode === "review" ? "复习" : "学习"} ${round.index + 1} / 5</span><span>${round.step + 1} / 4 步</span></div><p class="study-group-note">${round.group.items[round.index]?.afterPractice ? "顺便温习 · 原定复习日期不变" : Object.values(state().garden?.groups || {}).filter(group=>group.day===hooks.todayStr() && group.waterAwarded).length >= 3 ? "今天水滴已领完，本组仍会记录学习" : "学完 5 个词，收获 1 滴水 · 中途退出从头开始"}</p><div class="english-step-dots">${round.steps.map((s,i) => `<span class="${i === round.step ? "now" : i < round.step ? "done" : ""}">${labels[s]}</span>`).join("")}</div><div class="card english-practice"><div class="english-practice-heading"><p class="eyebrow">中文带着玩 · 英文慢慢说</p><h1>${labels[phase]}</h1></div>${content}${soundBar()}<p id="english-save-error" class="form-error" role="alert"></p></div>`;
+      root().innerHTML = `<div class="english-round-top"><button class="text-btn" id="english-exit">← 先休息</button><span>英语${item.phase === "review" ? "复习" : "学习"} ${round.index + 1} / ${round.items.length}</span><span id="english-step-count">${round.step + 1} / ${round.steps.length} 步</span></div><p class="study-group-note">${round.group.items[round.index]?.afterPractice ? "顺便温习 · 原定复习日期不变" : Object.values(state().garden?.groups || {}).filter(group=>group.day===hooks.todayStr() && group.waterAwarded).length >= 3 ? "今天水滴已领完，本组仍会记录学习" : `学完本组 ${round.items.length} 个词，收获 1 滴水 · 完成的词会保存，可继续学习`}</p><div class="english-step-dots" id="english-step-dots">${round.steps.map((s,i) => `<span class="${i === round.step ? "now" : i < round.step ? "done" : ""}">${labels[s]}</span>`).join("")}</div><div class="card english-practice"><div class="english-practice-heading"><p class="eyebrow">中文带着玩 · 英文慢慢说</p><h1>${labels[phase]}</h1></div>${content}${soundBar()}<p id="english-save-error" class="form-error" role="alert"></p></div>`;
       bindSound();
-      root().querySelector("#english-exit").onclick = () => {stop(); hooks.onExit();};
+      root().querySelector("#english-exit").onclick = () => {
+        if (saving || round?.pendingEntries || hooks.groupSaving?.()) return;
+        stop(); hooks.onExit();
+      };
       root().querySelector("#english-next").onclick = next;
       if (phase === "listen") {
         root().querySelector("#english-prompt").onclick = playPrompt;
@@ -212,6 +225,11 @@
       button.classList.add(correct ? "correct" : "try-again");
       if (!correct) {
         result.assisted = true; button.disabled = true; button.dataset.wrong = "true";
+        if (current().phase === "review" && round.steps.length === 1) {
+          round.steps = ["listen","learn","sentence","recall"];
+          root().querySelector("#english-step-count").textContent = "1 / 4 步";
+          root().querySelector("#english-step-dots").innerHTML = '<span class="now">听声音，找图片</span><span>听单词，跟着说</span><span>一起说一句</span><span>看图，试着自己说</span>';
+        }
         root().querySelector("#english-feedback").textContent = "再听一遍，找找另一个小伙伴。";
         play(["guide-retry",current().id + "-word"]); return;
       }
@@ -222,23 +240,57 @@
       play(["guide-correct",current().id + "-word"]);
     }
     function next() {
-      if (saving) return;
+      if (saving || !round) return;
+      if (round.pendingEntries) return finishItem();
       if (stage() === "recall") return finishItem("attempted");
       if (stage() === "listen" && !round.result.answered) return;
+      if (stage() === "listen" && round.steps.length === 1) return finishItem("listened");
       round.step++; renderStep();
     }
     async function finishItem(speaking) {
       if (saving || !round) return;
       saving = true; audio.stop();
       const active = round, item = current(), result = active.result;
-      result.speaking = speaking;
-      active.entries.push({
-        id:item.id,type:"english",title:`${item.word} · ${item.meaning}`,skill:"english-listening",result:listeningResult(result),source:"automatic",
-        details:{attempts:result.attempts,firstTryCorrect:result.firstTryCorrect,exposureFirst:result.exposureFirst,observedExposure:result.observedExposure,assisted:result.assisted,speaking,usedHint:result.usedHint,speakingAssessed:false,sentencePracticed:true}
-      });
-      active.index++;
-      if (active.index < active.items.length) {saving=false;setupItem();renderStep();}
-      else await hooks.completeGroup(active.entries);
+      if (!active.pendingEntries) {
+        result.speaking = speaking;
+        active.pendingEntries = [...active.entries,{
+          id:item.id,type:"english",title:`${item.word} · ${item.meaning}`,skill:"english-listening",result:listeningResult(result),source:"automatic",
+          details:{attempts:result.attempts,firstTryCorrect:result.firstTryCorrect,exposureFirst:result.exposureFirst,observedExposure:result.observedExposure,assisted:result.assisted,speaking,usedHint:result.usedHint,speakingAssessed:false,sentencePracticed:active.steps.includes("sentence")}
+        }];
+      }
+      const nextButton = root().querySelector("#english-next"), listenOnly = root().querySelector("#english-listen-only");
+      nextButton.disabled = true;
+      if (listenOnly) listenOnly.disabled = true;
+      root().querySelector("#english-save-error").textContent = "";
+      try {
+        const saved = await hooks.checkpointEnglishGroup(active.pendingEntries, active.index + 1);
+        if (saved === false) throw new Error("这个词还没有保存成功，请重试。");
+        if (round !== active || !hooks.isActive()) return;
+        active.entries = active.pendingEntries; active.pendingEntries = null; active.index++;
+        if (active.index < active.items.length) {saving=false;setupItem();renderStep();}
+        else await completeRound(active);
+      } catch (error) {
+        if (round !== active || !hooks.isActive()) return;
+        saving = false;
+        if (active.index === active.items.length) { renderCompleted(error.message); return; }
+        root().querySelector("#english-save-error").textContent = error.message || "这个词还没有保存成功，请重试。";
+        nextButton.disabled = false; nextButton.textContent = "重试保存 →";
+      }
+    }
+    async function completeRound(active) {
+      saving = true;
+      await hooks.completeGroup(active.entries);
+    }
+    function renderCompleted(message = "") {
+      saving = false;
+      root().innerHTML = `<div class="card english-practice"><h1>本组词汇已经练完啦</h1><p>已保存 ${round.entries.length} 个词，完成本组即可记录本次学习。</p><button class="btn btn-primary" id="english-complete">完成本组</button><p id="english-save-error" class="form-error" role="alert">${escape(message)}</p></div>`;
+      const active = round;
+      root().querySelector("#english-complete").onclick = async () => {
+        if (saving) return;
+        root().querySelector("#english-complete").disabled = true;
+        try { await completeRound(active); }
+        catch (error) { if (round === active && hooks.isActive()) renderCompleted(error.message || "本组还没有保存成功，请重试。"); }
+      };
     }
     async function open(options = {}) {
       stop(); const token = generation;

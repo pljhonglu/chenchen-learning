@@ -31,8 +31,8 @@ const read = name => fs.readFileSync(path.join(publicDir, name), "utf8");
 
 function harness(initial = {}) {
   const elements = new Map(), recordings = [], requests = [], timers = new Map();
-  let timerId = 0, failNextSave = false, holdSaves = false;
-  let database = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {}, garden:{groups:{}}, ...copy(initial) };
+  let timerId = 0, failNextSave = "", holdSaves = "";
+  let database = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {}, garden:{groups:{}}, studySessions:{}, ...copy(initial) };
   const datasetName = name => name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
   const matches = (element, selector) => {
     if (/^[a-z]+$/.test(selector)) return element.tagName === selector;
@@ -117,14 +117,14 @@ function harness(initial = {}) {
     setTimeout: (fn, delay) => { const id = ++timerId; timers.set(id, { fn, delay }); return id; },
     clearTimeout: id => timers.delete(id),
     fetch: async (url, options = {}) => {
-      assert.ok(["/api/progress","/api/study-groups"].includes(url), "Tests must not fetch remote resources or actual audio");
+      assert.ok(["/api/progress","/api/study-groups","/api/study-sessions"].includes(url), "Tests must not fetch remote resources or actual audio");
       const request = { url, method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null };
       requests.push(request);
-      if(holdSaves&&request.method==="POST") {
+      if(holdSaves===url&&request.method==="POST") {
         try {await new Promise((resolve,reject)=>{request.release=resolve;request.fail=()=>reject(new Error("Offline"));});}
         finally {request.settled=true;}
       }
-      if (failNextSave) { failNextSave = false; throw new Error("Offline"); }
+      if (failNextSave===url) { failNextSave = ""; throw new Error("Offline"); }
       if (request.method === "PATCH") {
         for (const op of request.body.operations) {
           if (op.op === "set") database[op.collection][op.key] = copy(op.value);
@@ -133,7 +133,10 @@ function harness(initial = {}) {
           else assert.fail(`Unexpected save operation: ${op.op}`);
         }
       }
-      if (request.method === "POST") {
+      if (request.method === "POST" && url === "/api/study-sessions") {
+        database.studySessions[request.body.id]=copy(request.body);
+      }
+      if (request.method === "POST" && url === "/api/study-groups") {
         const group=request.body;
         if (!database.garden.groups[group.id]) {
           group.entries.forEach((entry,index)=>{
@@ -141,6 +144,7 @@ function harness(initial = {}) {
             database.items[entry.id]={...(database.items[entry.id] || {}),id:entry.id,learned:true};
           });
           database.garden.groups[group.id]={id:group.id,day:window.ChenchenStudyGroups.day(),waterAwarded:1,contentIds:group.entries.map(entry=>entry.id)};
+          delete database.studySessions[group.id];
         }
       }
       return { ok: true, status: 200, json: async () => ({ ok: true, found: true, payload: copy(database) }) };
@@ -154,11 +158,11 @@ function harness(initial = {}) {
   const select = selector => { const node = get("pinyin-content").querySelector(selector); assert.ok(node, `Rendered control ${selector} must exist`); return node; };
   const click = node => { assert.equal(typeof node.onclick, "function", "Control must have an app handler"); return node.onclick({ currentTarget: node }); };
   let groupSerial=0;
-  const beginGroup=(first="b",mode="learn")=>{
+  const beginGroup=(first="b",mode="learn",options={})=>{
     const symbols=Object.values(window.ChenchenPinyinData).flat().map(item=>item.id);
-    const ordered=[first,...symbols.filter(symbol=>symbol!==first)].slice(0,10);
-    const items=ordered.map(symbol=>({id:`pinyin-${symbol.replace(/ü/g,"v")}`,type:"pinyin",title:`拼音·${symbol}`}));
-    context.subject.setSession({id:`pinyin-test-${++groupSerial}`,type:"pinyin",mode,title:"拼音",count:10,unit:"个",items,index:0,entries:[],saving:false});
+    const ordered=[first,...symbols.filter(symbol=>symbol!==first)].slice(0,options.count || 10);
+    const items=ordered.map((symbol,index)=>({phase:options.phases?.[index] || mode,id:`pinyin-${symbol.replace(/ü/g,"v")}`,type:"pinyin",title:`拼音·${symbol}`}));
+    context.subject.setSession({id:`pinyin-test-${++groupSerial}`,type:"pinyin",mode,title:"拼音",count:items.length,unit:"个",items,index:0,entries:[],saving:false});
     context.subject.openReviewItem(items[0].id,"pinyin");
     return items;
   };
@@ -167,8 +171,10 @@ function harness(initial = {}) {
     await click(get(`py-check-${result}`));
   };
   return {beginGroup,confirm, subject: context.subject, window, get, select, click, recordings, requests, data: copy(window.ChenchenPinyinData),
-    db: () => copy(database), failSave: () => { failNextSave = true; },
-    holdSaves: value => {holdSaves=value;},
+    db: () => copy(database), failSave: (url="/api/study-groups") => { failNextSave = url; },
+    checkpoints:()=>requests.filter(request=>request.url==="/api/study-sessions"),
+    commits:()=>requests.filter(request=>request.url==="/api/study-groups"),
+    holdSaves: (url="/api/study-groups") => {holdSaves=url;},
     async nextSave() {await flush();const request=requests.find(request=>request.release&&!request.settled);assert.ok(request,"Expected a held save");return request;},
     audio: () => recordings.at(-1), allAttempts: () => recordings.flatMap(recording => recording.attempts),
   };
@@ -324,37 +330,42 @@ test("a partially heard free sound stays rehearsal evidence across navigation in
   const h=harness(),sound=h.click(h.get("py-listen"));h.audio().emit("playing");
   h.subject.navigate("write");await sound;h.beginGroup("b","review");await h.confirm();
   const entry=h.subject.getSession().entries[0];assert.equal(entry.result,"independent");assert.equal(entry.details.afterPractice,true);
-  assert.equal(h.requests.length,0);assert.deepEqual(h.db().activity,{});
+  assert.equal(h.checkpoints().length,1);assert.equal(h.commits().length,0);assert.deepEqual(h.db().activity,{});
 });
 
 test("a free sound that failed before playing does not count as heard in the next group", async () => {
   const h=harness(),sound=h.click(h.get("py-listen"));h.audio().emit("error");await sound;
   h.subject.navigate("write");h.beginGroup("b","review");await h.confirm();
-  assert.equal(h.subject.getSession().entries[0].details.afterPractice,false);assert.equal(h.requests.length,0);
+  assert.equal(h.subject.getSession().entries[0].details.afterPractice,false);assert.equal(h.checkpoints().length,1);assert.equal(h.commits().length,0);
 });
 
-test("all ten sounds stay temporary until the last parent confirmation saves one group", async () => {
+test("ten sounds checkpoint individually and the last parent confirmation commits one group", async () => {
   const h=harness(),items=h.beginGroup();
   for(let index=0;index<10;index++) {
     assert.equal(h.subject.getSession().items[h.subject.getSession().index].id,items[index].id);
     await h.confirm(["independent","supported","again"][index%3]);
-    if(index<9) {assert.equal(h.requests.length,0);assert.equal(Object.keys(h.db().activity).length,0);}
+    if(index<9) {assert.equal(h.checkpoints().length,index+1);assert.equal(h.commits().length,0);assert.equal(Object.keys(h.db().activity).length,0);}
   }
   assert.equal(h.subject.getView(),"home");assert.equal(h.subject.getSession(),null);
-  assert.equal(h.requests.length,1);assert.equal(h.requests[0].method,"POST");
-  assert.equal(h.requests[0].body.type,"pinyin");assert.equal(h.requests[0].body.entries.length,10);
+  assert.equal(h.checkpoints().length,10);assert.equal(h.commits().length,1);assert.equal(h.commits()[0].method,"POST");
+  assert.equal(h.commits()[0].body.type,"pinyin");assert.equal(h.commits()[0].body.entries.length,10);assert.deepEqual(h.db().studySessions,{});
   const entries=Object.values(h.db().activity);
   assert.deepEqual(entries.map(entry=>entry.id),items.map(item=>item.id));
   assert.deepEqual(entries.map(entry=>entry.result),Array.from({length:10},(_,i)=>["independent","supported","again"][i%3]));
   assert.ok(entries.every(entry=>entry.source==="parent"&&entry.skill==="pinyin-reading"&&entry.details.afterPractice));
 });
 
-test("leaving an incomplete group discards every temporary result and a new group begins at one", async () => {
-  const h=harness();h.beginGroup();await h.confirm();await h.confirm("again");
-  assert.equal(h.subject.getSession().entries.length,2);
+test("leaving an incomplete group preserves its draft and the study button resumes the next sound", async () => {
+  const h=harness();const items=h.beginGroup();await h.confirm();await h.confirm("again");
+  const saved=copy(h.subject.getSession().entries),id=h.subject.getSession().id;
   h.subject.navigate("write");
-  assert.equal(h.subject.getSession(),null);assert.equal(h.requests.length,0);assert.deepEqual(h.db().activity,{});
-  h.beginGroup();assert.equal(h.subject.getSession().index,0);assert.equal(h.subject.getSession().entries.length,0);
+  assert.equal(h.subject.getSession(),null);assert.equal(h.checkpoints().length,2);assert.deepEqual(h.db().activity,{});
+  assert.deepEqual(h.db().studySessions[id].entries,saved);
+  h.subject.navigate("pinyin");await h.click(h.select('[data-start-study="pinyin"]'));
+  assert.equal(h.subject.getSession().id,id);assert.equal(h.subject.getSession().index,2);
+  assert.deepEqual(copy(h.subject.getSession().entries),saved);
+  assert.equal(h.subject.getSession().items[2].id,items[2].id);
+  assert.equal(h.subject.getSelected(),items[2].id.slice(7));assert.equal(h.commits().length,0);
 });
 
 test("a failed full-group save retries the exact immutable group and cannot lose its pending outcome", async () => {
@@ -363,7 +374,7 @@ test("a failed full-group save retries the exact immutable group and cannot lose
   assert.equal(h.subject.getSession().entries.length,10);
   h.subject.navigate("write");assert.equal(h.subject.getView(),"home");
   await h.click(h.get("study-save-retry"));
-  assert.deepEqual(h.requests[0].body,h.requests[1].body);
+  assert.deepEqual(h.commits()[0].body,h.commits()[1].body);
   assert.equal(Object.keys(h.db().activity).length,10);assert.equal(Object.keys(h.db().garden.groups).length,1);
 });
 
@@ -374,7 +385,7 @@ test("umlaut sounds in a review group open silent recall and retain stable v spe
     assert.equal(h.allAttempts().length,0);
     await h.confirm();const entry=h.subject.getSession().entries[0];
     assert.equal(entry.id,id);assert.equal(entry.result,"independent");assert.equal(entry.details.symbol,symbol);assert.equal(entry.details.afterPractice,false);
-    assert.equal(h.requests.length,0,"A single confirmed sound never persists the partial group");
+    assert.equal(h.checkpoints().length,1,"The confirmed sound is saved in the draft");assert.equal(h.commits().length,0);assert.deepEqual(h.db().activity,{});
   }
 });
 
@@ -382,7 +393,7 @@ test("a hint during group recall is preserved as rehearsal evidence", async () =
   const h=harness();h.beginGroup("b","review");
   const sound=h.click(h.get("py-check-hint"));h.audio().emit("ended");await sound;
   await h.confirm();const entry=h.subject.getSession().entries[0];
-  assert.equal(entry.result,"independent");assert.equal(entry.details.afterPractice,true);assert.equal(h.requests.length,0);
+  assert.equal(entry.result,"independent");assert.equal(entry.details.afterPractice,true);assert.equal(h.checkpoints().length,1);assert.equal(h.commits().length,0);
 });
 
 test("a scheduled sound stays on target after returning to its model", async () => {
@@ -397,11 +408,41 @@ test("a scheduled sound stays on target after returning to its model", async () 
 });
 
 test("the final pending request locks navigation until its single save is acknowledged", async () => {
-  const h=harness();h.beginGroup();for(let i=0;i<9;i++)await h.confirm();h.holdSaves(true);
+  const h=harness();h.beginGroup();for(let i=0;i<9;i++)await h.confirm();h.holdSaves();
   const saving=h.confirm(),request=await h.nextSave();
   assert.equal(h.subject.getSession().saving,true);assert.equal(Object.keys(h.db().activity).length,0);
   h.subject.navigate("write");assert.equal(h.subject.getView(),"home");
   request.release();await saving;
   assert.equal(h.subject.getSession(),null);assert.equal(Object.keys(h.db().activity).length,10);
   assert.match(h.get("home-content").innerHTML,/收获一滴水/);
+});
+
+
+test("a mixed learn group starts its due sound with silent independent recall", async () => {
+  const h=harness();h.beginGroup("b","learn",{count:2,phases:["review","learn"]});
+  assert.equal(h.get("py-assessment").hidden,false);assert.equal(h.allAttempts().length,0);
+  await h.confirm();assert.equal(h.subject.getSession().entries[0].details.afterPractice,false);
+  assert.equal(h.subject.getSession().index,1);assert.equal(h.get("py-assessment").hidden,true);
+  await h.confirm();
+  const entries=Object.values(h.db().activity);
+  assert.equal(entries.length,2);assert.equal(entries[0].details.afterPractice,false);assert.equal(entries[1].details.afterPractice,true);
+  assert.equal(h.checkpoints().length,2);assert.equal(h.commits().length,1);
+});
+
+test("a single due sound forms a complete short group", async () => {
+  const h=harness();h.beginGroup("ü","review",{count:1});await h.confirm();
+  assert.equal(h.subject.getSession(),null);assert.equal(h.subject.getView(),"home");
+  assert.equal(h.checkpoints().length,1);assert.equal(h.commits().length,1);
+  assert.equal(h.commits()[0].body.entries.length,1);assert.equal(h.commits()[0].body.entries[0].id,"pinyin-v");
+});
+
+test("failed sound checkpoints retry the same prefix without losing or duplicating the first result", async () => {
+  const h=harness();h.beginGroup("b","review",{count:2});h.failSave("/api/study-sessions");await h.confirm("again");
+  assert.equal(h.subject.getView(),"home");assert.equal(h.subject.getSession().index,0);
+  assert.equal(h.subject.getSession().entries.length,1);assert.equal(h.commits().length,0);
+  h.subject.navigate("write");assert.equal(h.subject.getView(),"home");
+  await h.click(h.get("study-checkpoint-retry"));
+  assert.deepEqual(h.checkpoints()[0].body,h.checkpoints()[1].body);
+  assert.equal(h.subject.getSession().index,1);assert.equal(h.subject.getSession().entries.length,1);
+  assert.equal(h.subject.getSession().entries[0].result,"again");assert.equal(h.subject.getView(),"pinyin");
 });
