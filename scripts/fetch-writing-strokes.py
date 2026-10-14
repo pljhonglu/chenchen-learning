@@ -5,13 +5,24 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import tarfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 URL = 'https://registry.npmjs.org/hanzi-writer-data/-/hanzi-writer-data-2.0.1.tgz'
 INTEGRITY = 'nbQwM+MaryGoq7pBMIZLCd3lFq03nXuJuwku1+6UbjL58uU+9OULVcMkoNvNuJSoIV7f1bbPRfD4D/LQa5S7qg=='
-CHARACTERS = '一二三四五十人大小口子女日月水火山石田木上下土天六七八九百左右中入出回目耳手足牙心米禾竹花草牛羊马鸟虫鱼白云雨风门车书本妈爸爷奶哥姐弟妹我你他她好爱家朋友学文字写画读课校师生同桌笔尺包开关来去走跑坐立看听说笑吃喝玩洗东西南北前后里外多少长短高低早晚春夏秋冬星光电雪河海林叶果红黄蓝绿黑瓜豆茶蛋饭肉面衣辰明'
+
+def selected_characters():
+    # Retired vocabulary stays bundled for saved drafts and custom classroom cards.
+    source = (ROOT / 'public/writing-vocabulary.js').read_text(encoding='utf-8')
+    match = re.fullmatch(r'\s*window\.ChenchenWritingVocabulary\s*=\s*(\[.*\])\s*;\s*', source, re.DOTALL)
+    if not match:
+        raise ValueError('Expected the writing vocabulary JSON array')
+    characters = [item['c'] for item in json.loads(match.group(1))]
+    if len(set(characters)) != len(characters) or any(len(c) != 1 for c in characters):
+        raise ValueError('Invalid or duplicate writing character')
+    return list(dict.fromkeys(characters + list('辰明')))
 
 def main():
     with urllib.request.urlopen(URL, timeout=90) as response:
@@ -22,7 +33,7 @@ def main():
     directory.mkdir(parents=True, exist_ok=True)
     manifest = {'source': 'hanzi-writer-data', 'version': '2.0.1', 'url': URL, 'license': 'Arphic Public License', 'characters': {}}
     with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as archive:
-        for character in CHARACTERS:
+        for character in selected_characters():
             source = archive.extractfile('package/' + character + '.json')
             if source is None:
                 raise RuntimeError('Missing character: ' + character)

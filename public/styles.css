@@ -3045,3 +3045,8 @@ button[hidden],*[hidden] {
   .assessment-options { gap:6px; }
   .assessment-option { font-size:13px; padding:11px 4px; min-height:78px; }
 }
+
+/* Keep the three writing actions together on small screens. */
+.write-main-controls { flex-wrap:nowrap; gap:8px; }
+.write-main-controls .btn { flex:1; min-width:0; padding-left:8px; padding-right:8px; white-space:nowrap; }
+.write-stroke-status:empty { display:none; }

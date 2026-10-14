@@ -10,20 +10,22 @@ const audio = read('data/english-audio.json');
 const art = read('data/english-illustrations.json');
 const ids = new Set();
 const themes = new Set(curriculum.themes.map(t => t.id));
-assert.equal(curriculum.items.length, 87);
+assert.equal(curriculum.items.length, 100);
 assert.equal(curriculum.items.filter(i => i.source === 'classroom').length, 39);
-assert.equal(curriculum.items.filter(i => i.source === 'extension').length, 48);
+assert.equal(curriculum.items.filter(i => i.source === 'extension').length, 61);
 for (const item of curriculum.items) {
   assert.match(item.id, /^english-[a-z-]+$/);
   assert.ok(!ids.has(item.id), `duplicate ${item.id}`); ids.add(item.id);
   assert.ok(themes.has(item.theme));
-  for (const key of ['word','meaning','sentence','translation']) assert.ok(item[key]?.trim(), `${item.id}: ${key}`);
-  assert.doesNotMatch(item.sentence, /\ba scissors\b|\ba (?:milk|rice|honey|cheese)\b|This is (?:cat|dog|mouse|box)\./i);
-  for (const type of ['word','sentence','meaning']) {
+  for (const key of ['word','meaning']) assert.ok(item[key]?.trim(), `${item.id}: ${key}`);
+  assert.equal(item.sentence, undefined);
+  assert.equal(item.translation, undefined);
+  for (const type of ['word','meaning']) {
     const clip = audio[`${item.id}-${type}`];
     assert.ok(clip, `${item.id}: ${type} audio missing`);
-    if (type !== 'meaning') assert.equal(clip.synthesisText, item[type] + (type === 'word' ? '.' : ''), `${item.id}: audio text mismatch`);
-    assert.match(clip.voice, type === 'meaning' ? /^zh-CN-/ : /^en-(GB|US)-/);
+    assert.equal(clip.spokenText || clip.synthesisText, item[type] + (type === 'word' ? '.' : '。'), `${item.id}: audio text mismatch`);
+    assert.equal(clip.language, type === 'meaning' ? 'zh-CN' : 'en-GB');
+    assert.ok(clip.voice && clip.provider);
   }
   const picture = art[item.id];
   assert.ok(picture, `${item.id}: illustration missing`);
@@ -48,6 +50,12 @@ for (const [key, clip] of Object.entries(audio)) {
   assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),clip.sha256, `${key}: damaged recording`);
   assert.ok(clip.durationSeconds > 0.2 && clip.durationSeconds < 60);
 }
+const requested = 'grape,rambutan,durian,kiwi,avocado,cherry,peach,mangosteen,melon,apple,banana,orange,pineapple,papaya,pear,mango,coconut,strawberry'.split(',');
+const fruit = curriculum.items.filter(item => item.theme === 'fruit');
+assert.deepEqual(fruit.slice(0, 18).map(item => item.word), requested);
+assert.equal(fruit.length, 20);
+assert.equal(fruit.find(item => item.id === 'english-rambutan').meaning, '毛荔枝');
+assert.ok(Object.keys(audio).every(key => !key.endsWith('-sentence')));
 const source = fs.readFileSync(path.join(root,'english.js'),'utf8');
 const guides = [...source.matchAll(/["'](guide-[a-z-]+)["']/g)].map(m=>m[1]);
 for (const guide of guides) assert.ok(audio[guide], `missing guide ${guide}`);

@@ -34,7 +34,7 @@ PRONUNCIATIONS = {
     ("乐", "yuè"): "月", ("为", "wèi"): "未", ("应", "yìng"): "映",
     ("和", "hé"): "河", ("磨", "mó"): "摩", ("蒙", "méng"): "萌",
     ("调", "diào"): "掉", ("阙", "què"): "确", ("胜", "shèng"): "圣",
-    ("绮", "qǐ"): "起",
+    ("绮", "qǐ"): "起", ("侵", "qīn"): "钦",
 }
 
 
@@ -82,6 +82,16 @@ def verify(poem, manifest):
     entry = manifest.get(poem["id"])
     if not entry:
         raise ValueError(f"Missing manifest entry: {poem['id']}")
+    from unified_voice import PROVIDER, verify_source
+    if entry.get("provider") == PROVIDER:
+        text, corrections, _ = build_input(poem)
+        verify_source(entry, poem, text, "zh-CN", "poem")
+        expected = {"src": f"/audio/poems/{poem['id']}.mp3", "pronunciationCorrections": corrections,
+                    **inspect_audio(OUTPUT / f"{poem['id']}.mp3")}
+        for key, value in expected.items():
+            if entry.get(key) != value:
+                raise ValueError(f"Recording verification failed: {poem['id']} ({key})")
+        return
     expected_source = build_input(poem)[2]
     if entry["sourceHash"] != expected_source:
         raise ValueError(f"Recording needs regeneration after text/pinyin change: {poem['id']}")

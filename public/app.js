@@ -1457,14 +1457,12 @@
     {"c":"目","level":"explore","group":"人和身体","example":"目光","strokes":"5画","tip":"长方框里有两条短横。"},
     {"c":"耳","level":"explore","group":"人和身体","example":"耳朵","strokes":"6画","tip":"里面短横要留出空隙。"},
     {"c":"手","level":"explore","group":"人和身体","example":"小手","strokes":"4画","tip":"中间的长钩向下伸。"},
-    {"c":"足","level":"explore","group":"人和身体","example":"足球","strokes":"7画","tip":"上面一个口，下面舒展开。"},
     {"c":"牙","level":"explore","group":"人和身体","example":"牙齿","strokes":"4画","tip":"右边的长钩向下伸。"},
     {"c":"心","level":"explore","group":"人和身体","example":"开心","strokes":"4画","tip":"弯钩旁边有小点。"},
     {"c":"米","level":"explore","group":"植物粮食","example":"大米","strokes":"6画","tip":"几条线向四周散开。"},
     {"c":"禾","level":"explore","group":"植物粮食","example":"禾苗","strokes":"5画","tip":"木字上面多一小撇。"},
     {"c":"竹","level":"explore","group":"植物粮食","example":"竹子","strokes":"6画","tip":"左右两边像两棵小竹子。"},
     {"c":"花","level":"explore","group":"植物粮食","example":"小花","strokes":"7画","tip":"草字头在上面。"},
-    {"c":"草","level":"explore","group":"植物粮食","example":"小草","strokes":"9画","tip":"草字头下面有日和十。"},
     {"c":"牛","level":"explore","group":"动物","example":"小牛","strokes":"4画","tip":"中间一条竖，上下两条横。"},
     {"c":"羊","level":"explore","group":"动物","example":"小羊","strokes":"6画","tip":"上面像羊角，中间一条竖。"},
     {"c":"马","level":"explore","group":"动物","example":"小马","strokes":"3画","tip":"里面的短横不要伸太长。"},
@@ -1483,92 +1481,144 @@
     {"c":"爸","level":"everyday","group":"家人与朋友","example":"爸爸","strokes":"8画","tip":"上面宽，下面的弯钩向右伸。"},
     {"c":"爷","level":"everyday","group":"家人与朋友","example":"爷爷","strokes":"6画","tip":"上半边舒展，下半边窄一点。"},
     {"c":"奶","level":"everyday","group":"家人与朋友","example":"奶奶","strokes":"5画","tip":"女字旁瘦一点，右边留出空间。"},
-    {"c":"哥","level":"everyday","group":"家人与朋友","example":"哥哥","strokes":"10画","tip":"上下各藏着一个小口。"},
-    {"c":"姐","level":"everyday","group":"家人与朋友","example":"姐姐","strokes":"8画","tip":"右边的小框里，短横留出空隙。"},
-    {"c":"弟","level":"everyday","group":"家人与朋友","example":"弟弟","strokes":"7画","tip":"上面两点，下面有弯弯的钩。"},
-    {"c":"妹","level":"everyday","group":"家人与朋友","example":"妹妹","strokes":"8画","tip":"女字旁在左，右边两横一长一短。"},
     {"c":"我","level":"everyday","group":"家人与朋友","example":"我们","strokes":"7画","tip":"右边的斜钩舒展开。"},
     {"c":"你","level":"everyday","group":"家人与朋友","example":"你好","strokes":"7画","tip":"左边窄，右边宽一点。"},
     {"c":"他","level":"everyday","group":"家人与朋友","example":"他们","strokes":"5画","tip":"左边单人旁，右边弯钩伸展开。"},
     {"c":"她","level":"everyday","group":"家人与朋友","example":"她们","strokes":"6画","tip":"女字旁在左，右边弯钩伸展开。"},
     {"c":"好","level":"everyday","group":"家人与朋友","example":"你好","strokes":"6画","tip":"女字在左，子字在右。"},
-    {"c":"爱","level":"everyday","group":"家人与朋友","example":"爱心","strokes":"10画","tip":"中间的小盖子下面留出空间。"},
     {"c":"家","level":"everyday","group":"家人与朋友","example":"回家","strokes":"10画","tip":"宝盖头在上，下面舒展开。"},
-    {"c":"朋","level":"everyday","group":"家人与朋友","example":"朋友","strokes":"8画","tip":"两个月字并排站。"},
     {"c":"友","level":"everyday","group":"家人与朋友","example":"朋友","strokes":"4画","tip":"下半边藏着一个又字。"},
     {"c":"学","level":"everyday","group":"校园生活","example":"学校","strokes":"8画","tip":"子字放在下半边。"},
     {"c":"文","level":"everyday","group":"校园生活","example":"中文","strokes":"4画","tip":"小点在上，下面撇捺舒展开。"},
     {"c":"字","level":"everyday","group":"校园生活","example":"写字","strokes":"6画","tip":"宝盖头下面藏着一个子字。"},
     {"c":"写","level":"everyday","group":"校园生活","example":"写字","strokes":"5画","tip":"上面小盖子，下面一条横。"},
     {"c":"画","level":"everyday","group":"校园生活","example":"画画","strokes":"8画","tip":"中间是田，下面像小托盘。"},
-    {"c":"读","level":"everyday","group":"校园生活","example":"读书","strokes":"10画","tip":"言字旁在左，右边宽一点。"},
-    {"c":"课","level":"everyday","group":"校园生活","example":"上课","strokes":"10画","tip":"言字旁在左，果字在右。"},
-    {"c":"校","level":"everyday","group":"校园生活","example":"学校","strokes":"10画","tip":"木字旁窄一点，右边舒展开。"},
     {"c":"师","level":"everyday","group":"校园生活","example":"老师","strokes":"6画","tip":"左边窄，右边的小框留出空间。"},
     {"c":"生","level":"everyday","group":"校园生活","example":"生日","strokes":"5画","tip":"中间一竖，把几条横连起来。"},
     {"c":"同","level":"everyday","group":"校园生活","example":"同学","strokes":"6画","tip":"外框里面有一横和一个口。"},
-    {"c":"桌","level":"everyday","group":"校园生活","example":"桌子","strokes":"10画","tip":"木字托住上面的部分。"},
-    {"c":"笔","level":"everyday","group":"校园生活","example":"铅笔","strokes":"10画","tip":"竹字头在上，弯钩向右伸。"},
     {"c":"尺","level":"everyday","group":"校园生活","example":"尺子","strokes":"4画","tip":"上面小折角，下面两边展开。"},
     {"c":"包","level":"everyday","group":"校园生活","example":"书包","strokes":"5画","tip":"外面包着，里面有弯钩。"},
     {"c":"开","level":"everyday","group":"日常动作","example":"开门","strokes":"4画","tip":"上面两条横，下面两边分开。"},
     {"c":"关","level":"everyday","group":"日常动作","example":"关门","strokes":"6画","tip":"上面两点，下面像天字。"},
     {"c":"来","level":"everyday","group":"日常动作","example":"回来","strokes":"7画","tip":"中间一竖，左右舒展开。"},
     {"c":"去","level":"everyday","group":"日常动作","example":"出去","strokes":"5画","tip":"上面土字，下面有小折角。"},
-    {"c":"走","level":"everyday","group":"日常动作","example":"走路","strokes":"7画","tip":"上面像土，下面向右展开。"},
-    {"c":"跑","level":"everyday","group":"日常动作","example":"跑步","strokes":"12画","tip":"足字旁在左，包字在右。"},
-    {"c":"坐","level":"everyday","group":"日常动作","example":"坐下","strokes":"7画","tip":"两个人坐在土字上面。"},
     {"c":"立","level":"everyday","group":"日常动作","example":"立正","strokes":"5画","tip":"小点在上，长横在下面托住。"},
-    {"c":"看","level":"everyday","group":"日常动作","example":"看书","strokes":"9画","tip":"下半边是目，上面舒展开。"},
-    {"c":"听","level":"everyday","group":"日常动作","example":"听话","strokes":"7画","tip":"小口在左，右边留出空间。"},
-    {"c":"说","level":"everyday","group":"日常动作","example":"说话","strokes":"9画","tip":"言字旁窄一点，右边宽一点。"},
-    {"c":"笑","level":"everyday","group":"日常动作","example":"微笑","strokes":"10画","tip":"竹字头在上，下面撇捺舒展开。"},
     {"c":"吃","level":"everyday","group":"日常动作","example":"吃饭","strokes":"6画","tip":"小口在左，右边有个弯钩。"},
-    {"c":"喝","level":"everyday","group":"日常动作","example":"喝水","strokes":"12画","tip":"左边小口，右边宽一点。"},
-    {"c":"玩","level":"everyday","group":"日常动作","example":"玩具","strokes":"8画","tip":"王字旁在左，元字在右。"},
-    {"c":"洗","level":"everyday","group":"日常动作","example":"洗手","strokes":"9画","tip":"三点水在左，右边弯钩伸展开。"},
     {"c":"东","level":"everyday","group":"方向与比较","example":"东边","strokes":"5画","tip":"中间长钩，左右小笔画。"},
     {"c":"西","level":"everyday","group":"方向与比较","example":"西边","strokes":"6画","tip":"里面的小笔画不要挤在一起。"},
-    {"c":"南","level":"everyday","group":"方向与比较","example":"南边","strokes":"9画","tip":"外框里面的短横留出空隙。"},
     {"c":"北","level":"everyday","group":"方向与比较","example":"北边","strokes":"5画","tip":"左边窄，右边的弯钩伸开。"},
-    {"c":"前","level":"everyday","group":"方向与比较","example":"前面","strokes":"9画","tip":"右边的竖钩站直一点。"},
     {"c":"后","level":"everyday","group":"方向与比较","example":"后面","strokes":"6画","tip":"小口放在右下方。"},
-    {"c":"里","level":"everyday","group":"方向与比较","example":"里面","strokes":"7画","tip":"上面像田，下面一条长横。"},
     {"c":"外","level":"everyday","group":"方向与比较","example":"外面","strokes":"5画","tip":"左边夕字，右边一竖一点。"},
     {"c":"多","level":"everyday","group":"方向与比较","example":"多少","strokes":"6画","tip":"上下两个夕字错开一点。"},
     {"c":"少","level":"everyday","group":"方向与比较","example":"多少","strokes":"4画","tip":"上半边像小，下面一撇伸展开。"},
     {"c":"长","level":"everyday","group":"方向与比较","example":"长短","strokes":"4画","tip":"右下方的笔画舒展开。"},
+    {"c":"早","level":"everyday","group":"方向与比较","example":"早上","strokes":"6画","tip":"上面日字，下面十字。"},
+    {"c":"冬","level":"everyday","group":"四季与自然","example":"冬天","strokes":"5画","tip":"下面两个小点分开一点。"},
+    {"c":"光","level":"everyday","group":"四季与自然","example":"阳光","strokes":"6画","tip":"上面小笔画，下面两边展开。"},
+    {"c":"电","level":"everyday","group":"四季与自然","example":"电灯","strokes":"5画","tip":"中间长钩穿过小方框。"},
+    {"c":"叶","level":"everyday","group":"四季与自然","example":"树叶","strokes":"5画","tip":"口字在左，十字在右。"},
+    {"c":"果","level":"everyday","group":"四季与自然","example":"水果","strokes":"8画","tip":"田字在上，木字在下。"},
+    {"c":"红","level":"everyday","group":"颜色","example":"红花","strokes":"6画","tip":"绞丝旁在左，工字在右。"},
+    {"c":"瓜","level":"everyday","group":"食物","example":"西瓜","strokes":"5画","tip":"外面两边伸开，里面留出空间。"},
+    {"c":"肉","level":"everyday","group":"食物","example":"吃肉","strokes":"6画","tip":"外框里面，两个人上下叠着。"},
+    {"c":"衣","level":"everyday","group":"身边物品","example":"衣服","strokes":"6画","tip":"小点在上，下面撇捺舒展开。"},
+    {"c":"王","level":"explore","group":"生活常用","example":"王子","strokes":"4画","tip":"三条横线，中间一竖串起来。"},
+    {"c":"厂","level":"starter","group":"生活常用","example":"工厂","strokes":"2画","tip":"上面一横，左边一撇向下伸。"},
+    {"c":"广","level":"starter","group":"生活常用","example":"广场","strokes":"3画","tip":"上面小点，横撇像屋顶。"},
+    {"c":"太","level":"explore","group":"生活常用","example":"太阳","strokes":"4画","tip":"大字下面添一点，撇捺舒展开。"},
+    {"c":"虾","level":"explore","group":"生活常用","example":"小虾","strokes":"9画","tip":"左边虫字旁，右边一个下。"},
+    {"c":"孙","level":"explore","group":"生活常用","example":"孙子","strokes":"6画","tip":"左边子字旁，右边小字留空隙。"},
+    {"c":"片","level":"explore","group":"生活常用","example":"叶片","strokes":"4画","tip":"左边长撇，右边的折向下收。"},
+    {"c":"又","level":"starter","group":"生活常用","example":"又来","strokes":"2画","tip":"横撇和捺在中间交叉。"},
+    {"c":"皮","level":"explore","group":"生活常用","example":"皮球","strokes":"5画","tip":"长撇向下伸，下面的又展开。"},
+    {"c":"买","level":"explore","group":"生活常用","example":"买菜","strokes":"6画","tip":"上面横钩，下面两点靠左。"},
+    {"c":"酒","level":"explore","group":"生活常用","example":"米酒","strokes":"10画","tip":"左边三点水，右边方框留空隙。"},
+    {"c":"比","level":"explore","group":"生活常用","example":"比赛","strokes":"4画","tip":"左边短小，右边竖弯钩站稳。"},
+    {"c":"切","level":"explore","group":"生活常用","example":"切开","strokes":"4画","tip":"左边七，右边刀，两边留空隙。"},
+    {"c":"寸","level":"starter","group":"生活常用","example":"一寸","strokes":"3画","tip":"长横下面一竖钩，左边添一点。"},
+    {"c":"丁","level":"starter","group":"生活常用","example":"园丁","strokes":"2画","tip":"一横下面，一条竖钩向下伸。"},
+    {"c":"了","level":"starter","group":"生活常用","example":"好了","strokes":"2画","tip":"上面横撇，下面弯钩向中间收。"},
+    {"c":"狗","level":"explore","group":"生活常用","example":"小狗","strokes":"8画","tip":"左边反犬旁，右边小口放进勾里。"},
+    {"c":"公","level":"explore","group":"生活常用","example":"公园","strokes":"4画","tip":"上面八字分开，下面撇折和点靠近。"},
+    {"c":"台","level":"explore","group":"生活常用","example":"台灯","strokes":"5画","tip":"上面撇折和点，下面口字摆正。"},
+    {"c":"如","level":"explore","group":"生活常用","example":"如果","strokes":"6画","tip":"左边女字旁，右边口字小一些。"},
+    {"c":"妆","level":"explore","group":"生活常用","example":"化妆","strokes":"6画","tip":"左边点提和长竖，右边女字舒展开。"},
+    {"c":"戏","level":"explore","group":"生活常用","example":"游戏","strokes":"6画","tip":"左边又收紧，右边斜钩向外伸。"},
+    {"c":"成","level":"explore","group":"生活常用","example":"成长","strokes":"6画","tip":"长撇在左，斜钩向右下伸。"},
+    {"c":"代","level":"explore","group":"生活常用","example":"代表","strokes":"5画","tip":"左边单人旁，右边斜钩舒展开。"},
+    {"c":"思","level":"explore","group":"生活常用","example":"思念","strokes":"9画","tip":"上面田字摆正，下面心字托住。"},
+    {"c":"忠","level":"explore","group":"生活常用","example":"忠心","strokes":"8画","tip":"上面中字居中，下面心字展开。"},
+    {"c":"刀","level":"starter","group":"生活常用","example":"小刀","strokes":"2画","tip":"横折钩向下弯，里面一撇伸出来。"},
+    {"c":"习","level":"starter","group":"生活常用","example":"学习","strokes":"3画","tip":"外面的钩包住一点和一提。"},
+    {"c":"认","level":"explore","group":"生活常用","example":"认识","strokes":"4画","tip":"左边言字旁，右边人字舒展开。"},
+    {"c":"让","level":"explore","group":"生活常用","example":"让开","strokes":"5画","tip":"左边言字旁，右边上字放稳。"},
+    {"c":"讲","level":"explore","group":"生活常用","example":"讲话","strokes":"6画","tip":"左边言字旁，右边井字留出空隙。"},
+    {"c":"朵","level":"explore","group":"生活常用","example":"花朵","strokes":"6画","tip":"上面小小的，下面木字展开。"},
+    {"c":"没","level":"explore","group":"生活常用","example":"没有","strokes":"7画","tip":"左边三点水，右边上下对齐。"},
+    {"c":"船","level":"explore","group":"生活常用","example":"小船","strokes":"11画","tip":"左边舟字旁，右边小口留空隙。"},
+    {"c":"飞","level":"starter","group":"生活常用","example":"飞机","strokes":"3画","tip":"弯钩向外展开，右边两笔像翅膀。"},
+    {"c":"凤","level":"explore","group":"生活常用","example":"凤凰","strokes":"4画","tip":"外面的框留开口，里面一个又。"},
+    {"c":"几","level":"starter","group":"生活常用","example":"几个","strokes":"2画","tip":"左边一撇，右边弯钩像桌腿。"},
+    {"c":"丸","level":"starter","group":"生活常用","example":"丸子","strokes":"3画","tip":"九字里面添一点，弯钩站稳。"},
+    {"c":"队","level":"explore","group":"生活常用","example":"队伍","strokes":"4画","tip":"左边双耳旁，右边人字展开。"},
+    {"c":"阳","level":"explore","group":"生活常用","example":"太阳","strokes":"6画","tip":"左边双耳旁，右边日字摆正。"},
+    {"c":"邻","level":"explore","group":"生活常用","example":"邻居","strokes":"7画","tip":"左边令字收紧，右边双耳旁。"},
+    {"c":"及","level":"starter","group":"生活常用","example":"及时","strokes":"3画","tip":"横折折撇连着写，捺向右下伸。"},
+    {"c":"边","level":"explore","group":"生活常用","example":"旁边","strokes":"5画","tip":"先写里面的力，走之底最后托住。"},
+    {"c":"建","level":"explore","group":"生活常用","example":"建立","strokes":"8画","tip":"里面横线留空隙，建字底最后托住。"},
+    {"c":"汤","level":"explore","group":"生活常用","example":"米汤","strokes":"6画","tip":"左边三点水，右边两撇分开。"},
+    {"c":"场","level":"explore","group":"生活常用","example":"广场","strokes":"6画","tip":"左边土字旁，右边两撇分开。"},
+    {"c":"弯","level":"explore","group":"生活常用","example":"弯腰","strokes":"9画","tip":"上面点横居中，下面弓字弯弯的。"},
+  ];
+  // Retired cards only support saved study drafts and existing custom classroom cards.
+  const RETIRED_WRITE_CHARS = [
+    {"c":"足","level":"explore","group":"人和身体","example":"足球","strokes":"7画","tip":"上面一个口，下面舒展开。"},
+    {"c":"草","level":"explore","group":"植物粮食","example":"小草","strokes":"9画","tip":"草字头下面有日和十。"},
+    {"c":"哥","level":"everyday","group":"家人与朋友","example":"哥哥","strokes":"10画","tip":"上下各藏着一个小口。"},
+    {"c":"姐","level":"everyday","group":"家人与朋友","example":"姐姐","strokes":"8画","tip":"右边的小框里，短横留出空隙。"},
+    {"c":"弟","level":"everyday","group":"家人与朋友","example":"弟弟","strokes":"7画","tip":"上面两点，下面有弯弯的钩。"},
+    {"c":"妹","level":"everyday","group":"家人与朋友","example":"妹妹","strokes":"8画","tip":"女字旁在左，右边两横一长一短。"},
+    {"c":"爱","level":"everyday","group":"家人与朋友","example":"爱心","strokes":"10画","tip":"中间的小盖子下面留出空间。"},
+    {"c":"朋","level":"everyday","group":"家人与朋友","example":"朋友","strokes":"8画","tip":"两个月字并排站。"},
+    {"c":"读","level":"everyday","group":"校园生活","example":"读书","strokes":"10画","tip":"言字旁在左，右边宽一点。"},
+    {"c":"课","level":"everyday","group":"校园生活","example":"上课","strokes":"10画","tip":"言字旁在左，果字在右。"},
+    {"c":"校","level":"everyday","group":"校园生活","example":"学校","strokes":"10画","tip":"木字旁窄一点，右边舒展开。"},
+    {"c":"桌","level":"everyday","group":"校园生活","example":"桌子","strokes":"10画","tip":"木字托住上面的部分。"},
+    {"c":"笔","level":"everyday","group":"校园生活","example":"铅笔","strokes":"10画","tip":"竹字头在上，弯钩向右伸。"},
+    {"c":"走","level":"everyday","group":"日常动作","example":"走路","strokes":"7画","tip":"上面像土，下面向右展开。"},
+    {"c":"跑","level":"everyday","group":"日常动作","example":"跑步","strokes":"12画","tip":"足字旁在左，包字在右。"},
+    {"c":"坐","level":"everyday","group":"日常动作","example":"坐下","strokes":"7画","tip":"两个人坐在土字上面。"},
+    {"c":"看","level":"everyday","group":"日常动作","example":"看书","strokes":"9画","tip":"下半边是目，上面舒展开。"},
+    {"c":"听","level":"everyday","group":"日常动作","example":"听话","strokes":"7画","tip":"小口在左，右边留出空间。"},
+    {"c":"说","level":"everyday","group":"日常动作","example":"说话","strokes":"9画","tip":"言字旁窄一点，右边宽一点。"},
+    {"c":"笑","level":"everyday","group":"日常动作","example":"微笑","strokes":"10画","tip":"竹字头在上，下面撇捺舒展开。"},
+    {"c":"喝","level":"everyday","group":"日常动作","example":"喝水","strokes":"12画","tip":"左边小口，右边宽一点。"},
+    {"c":"玩","level":"everyday","group":"日常动作","example":"玩具","strokes":"8画","tip":"王字旁在左，元字在右。"},
+    {"c":"洗","level":"everyday","group":"日常动作","example":"洗手","strokes":"9画","tip":"三点水在左，右边弯钩伸展开。"},
+    {"c":"南","level":"everyday","group":"方向与比较","example":"南边","strokes":"9画","tip":"外框里面的短横留出空隙。"},
+    {"c":"前","level":"everyday","group":"方向与比较","example":"前面","strokes":"9画","tip":"右边的竖钩站直一点。"},
+    {"c":"里","level":"everyday","group":"方向与比较","example":"里面","strokes":"7画","tip":"上面像田，下面一条长横。"},
     {"c":"短","level":"everyday","group":"方向与比较","example":"长短","strokes":"12画","tip":"右边是豆，左右靠近一点。"},
     {"c":"高","level":"everyday","group":"方向与比较","example":"高山","strokes":"10画","tip":"上下各藏着一个小口。"},
     {"c":"低","level":"everyday","group":"方向与比较","example":"低头","strokes":"7画","tip":"左边单人旁，右下角有个小点。"},
-    {"c":"早","level":"everyday","group":"方向与比较","example":"早上","strokes":"6画","tip":"上面日字，下面十字。"},
     {"c":"晚","level":"everyday","group":"方向与比较","example":"晚上","strokes":"11画","tip":"日字在左，右边弯钩伸展开。"},
     {"c":"春","level":"everyday","group":"四季与自然","example":"春天","strokes":"9画","tip":"上面几条横，日字在下面。"},
     {"c":"夏","level":"everyday","group":"四季与自然","example":"夏天","strokes":"10画","tip":"中间像目，下面两边舒展开。"},
     {"c":"秋","level":"everyday","group":"四季与自然","example":"秋天","strokes":"9画","tip":"禾字在左，火字在右。"},
-    {"c":"冬","level":"everyday","group":"四季与自然","example":"冬天","strokes":"5画","tip":"下面两个小点分开一点。"},
     {"c":"星","level":"everyday","group":"四季与自然","example":"星星","strokes":"9画","tip":"日字在上，生字在下。"},
-    {"c":"光","level":"everyday","group":"四季与自然","example":"阳光","strokes":"6画","tip":"上面小笔画，下面两边展开。"},
-    {"c":"电","level":"everyday","group":"四季与自然","example":"电灯","strokes":"5画","tip":"中间长钩穿过小方框。"},
     {"c":"雪","level":"everyday","group":"四季与自然","example":"雪花","strokes":"11画","tip":"雨字头在上，下面短横留出空隙。"},
     {"c":"河","level":"everyday","group":"四季与自然","example":"小河","strokes":"8画","tip":"三点水在左，右边小口留出空间。"},
     {"c":"海","level":"everyday","group":"四季与自然","example":"大海","strokes":"10画","tip":"三点水在左，右边宽一点。"},
     {"c":"林","level":"everyday","group":"四季与自然","example":"树林","strokes":"8画","tip":"两个木字并排，左边窄一点。"},
-    {"c":"叶","level":"everyday","group":"四季与自然","example":"树叶","strokes":"5画","tip":"口字在左，十字在右。"},
-    {"c":"果","level":"everyday","group":"四季与自然","example":"水果","strokes":"8画","tip":"田字在上，木字在下。"},
-    {"c":"红","level":"everyday","group":"颜色","example":"红花","strokes":"6画","tip":"绞丝旁在左，工字在右。"},
     {"c":"黄","level":"everyday","group":"颜色","example":"黄色","strokes":"11画","tip":"下面两点分开一点。"},
     {"c":"蓝","level":"everyday","group":"颜色","example":"蓝天","strokes":"13画","tip":"草字头在上，下面的皿稳稳托住。"},
     {"c":"绿","level":"everyday","group":"颜色","example":"绿叶","strokes":"11画","tip":"绞丝旁在左，右下边舒展开。"},
     {"c":"黑","level":"everyday","group":"颜色","example":"黑色","strokes":"12画","tip":"下面四点留出小空隙。"},
-    {"c":"瓜","level":"everyday","group":"食物","example":"西瓜","strokes":"5画","tip":"外面两边伸开，里面留出空间。"},
     {"c":"豆","level":"everyday","group":"食物","example":"豆子","strokes":"7画","tip":"小口在中间，下面长横托住。"},
     {"c":"茶","level":"everyday","group":"食物","example":"茶杯","strokes":"9画","tip":"草字头下面，两边舒展开。"},
     {"c":"蛋","level":"everyday","group":"食物","example":"鸡蛋","strokes":"11画","tip":"虫字放在下半边。"},
     {"c":"饭","level":"everyday","group":"食物","example":"吃饭","strokes":"7画","tip":"食字旁在左，右边舒展开。"},
-    {"c":"肉","level":"everyday","group":"食物","example":"吃肉","strokes":"6画","tip":"外框里面，两个人上下叠着。"},
     {"c":"面","level":"everyday","group":"食物","example":"面条","strokes":"9画","tip":"外面方框，里面短横留出空隙。"},
-    {"c":"衣","level":"everyday","group":"身边物品","example":"衣服","strokes":"6画","tip":"小点在上，下面撇捺舒展开。"},
   ];
   let selectedWriteId = null;
   let writingListScroll = 0;
@@ -1587,14 +1637,15 @@
     writingVoice = null;
   }
 
-  function writingCharacters() {
+  function writingCharacters(includeRetired = false) {
     const vocabulary = new Map((window.ChenchenWritingVocabulary || []).map(item=>[item.c,item]));
-    const characters = new Map(WRITE_CHARS.map(ch => {
+    const allBuiltin = [...WRITE_CHARS,...RETIRED_WRITE_CHARS];
+    const characters = new Map((includeRetired ? allBuiltin : WRITE_CHARS).map(ch => {
       const item = {...ch,...vocabulary.get(ch.c),id:`write-char-${ch.c.codePointAt(0).toString(16)}`};
       return [item.id,item];
     }));
     Object.values(loadState().customCharacters || {}).forEach(ch=>{
-      const builtin = WRITE_CHARS.find(item=>item.c === ch.c);
+      const builtin = allBuiltin.find(item=>item.c === ch.c);
       characters.set(ch.id,{...builtin,...vocabulary.get(ch.c),...characters.get(ch.id),...ch});
     });
     const count = ch => Number.parseInt(ch.strokes,10) || Number.MAX_SAFE_INTEGER;
@@ -1615,9 +1666,9 @@
     el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>openWriteCharacter(btn.dataset.writeId));
   }
 
-  function openWriteCharacter(id) {
+  function openWriteCharacter(id, rememberPosition = true) {
     if (!writingCharacters().some(ch=>ch.id === id)) return;
-    writingListScroll = window.scrollY || 0;
+    if (rememberPosition) writingListScroll = window.scrollY || 0;
     selectedWriteId = id;
     showView("write-detail");
     renderWriteDetail();
@@ -1633,9 +1684,13 @@
     stopSpeechSafe();
     const token = writingGeneration;
     const el = document.getElementById("write-detail-content");
-    const ch = writingCharacters().find(it=>it.id===selectedWriteId) || writingCharacters()[0];
+    const ch = writingCharacters(true).find(it=>it.id===selectedWriteId) || writingCharacters()[0];
     selectedWriteId = ch.id;
     const group = reviewSession;
+    const characters = writingCharacters();
+    const characterIndex = characters.findIndex(item=>item.id === ch.id);
+    const showNavigation = !group && characterIndex >= 0;
+    const lastCharacter = characterIndex === characters.length - 1;
     const startsWithBlindCheck = !!(ch.pinyin && currentStudyPhase() === "review" && group?.items[group.index]?.type === "write");
     const words = ch.words || [];
     let assisted = !startsWithBlindCheck, finished = false, watching = false, readingRequest = 0, practiceRun = 0;
@@ -1644,15 +1699,21 @@
     if (!startsWithBlindCheck) observedExposure("write",ch.id,true);
     const active = () => token === writingGeneration && currentView === "write-detail";
     const markAssisted = () => { assisted = true; observedExposure("write",ch.id,true); };
-    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">一笔一画，慢慢写</p><h2>汉字写一写</h2></div><span class="practice-count">${group ? "写完自动记录" : "自由练习 · 不留学习记录"}</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><p class="write-instruction" id="write-instruction">${startsWithBlindCheck ? "听读音，试着自己写。需要时可以点提示。" : "沿着浅色字形写，每写完一笔松开手指。"}</p><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="笔顺示范"></div><div id="write-practice-layer" class="write-practice-layer" hidden aria-label="汉字逐笔书写区"></div></div><div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite">笔画准备中…</div><div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-ghost" id="write-hint" disabled>提示这一笔</button><button class="text-btn" id="write-clear" disabled>↶ 重新写</button><button class="btn btn-primary" id="write-retry" hidden>重试加载</button></div>${words.length ? `<button class="text-btn write-show-words" id="write-show-words" ${startsWithBlindCheck ? "" : "hidden"}>看看词语</button><div id="write-words-panel" ${startsWithBlindCheck ? "hidden" : ""}><div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p></div>` : ""}</div>`;
+    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">一笔一画，慢慢写</p><h2>汉字写一写</h2></div><span class="practice-count">${group ? "写完自动记录" : "自由练习 · 不留学习记录"}</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><p class="write-instruction" id="write-instruction">${startsWithBlindCheck ? "听读音，试着自己写。需要时可以看笔顺。" : "沿着浅色字形写，每写完一笔松开手指。"}</p><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="笔顺示范"></div><div id="write-practice-layer" class="write-practice-layer" hidden aria-label="汉字逐笔书写区"></div></div><div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite"></div>${words.length ? `<button class="text-btn write-show-words" id="write-show-words" ${startsWithBlindCheck ? "" : "hidden"}>看看词语</button><div id="write-words-panel" ${startsWithBlindCheck ? "hidden" : ""}><div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p></div>` : ""}<div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-ghost" id="write-clear" disabled>↶ 重新写</button>${showNavigation ? `<button class="btn btn-primary" id="write-next">${lastCharacter ? "返回字库 ✓" : "下一个 →"}</button>` : ""}</div><button class="btn btn-primary" id="write-retry" hidden>重试加载</button></div>`;
     document.getElementById("write-back").onclick = returnToWriteLibrary;
+    if (showNavigation) {
+      document.getElementById("write-next").onclick = () => {
+        if (!active()) return;
+        if (lastCharacter) returnToWriteLibrary();
+        else openWriteCharacter(characters[characterIndex + 1].id, false);
+      };
+    }
     const stage = document.getElementById("write-stage");
     const loading = document.getElementById("write-shape-loading");
     const layer = document.getElementById("write-stroke-layer");
     const practiceLayer = document.getElementById("write-practice-layer");
     const status = document.getElementById("write-stroke-status");
     const playButton = document.getElementById("write-strokes-play");
-    const hintButton = document.getElementById("write-hint");
     const eraseButton = document.getElementById("write-clear");
     const retryButton = document.getElementById("write-retry");
     const pronounceButton = document.getElementById("write-pronounce");
@@ -1663,9 +1724,7 @@
       readingRequest++; voice?.stop();
       readingButtons.forEach(button=>button.classList.remove("is-reading"));
     };
-    const progressText = () => practiceState.total
-      ? `已完成 ${practiceState.completed} / ${practiceState.total} 笔，接着写第 ${practiceState.completed+1} 笔。`
-      : "笔画准备中…";
+    const progressText = () => "";
     const updateControls = () => {
       const busy = practiceState.status === "loading";
       const failed = practiceState.status === "error";
@@ -1673,7 +1732,6 @@
       loading.hidden = !busy;
       practiceLayer.hidden = busy || failed || watching;
       layer.hidden = !watching;
-      hintButton.disabled = watching || practiceState.status !== "active" || finished;
       eraseButton.disabled = busy || failed || (finished && !!group);
       playButton.disabled = !demoReady || (finished && !!group);
       playButton.textContent = watching ? "■ 停下" : demoFailed ? "↻ 重试笔顺" : "▶ 看笔顺";
@@ -1747,7 +1805,7 @@
             if (!current() || finished || watching) return;
             status.textContent = data.isBackwards
               ? "这一笔方向反了，换个方向再试试。"
-              : "这一笔还没对上，再试一次；也可以点提示。";
+              : "这一笔还没对上，再试一次；也可以看笔顺。";
           },
           onCorrectStroke() {
             if (!current() || finished || watching) return;
@@ -1787,12 +1845,6 @@
       watching = true;
       updateControls();
       void writingDemo?.play();
-    };
-    hintButton.onclick = () => {
-      if (hintButton.disabled || !active()) return;
-      markAssisted();
-      stopReading();
-      void writingPractice?.showHint();
     };
     eraseButton.onclick = () => {
       if (eraseButton.disabled || !active()) return;

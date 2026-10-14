@@ -70,12 +70,12 @@ for (const [id, example] of expectedClips) {
   assert.equal(clip.language, 'zh-CN', `${id}: incorrect narration language`);
   assert.equal(clip.kind, 'character', `${id}: incorrect clip kind`);
   assert.equal(clip.synthetic, true, `${id}: missing synthesis provenance`);
-  assert.equal(clip.sourceVersion, 1, `${id}: unknown recipe version`);
-  assert.equal(clip.provider, 'Microsoft Edge Read Aloud', `${id}: missing provider provenance`);
-  assert.equal(clip.voice, 'zh-CN-XiaoxiaoNeural', `${id}: unexpected voice`);
-  assert.equal(clip.rate, '-8%', `${id}: unexpected reading speed`);
+  assert.equal(clip.sourceVersion, 4, `${id}: unknown recipe version`);
+  assert.equal(clip.provider, 'Qwen3-TTS (local MLX)', `${id}: missing provider provenance`);
+  assert.equal(clip.voice, 'Serena', `${id}: unexpected voice`);
+  assert.equal(clip.rate, 'natural', `${id}: unexpected reading speed`);
   assert.match(clip.sourceHash, /^[0-9a-f]{64}$/, `${id}: missing source recipe hash`);
-  assert.equal(clip.synthesisText, `${example.text}。`, `${id}: clicking an example must read only its character`);
+  assert.equal(clip.spokenText || clip.synthesisText, `${example.text}。`, `${id}: clicking an example must read only its character`);
   const bytes = fs.readFileSync(path.join(root, clip.src.slice(1)));
   assert.ok(bytes.length > 1000, `${id}: empty or truncated audio`);
   assert.equal(clip.bytes, bytes.length, `${id}: incorrect byte count`);
@@ -96,9 +96,9 @@ for (const [id, example] of expectedClips) {
   } else {
     generated++;
     assert.equal(clip.origin.type, 'synthesis', `${id}: unknown provenance type`);
-    assert.equal(clip.origin.generator, 'scripts/generate-pinyin-examples-audio.py', `${id}: missing generator provenance`);
-    assert.equal(clip.origin.dependencies['edge-tts'], '7.2.8');
-    assert.equal(clip.origin.dependencies.mutagen, '1.47.0');
+    assert.equal(clip.origin.generator, 'scripts/generate-unified-audio.py', `${id}: missing generator provenance`);
+    assert.equal(clip.origin.dependencies['mlx-audio'], '0.5.8');
+    assert.equal(clip.origin.dependencies.mutagen, '1.48.1');
     assert.ok(!writingAudio[id] || writingAudio[id].pinyin !== example.pinyin || writingAudio[id].synthesisText !== `${example.text}。`, `${id}: matching single-character local recording was unnecessarily synthesized`);
   }
 }

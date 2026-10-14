@@ -59,6 +59,17 @@ def verify(clip, manifest):
     entry = manifest.get(clip["id"])
     if not entry:
         raise ValueError(f"Missing recording: {clip['id']}")
+    from unified_voice import PROVIDER, verify_source
+    if entry.get("provider") == PROVIDER:
+        text = source(clip)[0]["text"]
+        verify_source(entry, clip, text, clip["language"], "guide" if clip["kind"] == "guide" else "word")
+        expected = {"src": f"/audio/writing/{clip['id']}.mp3",
+                    **{key: value for key, value in clip.items() if key != "id"},
+                    **inspect_audio(OUTPUT / f"{clip['id']}.mp3")}
+        for key, value in expected.items():
+            if entry.get(key) != value:
+                raise ValueError(f"Recording verification failed: {clip['id']} ({key})")
+        return
     value, digest = source(clip)
     expected = {"src": f"/audio/writing/{clip['id']}.mp3", "text": clip["text"],
                 "language": clip["language"], "kind": clip["kind"],

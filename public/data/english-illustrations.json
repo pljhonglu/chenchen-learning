@@ -585,5 +585,96 @@
     "count": 10,
     "illustration": "english-apple",
     "alt": "10 个苹果"
+  },
+  "english-rambutan": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 0,
+    "alt": "红色毛刺外皮的毛荔枝和白色果肉"
+  },
+  "english-durian": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 1,
+    "alt": "带尖刺外壳和黄色果肉的榴莲"
+  },
+  "english-kiwi": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 2,
+    "alt": "棕色猕猴桃和绿色果肉切面"
+  },
+  "english-avocado": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 3,
+    "alt": "绿色牛油果和带棕色果核的切面"
+  },
+  "english-cherry": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 4,
+    "alt": "一颗带梗的红樱桃"
+  },
+  "english-peach": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 5,
+    "alt": "一个粉黄色的桃子"
+  },
+  "english-mangosteen": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 6,
+    "alt": "紫色山竹和白色分瓣果肉"
+  },
+  "english-melon": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 7,
+    "alt": "浅绿色甜瓜和一片切开的瓜"
+  },
+  "english-pineapple": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 8,
+    "alt": "一个带绿色叶冠的菠萝"
+  },
+  "english-papaya": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 9,
+    "alt": "木瓜和带黑色种子的橙色果肉"
+  },
+  "english-mango": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 10,
+    "alt": "芒果和黄色果肉切片"
+  },
+  "english-coconut": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 11,
+    "alt": "棕色椰子和白色椰肉"
+  },
+  "english-strawberry": {
+    "src": "/images/english/fruit-expansion.png",
+    "columns": 4,
+    "rows": 4,
+    "index": 12,
+    "alt": "一颗带绿叶的红草莓"
   }
 }

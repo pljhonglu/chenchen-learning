@@ -2708,5 +2708,856 @@ window.ChenchenWritingVocabulary = [
         "pinyin": "shàng yī"
       }
     ]
+  },
+  {
+    "c": "王",
+    "pinyin": "wáng",
+    "words": [
+      {
+        "text": "王子",
+        "pinyin": "wáng zǐ"
+      },
+      {
+        "text": "国王",
+        "pinyin": "guó wáng"
+      },
+      {
+        "text": "王国",
+        "pinyin": "wáng guó"
+      }
+    ]
+  },
+  {
+    "c": "厂",
+    "pinyin": "chǎng",
+    "words": [
+      {
+        "text": "工厂",
+        "pinyin": "gōng chǎng"
+      },
+      {
+        "text": "厂房",
+        "pinyin": "chǎng fáng"
+      },
+      {
+        "text": "厂长",
+        "pinyin": "chǎng zhǎng"
+      }
+    ]
+  },
+  {
+    "c": "广",
+    "pinyin": "guǎng",
+    "words": [
+      {
+        "text": "广场",
+        "pinyin": "guǎng chǎng"
+      },
+      {
+        "text": "广大",
+        "pinyin": "guǎng dà"
+      },
+      {
+        "text": "广播",
+        "pinyin": "guǎng bō"
+      }
+    ]
+  },
+  {
+    "c": "太",
+    "pinyin": "tài",
+    "words": [
+      {
+        "text": "太阳",
+        "pinyin": "tài yáng"
+      },
+      {
+        "text": "太空",
+        "pinyin": "tài kōng"
+      },
+      {
+        "text": "太极",
+        "pinyin": "tài jí"
+      }
+    ]
+  },
+  {
+    "c": "虾",
+    "pinyin": "xiā",
+    "words": [
+      {
+        "text": "小虾",
+        "pinyin": "xiǎo xiā"
+      },
+      {
+        "text": "虾米",
+        "pinyin": "xiā mǐ"
+      },
+      {
+        "text": "大虾",
+        "pinyin": "dà xiā"
+      }
+    ]
+  },
+  {
+    "c": "孙",
+    "pinyin": "sūn",
+    "words": [
+      {
+        "text": "孙子",
+        "pinyin": "sūn zi"
+      },
+      {
+        "text": "子孙",
+        "pinyin": "zǐ sūn"
+      },
+      {
+        "text": "爷孙",
+        "pinyin": "yé sūn"
+      }
+    ]
+  },
+  {
+    "c": "片",
+    "pinyin": "piàn",
+    "words": [
+      {
+        "text": "叶片",
+        "pinyin": "yè piàn"
+      },
+      {
+        "text": "照片",
+        "pinyin": "zhào piàn"
+      },
+      {
+        "text": "一片",
+        "pinyin": "yí piàn"
+      }
+    ]
+  },
+  {
+    "c": "又",
+    "pinyin": "yòu",
+    "words": [
+      {
+        "text": "又来",
+        "pinyin": "yòu lái"
+      },
+      {
+        "text": "又见",
+        "pinyin": "yòu jiàn"
+      },
+      {
+        "text": "又大又圆",
+        "pinyin": "yòu dà yòu yuán"
+      }
+    ]
+  },
+  {
+    "c": "皮",
+    "pinyin": "pí",
+    "words": [
+      {
+        "text": "皮球",
+        "pinyin": "pí qiú"
+      },
+      {
+        "text": "果皮",
+        "pinyin": "guǒ pí"
+      },
+      {
+        "text": "皮衣",
+        "pinyin": "pí yī"
+      }
+    ]
+  },
+  {
+    "c": "买",
+    "pinyin": "mǎi",
+    "words": [
+      {
+        "text": "买菜",
+        "pinyin": "mǎi cài"
+      },
+      {
+        "text": "买书",
+        "pinyin": "mǎi shū"
+      },
+      {
+        "text": "买车",
+        "pinyin": "mǎi chē"
+      }
+    ]
+  },
+  {
+    "c": "酒",
+    "pinyin": "jiǔ",
+    "words": [
+      {
+        "text": "米酒",
+        "pinyin": "mǐ jiǔ"
+      },
+      {
+        "text": "酒杯",
+        "pinyin": "jiǔ bēi"
+      },
+      {
+        "text": "酒店",
+        "pinyin": "jiǔ diàn"
+      }
+    ]
+  },
+  {
+    "c": "比",
+    "pinyin": "bǐ",
+    "words": [
+      {
+        "text": "比赛",
+        "pinyin": "bǐ sài"
+      },
+      {
+        "text": "比一比",
+        "pinyin": "bǐ yi bǐ"
+      },
+      {
+        "text": "对比",
+        "pinyin": "duì bǐ"
+      }
+    ]
+  },
+  {
+    "c": "切",
+    "pinyin": "qiē",
+    "words": [
+      {
+        "text": "切开",
+        "pinyin": "qiē kāi"
+      },
+      {
+        "text": "切菜",
+        "pinyin": "qiē cài"
+      },
+      {
+        "text": "切片",
+        "pinyin": "qiē piàn"
+      }
+    ],
+    "characterSpeech": "切菜的切。"
+  },
+  {
+    "c": "寸",
+    "pinyin": "cùn",
+    "words": [
+      {
+        "text": "一寸",
+        "pinyin": "yí cùn"
+      },
+      {
+        "text": "尺寸",
+        "pinyin": "chǐ cùn"
+      },
+      {
+        "text": "方寸",
+        "pinyin": "fāng cùn"
+      }
+    ]
+  },
+  {
+    "c": "丁",
+    "pinyin": "dīng",
+    "words": [
+      {
+        "text": "园丁",
+        "pinyin": "yuán dīng"
+      },
+      {
+        "text": "丁字",
+        "pinyin": "dīng zì"
+      },
+      {
+        "text": "丁香",
+        "pinyin": "dīng xiāng"
+      }
+    ]
+  },
+  {
+    "c": "了",
+    "pinyin": "le",
+    "words": [
+      {
+        "text": "好了",
+        "pinyin": "hǎo le"
+      },
+      {
+        "text": "来了",
+        "pinyin": "lái le"
+      },
+      {
+        "text": "走了",
+        "pinyin": "zǒu le"
+      }
+    ],
+    "characterSpeech": "好了的了。"
+  },
+  {
+    "c": "狗",
+    "pinyin": "gǒu",
+    "words": [
+      {
+        "text": "小狗",
+        "pinyin": "xiǎo gǒu"
+      },
+      {
+        "text": "花狗",
+        "pinyin": "huā gǒu"
+      },
+      {
+        "text": "狗窝",
+        "pinyin": "gǒu wō"
+      }
+    ]
+  },
+  {
+    "c": "公",
+    "pinyin": "gōng",
+    "words": [
+      {
+        "text": "公园",
+        "pinyin": "gōng yuán"
+      },
+      {
+        "text": "公鸡",
+        "pinyin": "gōng jī"
+      },
+      {
+        "text": "外公",
+        "pinyin": "wài gōng"
+      }
+    ]
+  },
+  {
+    "c": "台",
+    "pinyin": "tái",
+    "words": [
+      {
+        "text": "台灯",
+        "pinyin": "tái dēng"
+      },
+      {
+        "text": "阳台",
+        "pinyin": "yáng tái"
+      },
+      {
+        "text": "台风",
+        "pinyin": "tái fēng"
+      }
+    ]
+  },
+  {
+    "c": "如",
+    "pinyin": "rú",
+    "words": [
+      {
+        "text": "如果",
+        "pinyin": "rú guǒ"
+      },
+      {
+        "text": "比如",
+        "pinyin": "bǐ rú"
+      },
+      {
+        "text": "如意",
+        "pinyin": "rú yì"
+      }
+    ]
+  },
+  {
+    "c": "妆",
+    "pinyin": "zhuāng",
+    "words": [
+      {
+        "text": "化妆",
+        "pinyin": "huà zhuāng"
+      },
+      {
+        "text": "妆容",
+        "pinyin": "zhuāng róng"
+      },
+      {
+        "text": "淡妆",
+        "pinyin": "dàn zhuāng"
+      }
+    ]
+  },
+  {
+    "c": "戏",
+    "pinyin": "xì",
+    "words": [
+      {
+        "text": "游戏",
+        "pinyin": "yóu xì"
+      },
+      {
+        "text": "看戏",
+        "pinyin": "kàn xì"
+      },
+      {
+        "text": "戏台",
+        "pinyin": "xì tái"
+      }
+    ]
+  },
+  {
+    "c": "成",
+    "pinyin": "chéng",
+    "words": [
+      {
+        "text": "成长",
+        "pinyin": "chéng zhǎng"
+      },
+      {
+        "text": "成功",
+        "pinyin": "chéng gōng"
+      },
+      {
+        "text": "完成",
+        "pinyin": "wán chéng"
+      }
+    ]
+  },
+  {
+    "c": "代",
+    "pinyin": "dài",
+    "words": [
+      {
+        "text": "代表",
+        "pinyin": "dài biǎo"
+      },
+      {
+        "text": "代替",
+        "pinyin": "dài tì"
+      },
+      {
+        "text": "年代",
+        "pinyin": "nián dài"
+      }
+    ]
+  },
+  {
+    "c": "思",
+    "pinyin": "sī",
+    "words": [
+      {
+        "text": "思念",
+        "pinyin": "sī niàn"
+      },
+      {
+        "text": "思考",
+        "pinyin": "sī kǎo"
+      },
+      {
+        "text": "心思",
+        "pinyin": "xīn si"
+      }
+    ]
+  },
+  {
+    "c": "忠",
+    "pinyin": "zhōng",
+    "words": [
+      {
+        "text": "忠心",
+        "pinyin": "zhōng xīn"
+      },
+      {
+        "text": "忠实",
+        "pinyin": "zhōng shí"
+      },
+      {
+        "text": "忠诚",
+        "pinyin": "zhōng chéng"
+      }
+    ]
+  },
+  {
+    "c": "刀",
+    "pinyin": "dāo",
+    "words": [
+      {
+        "text": "小刀",
+        "pinyin": "xiǎo dāo"
+      },
+      {
+        "text": "刀片",
+        "pinyin": "dāo piàn"
+      },
+      {
+        "text": "剪刀",
+        "pinyin": "jiǎn dāo"
+      }
+    ]
+  },
+  {
+    "c": "习",
+    "pinyin": "xí",
+    "words": [
+      {
+        "text": "学习",
+        "pinyin": "xué xí"
+      },
+      {
+        "text": "练习",
+        "pinyin": "liàn xí"
+      },
+      {
+        "text": "复习",
+        "pinyin": "fù xí"
+      }
+    ]
+  },
+  {
+    "c": "认",
+    "pinyin": "rèn",
+    "words": [
+      {
+        "text": "认识",
+        "pinyin": "rèn shi"
+      },
+      {
+        "text": "认真",
+        "pinyin": "rèn zhēn"
+      },
+      {
+        "text": "认字",
+        "pinyin": "rèn zì"
+      }
+    ]
+  },
+  {
+    "c": "让",
+    "pinyin": "ràng",
+    "words": [
+      {
+        "text": "让开",
+        "pinyin": "ràng kāi"
+      },
+      {
+        "text": "让座",
+        "pinyin": "ràng zuò"
+      },
+      {
+        "text": "礼让",
+        "pinyin": "lǐ ràng"
+      }
+    ]
+  },
+  {
+    "c": "讲",
+    "pinyin": "jiǎng",
+    "words": [
+      {
+        "text": "讲话",
+        "pinyin": "jiǎng huà"
+      },
+      {
+        "text": "讲故事",
+        "pinyin": "jiǎng gù shi"
+      },
+      {
+        "text": "讲台",
+        "pinyin": "jiǎng tái"
+      }
+    ]
+  },
+  {
+    "c": "朵",
+    "pinyin": "duǒ",
+    "words": [
+      {
+        "text": "花朵",
+        "pinyin": "huā duǒ"
+      },
+      {
+        "text": "云朵",
+        "pinyin": "yún duǒ"
+      },
+      {
+        "text": "耳朵",
+        "pinyin": "ěr duo"
+      }
+    ]
+  },
+  {
+    "c": "没",
+    "pinyin": "méi",
+    "words": [
+      {
+        "text": "没有",
+        "pinyin": "méi yǒu"
+      },
+      {
+        "text": "没事",
+        "pinyin": "méi shì"
+      },
+      {
+        "text": "没空",
+        "pinyin": "méi kòng"
+      }
+    ],
+    "characterSpeech": "没有的没。"
+  },
+  {
+    "c": "船",
+    "pinyin": "chuán",
+    "words": [
+      {
+        "text": "小船",
+        "pinyin": "xiǎo chuán"
+      },
+      {
+        "text": "木船",
+        "pinyin": "mù chuán"
+      },
+      {
+        "text": "帆船",
+        "pinyin": "fān chuán"
+      }
+    ]
+  },
+  {
+    "c": "飞",
+    "pinyin": "fēi",
+    "words": [
+      {
+        "text": "飞机",
+        "pinyin": "fēi jī"
+      },
+      {
+        "text": "飞鸟",
+        "pinyin": "fēi niǎo"
+      },
+      {
+        "text": "飞行",
+        "pinyin": "fēi xíng"
+      }
+    ]
+  },
+  {
+    "c": "凤",
+    "pinyin": "fèng",
+    "words": [
+      {
+        "text": "凤凰",
+        "pinyin": "fèng huáng"
+      },
+      {
+        "text": "凤尾",
+        "pinyin": "fèng wěi"
+      },
+      {
+        "text": "凤仙花",
+        "pinyin": "fèng xiān huā"
+      }
+    ]
+  },
+  {
+    "c": "几",
+    "pinyin": "jǐ",
+    "words": [
+      {
+        "text": "几个",
+        "pinyin": "jǐ gè"
+      },
+      {
+        "text": "几天",
+        "pinyin": "jǐ tiān"
+      },
+      {
+        "text": "十几",
+        "pinyin": "shí jǐ"
+      }
+    ],
+    "characterSpeech": "几个的几。"
+  },
+  {
+    "c": "丸",
+    "pinyin": "wán",
+    "words": [
+      {
+        "text": "丸子",
+        "pinyin": "wán zi"
+      },
+      {
+        "text": "鱼丸",
+        "pinyin": "yú wán"
+      },
+      {
+        "text": "肉丸",
+        "pinyin": "ròu wán"
+      }
+    ]
+  },
+  {
+    "c": "队",
+    "pinyin": "duì",
+    "words": [
+      {
+        "text": "队伍",
+        "pinyin": "duì wu"
+      },
+      {
+        "text": "排队",
+        "pinyin": "pái duì"
+      },
+      {
+        "text": "队长",
+        "pinyin": "duì zhǎng"
+      }
+    ]
+  },
+  {
+    "c": "阳",
+    "pinyin": "yáng",
+    "words": [
+      {
+        "text": "太阳",
+        "pinyin": "tài yáng"
+      },
+      {
+        "text": "阳光",
+        "pinyin": "yáng guāng"
+      },
+      {
+        "text": "阳台",
+        "pinyin": "yáng tái"
+      }
+    ]
+  },
+  {
+    "c": "邻",
+    "pinyin": "lín",
+    "words": [
+      {
+        "text": "邻居",
+        "pinyin": "lín jū"
+      },
+      {
+        "text": "邻里",
+        "pinyin": "lín lǐ"
+      },
+      {
+        "text": "相邻",
+        "pinyin": "xiāng lín"
+      }
+    ]
+  },
+  {
+    "c": "及",
+    "pinyin": "jí",
+    "words": [
+      {
+        "text": "及时",
+        "pinyin": "jí shí"
+      },
+      {
+        "text": "及格",
+        "pinyin": "jí gé"
+      },
+      {
+        "text": "来得及",
+        "pinyin": "lái de jí"
+      }
+    ]
+  },
+  {
+    "c": "边",
+    "pinyin": "biān",
+    "words": [
+      {
+        "text": "旁边",
+        "pinyin": "páng biān"
+      },
+      {
+        "text": "河边",
+        "pinyin": "hé biān"
+      },
+      {
+        "text": "一边",
+        "pinyin": "yì biān"
+      }
+    ]
+  },
+  {
+    "c": "建",
+    "pinyin": "jiàn",
+    "words": [
+      {
+        "text": "建立",
+        "pinyin": "jiàn lì"
+      },
+      {
+        "text": "建造",
+        "pinyin": "jiàn zào"
+      },
+      {
+        "text": "建设",
+        "pinyin": "jiàn shè"
+      }
+    ]
+  },
+  {
+    "c": "汤",
+    "pinyin": "tāng",
+    "words": [
+      {
+        "text": "米汤",
+        "pinyin": "mǐ tāng"
+      },
+      {
+        "text": "喝汤",
+        "pinyin": "hē tāng"
+      },
+      {
+        "text": "汤水",
+        "pinyin": "tāng shuǐ"
+      }
+    ]
+  },
+  {
+    "c": "场",
+    "pinyin": "chǎng",
+    "words": [
+      {
+        "text": "广场",
+        "pinyin": "guǎng chǎng"
+      },
+      {
+        "text": "操场",
+        "pinyin": "cāo chǎng"
+      },
+      {
+        "text": "场地",
+        "pinyin": "chǎng dì"
+      }
+    ],
+    "characterSpeech": "广场的场。"
+  },
+  {
+    "c": "弯",
+    "pinyin": "wān",
+    "words": [
+      {
+        "text": "弯腰",
+        "pinyin": "wān yāo"
+      },
+      {
+        "text": "转弯",
+        "pinyin": "zhuǎn wān"
+      },
+      {
+        "text": "弯月",
+        "pinyin": "wān yuè"
+      }
+    ]
   }
 ];

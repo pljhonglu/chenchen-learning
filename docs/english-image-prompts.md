@@ -3,12 +3,12 @@
 本套图片用于现有学习程序的英语图卡。已参考 `public/images/poems/poem-01.webp` 的暖色水彩绘本气质，统一使用奶油色纸纹底、柔和水彩与不透明水粉、圆润轮廓和温暖配色。
 
 - 生成方式：内置 `image_gen.imagegen`，不是 CLI/API 回退。每张图集分别生成，逐张查看确认语义。
-- 共 11 张原创图集，提供 71 个具象词汇和情境插图；6 个颜色用界面色块呈现，10 个数字重复本套单个苹果插图，保证数量准确。
-- 实际使用资源：`public/images/english/*.webp`，总计 1,909,010 字节（约 1.82 MiB）。
+- 共 12 张原创图集，提供 84 个具象词汇和情境插图；6 个颜色用界面色块呈现，10 个数字重复本套单个苹果插图，保证数量准确。
+- 原有资源：`public/images/english/*.webp`，总计 1,909,010 字节（约 1.82 MiB）；新增 `fruit-expansion.png` 保留生成原图。
 - 原始 PNG 生成后由 sharp 仅进行 WebP 格式编码（quality 88、effort 6），不裁切、不重绘、不改变像素尺寸。PNG 原稿路径保留在下方。
 - 原图为 3×2 图集时 1536×1024，3×3 图集时 1254×1254。图卡使用 CSS 按等分网格呈现，不修改图片内容。
-- 对应文件：`public/data/english-illustrations.json`。全部 87 个 ID 与 `english.json` 一一对应。图集 `index` 从 0 开始，按从左到右、从上到下排序。
-- 原图纸纹和背景保留；无文字标签、品牌、水印。教材范句由页面单独渲染并播放语音。
+- 对应文件：`public/data/english-illustrations.json`。全部 100 个 ID 与 `english.json` 一一对应。图集 `index` 从 0 开始，按从左到右、从上到下排序。
+- 原图纸纹和背景保留；无文字标签、品牌、水印。英文单词和中文词义由页面单独渲染并播放语音。
 
 ## 已核对的教学语义
 
@@ -243,3 +243,16 @@ Bottom left PLEASE: child politely extending both open hands toward a red toy ba
 Bottom center THANKS: child holding a small wrapped present they have just received, smiling warmly and slightly bowing head toward another child, gentle grateful interaction, both children visible.
 Bottom right: leave completely BLANK warm cream watercolor paper, no object or markings.
 ```
+
+
+## fruit-expansion（2026-10-13）
+
+- 项目文件：`public/images/english/fruit-expansion.png`
+- 生成方式：内置 `image_gen.imagegen`，未使用 CLI 回退；原图直接复制到项目，无裁剪或重绘。
+- 原始 PNG：`/Users/bytedance/.codex/generated_images/01a134f2-c18d-7ec0-9edf-a459515c83c9/exec-be8bcc7e-3047-4516-b9b5-6ce48b00add1.png`
+- 4 × 4 等分图集，最后三个格子留空。index 0–12：rambutan、durian、kiwi、avocado、cherry、peach、mangosteen、melon、pineapple、papaya、mango、coconut、strawberry。
+- 核对：毛荔枝长软毛、榴莲硬尖刺、山竹紫壳白瓣均可区分；甜瓜用浅绿色果肉，与西瓜图不同；图卡无文本，读音和中文由页面提供。
+
+最终提示词：
+
+> Use case: scientific-educational. Asset type: a single square sprite atlas for a preschool English fruit flashcard app. Create a warm hand-painted watercolor and gouache fruit atlas on uniform pale ivory cream paper texture, realistic recognizable botanical fruit silhouettes with soft small ground shadows. EXACT 4 by 4 equal square cell layout, no borders, no gaps, no outer margin; each object centered inside its own cell with generous 15% padding, so each cell can be used separately using CSS. No text, letters, labels, numbers, faces, hands, logos or decorations. Row 1 left to right: rambutan (red skin with many long soft red and green hairs, one whole fruit and one peeled white pulp); durian (green-brown hard spiky husk with creamy yellow lobes visible in a cut-open half); kiwi fruit (brown fuzzy whole kiwi with a green cross-section and tiny black seeds); avocado (dark green avocado and cut half with one large brown seed). Row 2 left to right: cherry (one ripe red cherry on slender curved stalk with small leaf); peach (one fuzzy pink-yellow peach with characteristic crease); mangosteen (round deep purple thick shell with green calyx and one open half with white segmented flesh); melon (one pale green honeydew melon with a wedge showing pale green flesh and light tan seeds, NOT watermelon). Row 3 left to right: pineapple (golden diamond-pattern body and spiky green crown); papaya (orange-yellow elongated papaya with open half showing orange flesh and black seeds in center); mango (golden red-green mango and a cut yellow cheek); coconut (brown hairy coconut and half showing white flesh). Row 4: strawberry in first cell (red strawberry with yellow seeds and green leafy crown); leave the other THREE cells completely empty cream paper. All 13 fruit illustrations must stay strictly inside their exact equal grid cell, consistent scale and watercolor style. A single clean square sprite sheet, preferably 2048 by 2048 pixels.

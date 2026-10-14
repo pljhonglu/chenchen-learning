@@ -23,7 +23,7 @@ node scripts/test-pinyin-sounds.cjs
 
 ## 例字读音
 
-例字有 112 段不重复读音：68 段复用已有写字音频，44 段补充合成。补充音频使用“单字 + 句号”作为合成输入；仅用于汉字读音，不代替拼音范音。具体音频、来源及生成参数见例字音频清单和生成脚本。
+例字有 112 段不重复读音，统一为 Qwen3-TTS Base 固定 Serena 参考女声；与写字字音匹配的片段共用录音。补充音频使用“单字 + 句号”作为合成输入；仅用于汉字读音，不代替拼音范音。具体模型、参数和重建步骤见[统一音频说明](unified-audio.md)。
 
 ```sh
 python3 scripts/generate-pinyin-examples-audio.py --check

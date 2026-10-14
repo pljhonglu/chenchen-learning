@@ -14,6 +14,10 @@ const literal = app.match(/\bconst WRITE_CHARS\s*=\s*(\[[\s\S]*?\n\s*\]);/);
 assert.ok(literal, 'Writing curriculum array is missing');
 // Evaluate only the data literal, never the app or its startup side effects.
 const curriculum = vm.runInNewContext(`(${literal[1]})`, Object.create(null), { timeout: 1000 });
+const retiredLiteral = app.match(/\bconst RETIRED_WRITE_CHARS\s*=\s*(\[[\s\S]*?\n\s*\]);/);
+assert.ok(retiredLiteral, 'Retired writing cards must remain available to saved drafts');
+const retired = vm.runInNewContext(`(${retiredLiteral[1]})`, Object.create(null), { timeout: 1000 });
+const supportedCurriculum = [...curriculum, ...retired];
 const strokes = json('data/writing-strokes.json').characters;
 const audio = json('data/writing-audio.json');
 const characters = new Set(curriculum.map(item => item.c));
@@ -24,9 +28,16 @@ const vocabularyAudio = json('data/writing-vocabulary-audio.json');
 
 assert.equal(curriculum.length, 150, 'Expected 150 selectable characters');
 assert.equal(characters.size, 150, 'Duplicate characters in writing curriculum');
-const originalCharacters = '一二三四五十人大小口子女日月水火山石田木上下土天六七八九百左右中入出回目耳手足牙心米禾竹花草牛羊马鸟虫鱼白云雨风门车书本妈爸爷奶哥姐弟妹我你他她好爱家朋友学文字写画读课校师生同桌笔尺包开关来去走跑坐立看听说笑吃喝玩洗东西南北前后里外多少长短高低早晚春夏秋冬星光电雪河海林叶果红黄蓝绿黑瓜豆茶蛋饭肉面衣';
-assert.deepEqual(Array.from(characters).sort(), Array.from(originalCharacters).sort(), 'The original 150-character collection must be preserved');
-for (const item of curriculum) {
+const requestedCharacters = '一二三十土王厂广人八大天羊太六虫虾孙口片五又友多子皮买山出画四西酒比瓜切水寸丁了手狗公云台女如妆戏成代心思忠刀习月认让讲朵没船风飞凤七电包九几丸队阳邻及边建奶汤场马写弯';
+for (const c of requestedCharacters) assert.ok(characters.has(c), `Requested character missing from library: ${c}`);
+assert.equal(retired.length, 47, 'Replace exactly 47 previous characters');
+const supportedCharacters = new Set(supportedCurriculum.map(item => item.c));
+assert.equal(supportedCharacters.size, supportedCurriculum.length, 'Current and retired cards must be distinct');
+for (const item of retired) {
+  assert.ok(!characters.has(item.c), `${item.c}: retired character still appears in the default library`);
+  assert.ok(strokes[item.c].strokeCount >= 7, `${item.c}: replacement should remove a more complex character`);
+}
+for (const item of supportedCurriculum) {
   assert.equal(Array.from(item.c).length, 1, `Not a single character: ${item.c}`);
   assert.ok(item.tip?.trim(), `${item.c}: missing shape hint`);
   assert.ok(strokes[item.c], `${item.c}: missing bundled stroke data`);
@@ -54,10 +65,10 @@ function expectVocabularyClip(kind, label, pinyin) {
   vocabularyClips.set(id, { text: label, pinyin, src: `/audio/writing-vocabulary/${id}.mp3` });
 }
 assert.ok(Array.isArray(vocabulary), 'Writing vocabulary array is missing');
-assert.equal(vocabulary.length, 150, 'Vocabulary must cover all 150 characters');
+assert.equal(vocabulary.length, supportedCharacters.size, 'Vocabulary must cover current and retired cards');
 const vocabularyCharacters = Array.from(vocabulary, item => item.c);
-assert.equal(new Set(vocabularyCharacters).size, 150, 'Duplicate character in writing vocabulary');
-assert.deepEqual(vocabularyCharacters.sort(), Array.from(characters).sort(), 'Vocabulary and selectable characters differ');
+assert.equal(new Set(vocabularyCharacters).size, vocabulary.length, 'Duplicate character in writing vocabulary');
+assert.deepEqual(vocabularyCharacters.sort(), Array.from(supportedCharacters).sort(), 'Vocabulary and supported characters differ');
 for (const item of vocabulary) {
   checkPinyin(item.c, item.pinyin);
   expectVocabularyClip('char', item.c, item.pinyin);
@@ -144,11 +155,11 @@ for (const [id, clip] of Object.entries(audio)) {
     assert.ok(Number.isInteger(number) && number >= 1 && number <= ordinals.length, `${id}: invalid stroke number`);
     assert.equal(clip.strokeNumber, number, `${id}: mismatched number metadata`);
     assert.equal(clip.text, `第${ordinals[number - 1]}画`, `${id}: incorrect spoken ordinal`);
-    assert.equal(clip.synthesisText, `${clip.text}。`, `${id}: synthesis text differs from label`);
+    assert.equal(clip.spokenText || clip.synthesisText, `${clip.text}。`, `${id}: synthesis text differs from label`);
   } else {
     assert.equal(clip.kind, 'guide', `${id}: unknown recording kind`);
     assert.ok(clip.text?.trim(), `${id}: missing guide text`);
-    assert.equal(clip.synthesisText, clip.text, `${id}: synthesis text differs from guide`);
+    assert.equal(clip.spokenText || clip.synthesisText, clip.text, `${id}: synthesis text differs from guide`);
   }
 }
 

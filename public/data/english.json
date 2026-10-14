@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "themes": [
     {
       "id": "animals",
@@ -14,7 +14,7 @@
     {
       "id": "fruit",
       "title": "水果篮子",
-      "description": "认识水果，也可以数一数。"
+      "description": "认识水果，听单词和中文，按顺序一张张学。"
     },
     {
       "id": "food",
@@ -73,72 +73,56 @@
       "word": "dog",
       "meaning": "狗",
       "theme": "animals",
-      "source": "classroom",
-      "sentence": "This is a dog.",
-      "translation": "这是一只狗。"
+      "source": "classroom"
     },
     {
       "id": "english-cat",
       "word": "cat",
       "meaning": "猫",
       "theme": "animals",
-      "source": "classroom",
-      "sentence": "This is a cat.",
-      "translation": "这是一只猫。"
+      "source": "classroom"
     },
     {
       "id": "english-mouse",
       "word": "mouse",
       "meaning": "老鼠",
       "theme": "animals",
-      "source": "classroom",
-      "sentence": "This is a mouse.",
-      "translation": "这是一只老鼠。"
+      "source": "classroom"
     },
     {
       "id": "english-hippo",
       "word": "hippo",
       "meaning": "河马",
       "theme": "animals",
-      "source": "classroom",
-      "sentence": "This is a hippo.",
-      "translation": "这是一只河马。"
+      "source": "classroom"
     },
     {
       "id": "english-hamster",
       "word": "hamster",
       "meaning": "仓鼠",
       "theme": "animals",
-      "source": "classroom",
-      "sentence": "This is a hamster.",
-      "translation": "这是一只仓鼠。"
+      "source": "classroom"
     },
     {
       "id": "english-schoolbag",
       "word": "schoolbag",
       "meaning": "书包",
       "theme": "school",
-      "source": "classroom",
-      "sentence": "This is my schoolbag.",
-      "translation": "这是我的书包。"
+      "source": "classroom"
     },
     {
       "id": "english-book",
       "word": "book",
       "meaning": "书",
       "theme": "school",
-      "source": "classroom",
-      "sentence": "This is a book.",
-      "translation": "这是一本书。"
+      "source": "classroom"
     },
     {
       "id": "english-pencil",
       "word": "pencil",
       "meaning": "铅笔",
       "theme": "school",
-      "source": "classroom",
-      "sentence": "I have a pencil.",
-      "translation": "我有一支铅笔。"
+      "source": "classroom"
     },
     {
       "id": "english-scissors",
@@ -146,8 +130,6 @@
       "meaning": "剪刀",
       "theme": "school",
       "source": "classroom",
-      "sentence": "These are scissors.",
-      "translation": "这是剪刀。",
       "note": "scissors 通常用复数形式，范句用 These are scissors."
     },
     {
@@ -155,64 +137,14 @@
       "word": "glue",
       "meaning": "胶水",
       "theme": "school",
-      "source": "classroom",
-      "sentence": "This is glue.",
-      "translation": "这是胶水。"
+      "source": "classroom"
     },
     {
       "id": "english-pencil-case",
       "word": "pencil case",
       "meaning": "铅笔袋",
       "theme": "school",
-      "source": "classroom",
-      "sentence": "This is my pencil case.",
-      "translation": "这是我的铅笔袋。"
-    },
-    {
-      "id": "english-pear",
-      "word": "pear",
-      "meaning": "梨",
-      "theme": "fruit",
-      "source": "classroom",
-      "sentence": "This is a pear.",
-      "translation": "这是一个梨。",
-      "note": "老师水果列表有一次写作 pea（豌豆），后一次为 pear（梨）。本词按后一次课堂清单整理；请结合老师图片核对。"
-    },
-    {
-      "id": "english-apple",
-      "word": "apple",
-      "meaning": "苹果",
-      "theme": "fruit",
-      "source": "classroom",
-      "sentence": "This is an apple.",
-      "translation": "这是一个苹果。"
-    },
-    {
-      "id": "english-plum",
-      "word": "plum",
-      "meaning": "李子",
-      "theme": "fruit",
-      "source": "classroom",
-      "sentence": "This is a plum.",
-      "translation": "这是一个李子。"
-    },
-    {
-      "id": "english-banana",
-      "word": "banana",
-      "meaning": "香蕉",
-      "theme": "fruit",
-      "source": "classroom",
-      "sentence": "This is a banana.",
-      "translation": "这是一根香蕉。"
-    },
-    {
-      "id": "english-watermelon",
-      "word": "watermelon",
-      "meaning": "西瓜",
-      "theme": "fruit",
-      "source": "classroom",
-      "sentence": "This is a watermelon.",
-      "translation": "这是一个西瓜。"
+      "source": "classroom"
     },
     {
       "id": "english-grape",
@@ -220,72 +152,183 @@
       "meaning": "葡萄",
       "theme": "fruit",
       "source": "classroom",
-      "sentence": "This is a grape.",
-      "translation": "这是一颗葡萄。",
-      "note": "单词与范句使用单数 grape，图片是一颗葡萄。"
+      "note": "单词使用单数 grape，图片是一颗葡萄。"
+    },
+    {
+      "id": "english-rambutan",
+      "word": "rambutan",
+      "meaning": "毛荔枝",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-durian",
+      "word": "durian",
+      "meaning": "榴莲",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-kiwi",
+      "word": "kiwi",
+      "meaning": "猕猴桃",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-avocado",
+      "word": "avocado",
+      "meaning": "牛油果",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-cherry",
+      "word": "cherry",
+      "meaning": "樱桃",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-peach",
+      "word": "peach",
+      "meaning": "桃子",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-mangosteen",
+      "word": "mangosteen",
+      "meaning": "山竹",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-melon",
+      "word": "melon",
+      "meaning": "甜瓜",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-apple",
+      "word": "apple",
+      "meaning": "苹果",
+      "theme": "fruit",
+      "source": "classroom"
+    },
+    {
+      "id": "english-banana",
+      "word": "banana",
+      "meaning": "香蕉",
+      "theme": "fruit",
+      "source": "classroom"
     },
     {
       "id": "english-orange",
       "word": "orange",
       "meaning": "橙子",
       "theme": "fruit",
+      "source": "classroom"
+    },
+    {
+      "id": "english-pineapple",
+      "word": "pineapple",
+      "meaning": "菠萝",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-papaya",
+      "word": "papaya",
+      "meaning": "木瓜",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-pear",
+      "word": "pear",
+      "meaning": "梨",
+      "theme": "fruit",
       "source": "classroom",
-      "sentence": "This is an orange.",
-      "translation": "这是一个橙子。"
+      "note": "老师水果列表有一次写作 pea（豌豆），后一次为 pear（梨）。本词按后一次课堂清单整理；请结合老师图片核对。"
+    },
+    {
+      "id": "english-mango",
+      "word": "mango",
+      "meaning": "芒果",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-coconut",
+      "word": "coconut",
+      "meaning": "椰子",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-strawberry",
+      "word": "strawberry",
+      "meaning": "草莓",
+      "theme": "fruit",
+      "source": "extension"
+    },
+    {
+      "id": "english-plum",
+      "word": "plum",
+      "meaning": "李子",
+      "theme": "fruit",
+      "source": "classroom"
+    },
+    {
+      "id": "english-watermelon",
+      "word": "watermelon",
+      "meaning": "西瓜",
+      "theme": "fruit",
+      "source": "classroom"
     },
     {
       "id": "english-cheese",
       "word": "cheese",
       "meaning": "奶酪",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "This is cheese.",
-      "translation": "这是奶酪。"
+      "source": "classroom"
     },
     {
       "id": "english-pizza",
       "word": "pizza",
       "meaning": "披萨",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "I like pizza.",
-      "translation": "我喜欢披萨。"
+      "source": "classroom"
     },
     {
       "id": "english-milk",
       "word": "milk",
       "meaning": "牛奶",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "I like milk.",
-      "translation": "我喜欢牛奶。"
+      "source": "classroom"
     },
     {
       "id": "english-egg",
       "word": "egg",
       "meaning": "鸡蛋",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "This is an egg.",
-      "translation": "这是一个鸡蛋。"
+      "source": "classroom"
     },
     {
       "id": "english-cake",
       "word": "cake",
       "meaning": "蛋糕",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "This is a cake.",
-      "translation": "这是一个蛋糕。"
+      "source": "classroom"
     },
     {
       "id": "english-rice",
       "word": "rice",
       "meaning": "米饭",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "I like rice.",
-      "translation": "我喜欢米饭。"
+      "source": "classroom"
     },
     {
       "id": "english-chicken",
@@ -293,8 +336,6 @@
       "meaning": "鸡肉",
       "theme": "food",
       "source": "classroom",
-      "sentence": "I like chicken.",
-      "translation": "我喜欢鸡肉。",
       "note": "本词位于食物单元，按“鸡肉”学习；chicken 也可以指“鸡”。"
     },
     {
@@ -302,18 +343,14 @@
       "word": "carrot",
       "meaning": "胡萝卜",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "This is a carrot.",
-      "translation": "这是一根胡萝卜。"
+      "source": "classroom"
     },
     {
       "id": "english-honey",
       "word": "honey",
       "meaning": "蜂蜜",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "This is honey.",
-      "translation": "这是蜂蜜。"
+      "source": "classroom"
     },
     {
       "id": "english-beans",
@@ -321,8 +358,6 @@
       "meaning": "豆子",
       "theme": "food",
       "source": "classroom",
-      "sentence": "These are beans.",
-      "translation": "这些是豆子。",
       "note": "beans 指豆子。老师中文写作“豌豆”，而豌豆通常是 peas；本卡暂按 beans 配图，请结合课堂图片核对。"
     },
     {
@@ -330,293 +365,175 @@
       "word": "hamburger",
       "meaning": "汉堡包",
       "theme": "food",
-      "source": "classroom",
-      "sentence": "This is a hamburger.",
-      "translation": "这是一个汉堡包。"
+      "source": "classroom"
     },
     {
       "id": "english-eye",
       "word": "eye",
       "meaning": "眼睛",
       "theme": "body",
-      "source": "classroom",
-      "sentence": "Point to your eye.",
-      "translation": "指一指你的眼睛。",
-      "action": {
-        "en": "Point to your eye.",
-        "zh": "指一指你的眼睛。"
-      }
+      "source": "classroom"
     },
     {
       "id": "english-ear",
       "word": "ear",
       "meaning": "耳朵",
       "theme": "body",
-      "source": "classroom",
-      "sentence": "Touch your ear.",
-      "translation": "摸摸你的耳朵。",
-      "action": {
-        "en": "Touch your ear.",
-        "zh": "摸摸你的耳朵。"
-      }
+      "source": "classroom"
     },
     {
       "id": "english-knee",
       "word": "knee",
       "meaning": "膝盖",
       "theme": "body",
-      "source": "classroom",
-      "sentence": "Touch your knee.",
-      "translation": "摸摸你的膝盖。",
-      "action": {
-        "en": "Touch your knee.",
-        "zh": "摸摸你的膝盖。"
-      }
+      "source": "classroom"
     },
     {
       "id": "english-toe",
       "word": "toe",
       "meaning": "脚趾",
       "theme": "body",
-      "source": "classroom",
-      "sentence": "Touch your toe.",
-      "translation": "摸摸你的脚趾。",
-      "action": {
-        "en": "Touch your toe.",
-        "zh": "摸摸你的脚趾。"
-      }
+      "source": "classroom"
     },
     {
       "id": "english-head",
       "word": "head",
       "meaning": "头",
       "theme": "body",
-      "source": "classroom",
-      "sentence": "Touch your head.",
-      "translation": "摸摸你的头。",
-      "action": {
-        "en": "Touch your head.",
-        "zh": "摸摸你的头。"
-      }
+      "source": "classroom"
     },
     {
       "id": "english-shoulder",
       "word": "shoulder",
       "meaning": "肩膀",
       "theme": "body",
-      "source": "classroom",
-      "sentence": "Touch your shoulder.",
-      "translation": "摸摸你的肩膀。",
-      "action": {
-        "en": "Touch your shoulder.",
-        "zh": "摸摸你的肩膀。"
-      }
+      "source": "classroom"
     },
     {
       "id": "english-box",
       "word": "box",
       "meaning": "盒子",
       "theme": "things",
-      "source": "classroom",
-      "sentence": "This is a box.",
-      "translation": "这是一个盒子。"
+      "source": "classroom"
     },
     {
       "id": "english-running",
       "word": "running",
       "meaning": "正在跑",
       "theme": "actions",
-      "source": "classroom",
-      "sentence": "The dog is running.",
-      "translation": "小狗正在跑。"
+      "source": "classroom"
     },
     {
       "id": "english-dancing",
       "word": "dancing",
       "meaning": "正在跳舞",
       "theme": "actions",
-      "source": "classroom",
-      "sentence": "I am dancing.",
-      "translation": "我正在跳舞。",
-      "action": {
-        "en": "I am dancing.",
-        "zh": "我正在跳舞。"
-      }
+      "source": "classroom"
     },
     {
       "id": "english-sleeping",
       "word": "sleeping",
       "meaning": "正在睡觉",
       "theme": "actions",
-      "source": "classroom",
-      "sentence": "The cat is sleeping.",
-      "translation": "小猫正在睡觉。"
+      "source": "classroom"
     },
     {
       "id": "english-water",
       "word": "water",
       "meaning": "水",
       "theme": "food",
-      "source": "extension",
-      "sentence": "Water, please.",
-      "translation": "请给我水。"
+      "source": "extension"
     },
     {
       "id": "english-nose",
       "word": "nose",
       "meaning": "鼻子",
       "theme": "body",
-      "source": "extension",
-      "sentence": "Touch your nose.",
-      "translation": "摸摸你的鼻子。",
-      "action": {
-        "en": "Touch your nose.",
-        "zh": "摸摸你的鼻子。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-mouth",
       "word": "mouth",
       "meaning": "嘴巴",
       "theme": "body",
-      "source": "extension",
-      "sentence": "Point to your mouth.",
-      "translation": "指一指你的嘴巴。",
-      "action": {
-        "en": "Point to your mouth.",
-        "zh": "指一指你的嘴巴。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-hand",
       "word": "hand",
       "meaning": "手",
       "theme": "body",
-      "source": "extension",
-      "sentence": "This is my hand.",
-      "translation": "这是我的手。"
+      "source": "extension"
     },
     {
       "id": "english-foot",
       "word": "foot",
       "meaning": "脚",
       "theme": "body",
-      "source": "extension",
-      "sentence": "This is my foot.",
-      "translation": "这是我的脚。"
+      "source": "extension"
     },
     {
       "id": "english-ball",
       "word": "ball",
       "meaning": "球",
       "theme": "things",
-      "source": "extension",
-      "sentence": "I have a ball.",
-      "translation": "我有一个球。"
+      "source": "extension"
     },
     {
       "id": "english-look",
       "word": "look",
       "meaning": "看",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "Look at the cat.",
-      "translation": "看看小猫。",
-      "action": {
-        "en": "Look at the cat.",
-        "zh": "看看小猫。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-listen",
       "word": "listen",
       "meaning": "听",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "Listen, please.",
-      "translation": "请听一听。",
-      "action": {
-        "en": "Listen, please.",
-        "zh": "请听一听。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-point",
       "word": "point",
       "meaning": "指",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "Point to the book.",
-      "translation": "指一指书。",
-      "action": {
-        "en": "Point to the book.",
-        "zh": "指一指书。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-touch",
       "word": "touch",
       "meaning": "触摸",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "Touch your head.",
-      "translation": "摸摸你的头。",
-      "action": {
-        "en": "Touch your head.",
-        "zh": "摸摸你的头。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-clap",
       "word": "clap",
       "meaning": "拍手",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "Clap your hands.",
-      "translation": "拍拍手。",
-      "action": {
-        "en": "Clap your hands.",
-        "zh": "拍拍手。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-jump",
       "word": "jump",
       "meaning": "跳",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "I can jump.",
-      "translation": "我会跳。",
-      "action": {
-        "en": "I can jump.",
-        "zh": "我会跳。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-sit",
       "word": "sit",
       "meaning": "坐",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "Sit down, please.",
-      "translation": "请坐下。",
-      "action": {
-        "en": "Sit down, please.",
-        "zh": "请坐下。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-stand",
       "word": "stand",
       "meaning": "站",
       "theme": "actions",
-      "source": "extension",
-      "sentence": "Stand up, please.",
-      "translation": "请站起来。",
-      "action": {
-        "en": "Stand up, please.",
-        "zh": "请站起来。"
-      }
+      "source": "extension"
     },
     {
       "id": "english-mum",
@@ -624,8 +541,6 @@
       "meaning": "妈妈",
       "theme": "family",
       "source": "extension",
-      "sentence": "This is my mum.",
-      "translation": "这是我的妈妈。",
       "note": "本模块使用英式发音；mum 是英式英语中常见的“妈妈”。"
     },
     {
@@ -633,9 +548,7 @@
       "word": "dad",
       "meaning": "爸爸",
       "theme": "family",
-      "source": "extension",
-      "sentence": "This is my dad.",
-      "translation": "这是我的爸爸。"
+      "source": "extension"
     },
     {
       "id": "english-grandma",
@@ -643,8 +556,6 @@
       "meaning": "奶奶或外婆",
       "theme": "family",
       "source": "extension",
-      "sentence": "This is my grandma.",
-      "translation": "这是我的奶奶或外婆。",
       "note": "grandma 可以指奶奶或外婆，介绍家人时按自家的称呼理解。"
     },
     {
@@ -653,8 +564,6 @@
       "meaning": "爷爷或外公",
       "theme": "family",
       "source": "extension",
-      "sentence": "This is my grandpa.",
-      "translation": "这是我的爷爷或外公。",
       "note": "grandpa 可以指爷爷或外公，介绍家人时按自家的称呼理解。"
     },
     {
@@ -663,8 +572,6 @@
       "meaning": "兄弟",
       "theme": "family",
       "source": "extension",
-      "sentence": "This is my brother.",
-      "translation": "这是我的哥哥或弟弟。",
       "note": "brother 可以指哥哥或弟弟。"
     },
     {
@@ -673,8 +580,6 @@
       "meaning": "姐妹",
       "theme": "family",
       "source": "extension",
-      "sentence": "This is my sister.",
-      "translation": "这是我的姐姐或妹妹。",
       "note": "sister 可以指姐姐或妹妹。"
     },
     {
@@ -682,252 +587,196 @@
       "word": "red",
       "meaning": "红色",
       "theme": "colors",
-      "source": "extension",
-      "sentence": "It is red.",
-      "translation": "它是红色的。"
+      "source": "extension"
     },
     {
       "id": "english-yellow",
       "word": "yellow",
       "meaning": "黄色",
       "theme": "colors",
-      "source": "extension",
-      "sentence": "It is yellow.",
-      "translation": "它是黄色的。"
+      "source": "extension"
     },
     {
       "id": "english-blue",
       "word": "blue",
       "meaning": "蓝色",
       "theme": "colors",
-      "source": "extension",
-      "sentence": "It is blue.",
-      "translation": "它是蓝色的。"
+      "source": "extension"
     },
     {
       "id": "english-green",
       "word": "green",
       "meaning": "绿色",
       "theme": "colors",
-      "source": "extension",
-      "sentence": "It is green.",
-      "translation": "它是绿色的。"
+      "source": "extension"
     },
     {
       "id": "english-black",
       "word": "black",
       "meaning": "黑色",
       "theme": "colors",
-      "source": "extension",
-      "sentence": "It is black.",
-      "translation": "它是黑色的。"
+      "source": "extension"
     },
     {
       "id": "english-white",
       "word": "white",
       "meaning": "白色",
       "theme": "colors",
-      "source": "extension",
-      "sentence": "It is white.",
-      "translation": "它是白色的。"
+      "source": "extension"
     },
     {
       "id": "english-one",
       "word": "one",
       "meaning": "一",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "One apple.",
-      "translation": "一个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-two",
       "word": "two",
       "meaning": "二",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Two apples.",
-      "translation": "两个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-three",
       "word": "three",
       "meaning": "三",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Three apples.",
-      "translation": "三个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-four",
       "word": "four",
       "meaning": "四",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Four apples.",
-      "translation": "四个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-five",
       "word": "five",
       "meaning": "五",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Five apples.",
-      "translation": "五个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-six",
       "word": "six",
       "meaning": "六",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Six apples.",
-      "translation": "六个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-seven",
       "word": "seven",
       "meaning": "七",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Seven apples.",
-      "translation": "七个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-eight",
       "word": "eight",
       "meaning": "八",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Eight apples.",
-      "translation": "八个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-nine",
       "word": "nine",
       "meaning": "九",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Nine apples.",
-      "translation": "九个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-ten",
       "word": "ten",
       "meaning": "十",
       "theme": "numbers",
-      "source": "extension",
-      "sentence": "Ten apples.",
-      "translation": "十个苹果。"
+      "source": "extension"
     },
     {
       "id": "english-happy",
       "word": "happy",
       "meaning": "开心",
       "theme": "feelings",
-      "source": "extension",
-      "sentence": "I am happy.",
-      "translation": "我很开心。"
+      "source": "extension"
     },
     {
       "id": "english-sad",
       "word": "sad",
       "meaning": "难过",
       "theme": "feelings",
-      "source": "extension",
-      "sentence": "I am sad.",
-      "translation": "我很难过。"
+      "source": "extension"
     },
     {
       "id": "english-hungry",
       "word": "hungry",
       "meaning": "饿",
       "theme": "feelings",
-      "source": "extension",
-      "sentence": "I am hungry.",
-      "translation": "我饿了。"
+      "source": "extension"
     },
     {
       "id": "english-thirsty",
       "word": "thirsty",
       "meaning": "渴",
       "theme": "feelings",
-      "source": "extension",
-      "sentence": "I am thirsty.",
-      "translation": "我渴了。"
+      "source": "extension"
     },
     {
       "id": "english-hello",
       "word": "hello",
       "meaning": "你好",
       "theme": "greetings",
-      "source": "extension",
-      "sentence": "Hello, Mum!",
-      "translation": "妈妈，你好！"
+      "source": "extension"
     },
     {
       "id": "english-goodbye",
       "word": "goodbye",
       "meaning": "再见",
       "theme": "greetings",
-      "source": "extension",
-      "sentence": "Goodbye, Dad!",
-      "translation": "爸爸，再见！"
+      "source": "extension"
     },
     {
       "id": "english-yes",
       "word": "yes",
       "meaning": "是或好",
       "theme": "greetings",
-      "source": "extension",
-      "sentence": "Yes, please.",
-      "translation": "好的，谢谢。"
+      "source": "extension"
     },
     {
       "id": "english-no",
       "word": "no",
       "meaning": "不",
       "theme": "greetings",
-      "source": "extension",
-      "sentence": "No, thanks.",
-      "translation": "不用了，谢谢。"
+      "source": "extension"
     },
     {
       "id": "english-please",
       "word": "please",
       "meaning": "请",
       "theme": "greetings",
-      "source": "extension",
-      "sentence": "Help me, please.",
-      "translation": "请帮帮我。"
+      "source": "extension"
     },
     {
       "id": "english-thanks",
       "word": "thanks",
       "meaning": "谢谢",
       "theme": "greetings",
-      "source": "extension",
-      "sentence": "Thank you.",
-      "translation": "谢谢你。"
+      "source": "extension"
     },
     {
       "id": "english-big",
       "word": "big",
       "meaning": "大",
       "theme": "sizes",
-      "source": "extension",
-      "sentence": "It is big.",
-      "translation": "它很大。"
+      "source": "extension"
     },
     {
       "id": "english-small",
       "word": "small",
       "meaning": "小",
       "theme": "sizes",
-      "source": "extension",
-      "sentence": "It is small.",
-      "translation": "它很小。"
+      "source": "extension"
     }
   ]
 }

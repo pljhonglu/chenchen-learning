@@ -1,6 +1,6 @@
 # 大班汉字书写准备：150 字与生活词语
 
-核对日期：2026-10-02。
+选字更新：2026-10-13；官方指导核对日期：2026-10-02。
 
 ## 官方指导与本程序的定位
 
@@ -16,9 +16,18 @@
 
 - 字库统一展示，不再分组或划分学习阶段。按实际笔顺数据的笔画数由少到多排列，同笔画保留原字库顺序；这是一种简单可理解的排序，不代表笔画数能完全衡量书写难度。
 - 每字配带声调的拼音与 3 个生活词语或短语，例如“禾苗、小禾苗、锄禾”。拼音按音节分开，轻声不标调；“一、不”在词中按实际变调标注，单字显示本调。其他声调按本调标注。
-- 多音字在这一轮只展示一个常用读音及相应词语，例如“长 cháng”“少 shǎo”“校 xiào”。“子”选“王子、子女、子孙”，避免把轻声后缀混作单字本调。部分孤立字的朗读用简短语境帮助明确读音。
+- 多音字在这一轮只展示一个常用读音及相应词语，例如“长 cháng”“少 shǎo”“切 qiē”“没 méi”“场 chǎng”“几 jǐ”。“子”选“王子、子女、子孙”，避免把轻声后缀混作单字本调。部分孤立字的朗读用简短语境帮助明确读音。
 - 看一次笔顺，听一听字和词；孩子愿意时用手指描一次，或在纸上试写一次即可。一次选 1 个字、约 3—5 分钟是本程序的轻量建议，不是官方时长要求。
 - 动画不能计作完成书写；屏幕练习逐笔自动检查，全部笔画通过才完成，保留重播、停止与提示。轮廓、示范和重试会计入帮助信息；无需家长确认，不以屏幕轨迹评价纸笔书写能力。
+
+## 本轮选字调整
+
+完整保留本次指定的 84 个字，其中 37 个原本就在字库，新增 47 个。优先替换笔画较多、结构较复杂的旧字，保留“爸、妈、家、学、鱼、雨、果”等生活基础字，默认字库仍为 150 字。
+
+- 新增：王厂广太虾孙片又皮买酒比切寸丁了狗公台如妆戏成代思忠刀习认让讲朵没船飞凤几丸队阳邻及边建汤场弯。
+- 移出默认字库：足草哥姐弟妹爱朋读课校桌笔走跑坐看听说笑喝玩洗南前里短高低晚春夏秋星雪河海林黄蓝绿黑豆茶蛋饭面。
+- 旧字的学习记录、已保存的未完成学习组、原有自定义课堂字和本地点读、笔顺资源继续保留；旧字不再进入新的默认学习安排。已有自定义字仍会作为额外字卡显示。
+- “了”采用“好了、来了、走了”中的轻声 le；“切、没、场、几”使用简短语境明确这一轮的读音。
 
 ## 150 字表
 
@@ -32,6 +41,12 @@
 | 八 | bā | 八月（bā yuè）；八十（bā shí）；八只（bā zhī） |
 | 九 | jiǔ | 九月（jiǔ yuè）；九十（jiǔ shí）；九只（jiǔ zhī） |
 | 入 | rù | 入口（rù kǒu）；进入（jìn rù）；入门（rù mén） |
+| 厂 | chǎng | 工厂（gōng chǎng）；厂房（chǎng fáng）；厂长（chǎng zhǎng） |
+| 又 | yòu | 又来（yòu lái）；又见（yòu jiàn）；又大又圆（yòu dà yòu yuán） |
+| 丁 | dīng | 园丁（yuán dīng）；丁字（dīng zì）；丁香（dīng xiāng） |
+| 了 | le | 好了（hǎo le）；来了（lái le）；走了（zǒu le） |
+| 刀 | dāo | 小刀（xiǎo dāo）；刀片（dāo piàn）；剪刀（jiǎn dāo） |
+| 几 | jǐ | 几个（jǐ gè）；几天（jǐ tiān）；十几（shí jǐ） |
 | 三 | sān | 三月（sān yuè）；三人（sān rén）；三角形（sān jiǎo xíng） |
 | 大 | dà | 大山（dà shān）；大门（dà mén）；大象（dà xiàng） |
 | 小 | xiǎo | 小手（xiǎo shǒu）；小鸟（xiǎo niǎo）；大小（dà xiǎo） |
@@ -44,6 +59,12 @@
 | 土 | tǔ | 泥土（ní tǔ）；土地（tǔ dì）；土豆（tǔ dòu） |
 | 马 | mǎ | 小马（xiǎo mǎ）；木马（mù mǎ）；斑马（bān mǎ） |
 | 门 | mén | 大门（dà mén）；门口（mén kǒu）；开门（kāi mén） |
+| 广 | guǎng | 广场（guǎng chǎng）；广大（guǎng dà）；广播（guǎng bō） |
+| 寸 | cùn | 一寸（yí cùn）；尺寸（chǐ cùn）；方寸（fāng cùn） |
+| 习 | xí | 学习（xué xí）；练习（liàn xí）；复习（fù xí） |
+| 飞 | fēi | 飞机（fēi jī）；飞鸟（fēi niǎo）；飞行（fēi xíng） |
+| 丸 | wán | 丸子（wán zi）；鱼丸（yú wán）；肉丸（ròu wán） |
+| 及 | jí | 及时（jí shí）；及格（jí gé）；来得及（lái de jí） |
 | 五 | wǔ | 五月（wǔ yuè）；五十（wǔ shí）；五指（wǔ zhǐ） |
 | 日 | rì | 日出（rì chū）；生日（shēng rì）；日光（rì guāng） |
 | 月 | yuè | 月亮（yuè liang）；月光（yuè guāng）；月牙（yuè yá） |
@@ -67,6 +88,15 @@
 | 开 | kāi | 开门（kāi mén）；开花（kāi huā）；开心（kāi xīn） |
 | 少 | shǎo | 少量（shǎo liàng）；不少（bù shǎo）；少许（shǎo xǔ） |
 | 长 | cháng | 长短（cháng duǎn）；长江（cháng jiāng）；长方形（cháng fāng xíng） |
+| 王 | wáng | 王子（wáng zǐ）；国王（guó wáng）；王国（wáng guó） |
+| 太 | tài | 太阳（tài yáng）；太空（tài kōng）；太极（tài jí） |
+| 片 | piàn | 叶片（yè piàn）；照片（zhào piàn）；一片（yí piàn） |
+| 比 | bǐ | 比赛（bǐ sài）；比一比（bǐ yi bǐ）；对比（duì bǐ） |
+| 切 | qiē | 切开（qiē kāi）；切菜（qiē cài）；切片（qiē piàn） |
+| 公 | gōng | 公园（gōng yuán）；公鸡（gōng jī）；外公（wài gōng） |
+| 认 | rèn | 认识（rèn shi）；认真（rèn zhēn）；认字（rèn zì） |
+| 凤 | fèng | 凤凰（fèng huáng）；凤尾（fèng wěi）；凤仙花（fèng xiān huā） |
+| 队 | duì | 队伍（duì wu）；排队（pái duì）；队长（duì zhǎng） |
 | 四 | sì | 四月（sì yuè）；四季（sì jì）；四只（sì zhī） |
 | 石 | shí | 石头（shí tou）；宝石（bǎo shí）；石桥（shí qiáo） |
 | 田 | tián | 田地（tián dì）；田野（tián yě）；水田（shuǐ tián） |
@@ -92,6 +122,11 @@
 | 电 | diàn | 电灯（diàn dēng）；电话（diàn huà）；电视（diàn shì） |
 | 叶 | yè | 树叶（shù yè）；叶子（yè zi）；落叶（luò yè） |
 | 瓜 | guā | 西瓜（xī guā）；冬瓜（dōng guā）；南瓜（nán guā） |
+| 皮 | pí | 皮球（pí qiú）；果皮（guǒ pí）；皮衣（pí yī） |
+| 台 | tái | 台灯（tái dēng）；阳台（yáng tái）；台风（tái fēng） |
+| 代 | dài | 代表（dài biǎo）；代替（dài tì）；年代（nián dài） |
+| 让 | ràng | 让开（ràng kāi）；让座（ràng zuò）；礼让（lǐ ràng） |
+| 边 | biān | 旁边（páng biān）；河边（hé biān）；一边（yì biān） |
 | 百 | bǎi | 一百（yì bǎi）；百花（bǎi huā）；百合（bǎi hé） |
 | 回 | huí | 回家（huí jiā）；回头（huí tóu）；回答（huí dá） |
 | 耳 | ěr | 耳朵（ěr duo）；木耳（mù ěr）；耳机（ěr jī） |
@@ -116,61 +151,35 @@
 | 红 | hóng | 红花（hóng huā）；红色（hóng sè）；红豆（hóng dòu） |
 | 肉 | ròu | 牛肉（niú ròu）；羊肉（yáng ròu）；肉包（ròu bāo） |
 | 衣 | yī | 衣服（yī fu）；雨衣（yǔ yī）；上衣（shàng yī） |
-| 足 | zú | 足球（zú qiú）；手足（shǒu zú）；足迹（zú jì） |
+| 孙 | sūn | 孙子（sūn zi）；子孙（zǐ sūn）；爷孙（yé sūn） |
+| 买 | mǎi | 买菜（mǎi cài）；买书（mǎi shū）；买车（mǎi chē） |
+| 如 | rú | 如果（rú guǒ）；比如（bǐ rú）；如意（rú yì） |
+| 妆 | zhuāng | 化妆（huà zhuāng）；妆容（zhuāng róng）；淡妆（dàn zhuāng） |
+| 戏 | xì | 游戏（yóu xì）；看戏（kàn xì）；戏台（xì tái） |
+| 成 | chéng | 成长（chéng zhǎng）；成功（chéng gōng）；完成（wán chéng） |
+| 讲 | jiǎng | 讲话（jiǎng huà）；讲故事（jiǎng gù shi）；讲台（jiǎng tái） |
+| 朵 | duǒ | 花朵（huā duǒ）；云朵（yún duǒ）；耳朵（ěr duo） |
+| 阳 | yáng | 太阳（tài yáng）；阳光（yáng guāng）；阳台（yáng tái） |
+| 汤 | tāng | 米汤（mǐ tāng）；喝汤（hē tāng）；汤水（tāng shuǐ） |
+| 场 | chǎng | 广场（guǎng chǎng）；操场（cāo chǎng）；场地（chǎng dì） |
 | 花 | huā | 花朵（huā duǒ）；花园（huā yuán）；开花（kāi huā） |
-| 弟 | dì | 弟弟（dì di）；小弟（xiǎo dì）；姐弟（jiě dì） |
 | 我 | wǒ | 我们（wǒ men）；我家（wǒ jiā）；你我（nǐ wǒ） |
 | 你 | nǐ | 你好（nǐ hǎo）；你们（nǐ men）；你的（nǐ de） |
 | 来 | lái | 来回（lái huí）；来到（lái dào）；来客（lái kè） |
-| 走 | zǒu | 走路（zǒu lù）；走开（zǒu kāi）；行走（xíng zǒu） |
-| 坐 | zuò | 坐下（zuò xià）；坐车（zuò chē）；坐好（zuò hǎo） |
-| 听 | tīng | 听话（tīng huà）；听见（tīng jiàn）；听写（tīng xiě） |
-| 里 | lǐ | 里面（lǐ miàn）；公里（gōng lǐ）；里外（lǐ wài） |
-| 低 | dī | 低头（dī tóu）；高低（gāo dī）；低声（dī shēng） |
-| 豆 | dòu | 豆子（dòu zi）；豆芽（dòu yá）；豆沙（dòu shā） |
-| 饭 | fàn | 吃饭（chī fàn）；米饭（mǐ fàn）；饭桌（fàn zhuō） |
+| 没 | méi | 没有（méi yǒu）；没事（méi shì）；没空（méi kòng） |
+| 邻 | lín | 邻居（lín jū）；邻里（lín lǐ）；相邻（xiāng lín） |
 | 鱼 | yú | 小鱼（xiǎo yú）；金鱼（jīn yú）；鱼缸（yú gāng） |
 | 雨 | yǔ | 下雨（xià yǔ）；雨衣（yǔ yī）；雨伞（yǔ sǎn） |
 | 爸 | bà | 爸爸（bà ba）；老爸（lǎo bà）；爸爸妈妈（bà ba mā ma） |
-| 姐 | jiě | 姐姐（jiě jie）；大姐（dà jiě）；表姐（biǎo jiě） |
-| 妹 | mèi | 妹妹（mèi mei）；小妹（xiǎo mèi）；姐妹（jiě mèi） |
-| 朋 | péng | 朋友（péng you）；小朋友（xiǎo péng you）；好朋友（hǎo péng you） |
 | 学 | xué | 学校（xué xiào）；学生（xué shēng）；学会（xué huì） |
 | 画 | huà | 画画（huà huà）；图画（tú huà）；画笔（huà bǐ） |
-| 玩 | wán | 玩具（wán jù）；玩耍（wán shuǎ）；游玩（yóu wán） |
-| 河 | hé | 小河（xiǎo hé）；河水（hé shuǐ）；河马（hé mǎ） |
-| 林 | lín | 树林（shù lín）；森林（sēn lín）；竹林（zhú lín） |
 | 果 | guǒ | 水果（shuǐ guǒ）；苹果（píng guǒ）；果汁（guǒ zhī） |
-| 草 | cǎo | 小草（xiǎo cǎo）；草地（cǎo dì）；青草（qīng cǎo） |
-| 看 | kàn | 看书（kàn shū）；看见（kàn jiàn）；观看（guān kàn） |
-| 说 | shuō | 说话（shuō huà）；说明（shuō míng）；说笑（shuō xiào） |
-| 洗 | xǐ | 洗手（xǐ shǒu）；洗脸（xǐ liǎn）；清洗（qīng xǐ） |
-| 南 | nán | 南瓜（nán guā）；南方（nán fāng）；南北（nán běi） |
-| 前 | qián | 前面（qián miàn）；前方（qián fāng）；以前（yǐ qián） |
-| 春 | chūn | 春天（chūn tiān）；春节（chūn jié）；春风（chūn fēng） |
-| 秋 | qiū | 秋天（qiū tiān）；秋风（qiū fēng）；中秋（zhōng qiū） |
-| 星 | xīng | 星星（xīng xing）；星光（xīng guāng）；星空（xīng kōng） |
-| 茶 | chá | 茶杯（chá bēi）；茶叶（chá yè）；喝茶（hē chá） |
-| 面 | miàn | 面包（miàn bāo）；面条（miàn tiáo）；面粉（miàn fěn） |
-| 哥 | gē | 哥哥（gē ge）；大哥（dà gē）；表哥（biǎo gē） |
-| 爱 | ài | 爱心（ài xīn）；可爱（kě ài）；喜爱（xǐ ài） |
+| 狗 | gǒu | 小狗（xiǎo gǒu）；花狗（huā gǒu）；狗窝（gǒu wō） |
+| 忠 | zhōng | 忠心（zhōng xīn）；忠实（zhōng shí）；忠诚（zhōng chéng） |
+| 建 | jiàn | 建立（jiàn lì）；建造（jiàn zào）；建设（jiàn shè） |
+| 虾 | xiā | 小虾（xiǎo xiā）；虾米（xiā mǐ）；大虾（dà xiā） |
+| 思 | sī | 思念（sī niàn）；思考（sī kǎo）；心思（xīn si） |
+| 弯 | wān | 弯腰（wān yāo）；转弯（zhuǎn wān）；弯月（wān yuè） |
 | 家 | jiā | 回家（huí jiā）；家人（jiā rén）；大家（dà jiā） |
-| 读 | dú | 读书（dú shū）；朗读（lǎng dú）；读音（dú yīn） |
-| 课 | kè | 上课（shàng kè）；课本（kè běn）；下课（xià kè） |
-| 校 | xiào | 学校（xué xiào）；校园（xiào yuán）；校门（xiào mén） |
-| 桌 | zhuō | 桌子（zhuō zi）；书桌（shū zhuō）；饭桌（fàn zhuō） |
-| 笔 | bǐ | 铅笔（qiān bǐ）；画笔（huà bǐ）；毛笔（máo bǐ） |
-| 笑 | xiào | 微笑（wēi xiào）；笑脸（xiào liǎn）；欢笑（huān xiào） |
-| 高 | gāo | 高山（gāo shān）；高兴（gāo xìng）；高低（gāo dī） |
-| 夏 | xià | 夏天（xià tiān）；夏日（xià rì）；夏季（xià jì） |
-| 海 | hǎi | 大海（dà hǎi）；海水（hǎi shuǐ）；海马（hǎi mǎ） |
-| 晚 | wǎn | 晚上（wǎn shang）；晚饭（wǎn fàn）；晚安（wǎn ān） |
-| 雪 | xuě | 雪花（xuě huā）；雪人（xuě rén）；白雪（bái xuě） |
-| 黄 | huáng | 黄色（huáng sè）；黄瓜（huáng guā）；黄金（huáng jīn） |
-| 绿 | lǜ | 绿叶（lǜ yè）；绿色（lǜ sè）；绿豆（lǜ dòu） |
-| 蛋 | dàn | 鸡蛋（jī dàn）；蛋糕（dàn gāo）；鸭蛋（yā dàn） |
-| 跑 | pǎo | 跑步（pǎo bù）；跑车（pǎo chē）；奔跑（bēn pǎo） |
-| 喝 | hē | 喝水（hē shuǐ）；喝茶（hē chá）；喝奶（hē nǎi） |
-| 短 | duǎn | 长短（cháng duǎn）；短裤（duǎn kù）；短发（duǎn fà） |
-| 黑 | hēi | 黑色（hēi sè）；黑白（hēi bái）；黑板（hēi bǎn） |
-| 蓝 | lán | 蓝天（lán tiān）；蓝色（lán sè）；蓝莓（lán méi） |
+| 酒 | jiǔ | 米酒（mǐ jiǔ）；酒杯（jiǔ bēi）；酒店（jiǔ diàn） |
+| 船 | chuán | 小船（xiǎo chuán）；木船（mù chuán）；帆船（fān chuán） |

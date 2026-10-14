@@ -8,14 +8,14 @@
 
 ## 声音与文本
 
-- 声音为 Microsoft Edge Read Aloud 的 `zh-CN-XiaoxiaoNeural`，属于 **AI 合成自然语音**，不是真人录制。
-- 合成速度为 `-22%`，依次读标题、朝代作者、所有诗句；每句使用句号留出停顿。
+- 声音为本地 Qwen3-TTS Base 使用固定 `Serena` 合成参考录音生成的女声，属于 **AI 合成自然语音**，不是真人录制。
+- 采用清晰、温和、放缓的朗读引导，依次读标题、朝代作者、所有诗句；每句使用句号留出停顿。
 - MP3 为单声道 24 kHz、48 kbps。没有转用第三方商业朗诵录音，也没有模仿指定真人。
 - `public/data/poem-audio.json` 记录来源、声音、合成输入、校音清单、时长、文件哈希及文本哈希。
 
 ## 多音字校正
 
-Edge Read Aloud 目前不支持自定义 `phoneme` SSML。因此生成脚本按“原字 + 诗歌拼音”
+为保持课程指定读音，生成脚本按“原字 + 诗歌拼音”
 匹配，在**仅供语音生成的输入**中采用同音替换，网页仍显示原诗与正确拼音。例如：
 
 | 原字与语境 | 目标读音 | 合成输入中的同音字 |
@@ -36,18 +36,14 @@ Edge Read Aloud 目前不支持自定义 `phoneme` SSML。因此生成脚本按�
 
 ## 重新生成与检查
 
-仅构建时需要 Python 3.9+、网络及以下依赖；部署运行不需要它们：
+按照[统一音频说明](unified-audio.md)重建，所有科目共用同一个说话人。离线检查：
 
 ```sh
-python3 -m pip install edge-tts==7.2.8 mutagen==1.47.0
-python3 scripts/generate-poem-audio.py --dry-run
-python3 scripts/generate-poem-audio.py
 python3 scripts/generate-poem-audio.py --check
 node scripts/test-speech.cjs
 ```
 
-可以用 `--id poem-10 --force` 仅重做某首。脚本每完成一首就写入清单，失败可重跑；
-已有且文本哈希一致的音频会保留。改变诗文、拼音、声音、语速或校音规则后，
+统一脚本可以用 `--regenerate-id poem/poem-10` 重做单首；已完成的有效录音有独立缓存，失败可重跑。改变诗文、拼音、声音、语速或校音规则后，
 `--check` 会检查旧录音是否仍与生成输入一致，必要时应重新生成。
 
 自动检查覆盖全部文件的 MP3 元数据、时长、字节数、SHA-256、诗文/拼音输入一致性，以及
@@ -61,4 +57,4 @@ node scripts/test-speech.cjs
 
 `poem-36` 为苏轼的完整词正文，共 95 字、19 个短句；不将题前小序混入正文。正文核对[青岛科技大学教务处原文](https://jw.qust.edu.cn/info/1163/4463.htm)，保留“何似在人间”“何事长向别时圆”等原句。
 
-“调”标为 diào、“阙”为 què、“胜”为 shèng、“绮”为 qǐ；“不应有恨”的“应”为 yīng，两处“长”为 cháng。“胜”按[教育部公布的《普通话异读词审音表》](https://www.moe.gov.cn/jyb_sjzl/ziliao/A19/201001/W020190416497956176438.pdf)统读 shèng。朗读输入采用对应同音替换帮助校音，网页保留原字和逐字拼音；生成与校验沿用现有脚本，不更改前 35 首音频。
+“调”标为 diào、“阙”为 què、“胜”为 shèng、“绮”为 qǐ；“不应有恨”的“应”为 yīng，两处“长”为 cháng。“胜”按[教育部公布的《普通话异读词审音表》](https://www.moe.gov.cn/jyb_sjzl/ziliao/A19/201001/W020190416497956176438.pdf)统读 shèng。朗读输入采用对应同音替换帮助校音，网页保留原字和逐字拼音；课程文字保持不变；本次统一女声覆盖全部 36 首。

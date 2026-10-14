@@ -140,7 +140,7 @@ test("English opens the complete unified library without starting audio or a dai
   const h = harness();
   await h.app.open();
   const cards = h.root.querySelectorAll("[data-english-card]");
-  assert.equal(cards.length, 87);
+  assert.equal(cards.length, 100);
   assert.deepEqual(cards.map(card => card.dataset.englishCard), curriculum.items.map(item => item.id));
   assert.equal(h.root.querySelectorAll("[data-english-mode]").length, 0);
   assert.equal(h.root.querySelector("#english-daily"), null);
@@ -171,7 +171,7 @@ test("theme filtering includes both vocabulary sources and returning from a card
   assert.equal(h.audio.pending, false, "Returning to the list should stop detail audio");
   assert.deepEqual(h.root.querySelectorAll("[data-english-card]").map(card => card.dataset.englishCard), expected.map(item => item.id));
   await h.clickData("data-english-theme", "all");
-  assert.equal(h.root.querySelectorAll("[data-english-card]").length, 87);
+  assert.equal(h.root.querySelectorAll("[data-english-card]").length, 100);
   assert.equal(h.commits.length, 0, "Browsing and listening must not count as practice completion");
 });
 
@@ -192,7 +192,7 @@ test("listening choices remain locked until audio succeeds, including after retr
 });
 
 
-test("learn and sentence playback can recover through retry or a relevant replay button", async () => {
+test("word playback can recover through retry and Chinese alone cannot complete the English model", async () => {
   const h = harness();
   await h.openGroup("english-cat");
   await h.audio.complete(); await h.answer("english-cat"); h.click("english-next");
@@ -201,12 +201,18 @@ test("learn and sentence playback can recover through retry or a relevant replay
   const retry = h.click("english-audio-retry");
   await h.audio.complete(); await retry;
   assert.equal(h.button("english-next").disabled, false);
-  h.click("english-next");
+  await h.openGroup("english-cat");
+  await h.audio.complete(); await h.answer("english-cat"); h.click("english-next");
+  const meaning = h.click("english-meaning-hint");
+  await h.audio.complete(); await meaning;
   assert.equal(h.button("english-next").disabled, true);
-  // This tap interrupts the automatic sequence. Its complete sentence still counts.
-  const replay = h.click("english-sentence-hint");
+  const replay = h.click("english-word-hint");
   await h.audio.complete(); await replay;
   assert.equal(h.button("english-next").disabled, false);
+  h.click("english-next");
+  assert.ok(h.root.querySelector("#english-listen-only"));
+  assert.ok(!h.root.querySelector("#english-sentence-hint"));
+  assert.equal(h.plays.some(keys => keys.some(key => key.includes("sentence"))), false);
   h.leave();
 });
 
@@ -247,7 +253,7 @@ test("the English library start button delegates group creation to the shared ap
 test("catalog lookup is complete and cannot interrupt the active group's audio", async () => {
   const h=harness();await h.openGroup();const before=h.root.innerHTML,plays=h.plays.length;
   const catalog=await h.app.catalog();
-  assert.equal(catalog.length,87);assert.ok(catalog.every(item=>item.type==="english"));
+  assert.equal(catalog.length,100);assert.ok(catalog.every(item=>item.type==="english"));
   assert.equal(h.root.innerHTML,before);assert.equal(h.plays.length,plays);
   await h.audio.complete();assert.ok(h.root.querySelectorAll("[data-english-choice]").every(choice=>!choice.disabled));h.leave();
 });
@@ -287,14 +293,14 @@ test("speaking hints stay separate from successful first-try listening", async (
   const entry=h.app.inspect().entries[0];
   assert.equal(entry.id,"english-cat");assert.equal(entry.title,"cat · 猫");assert.equal(entry.result,"independent");
   assert.equal(entry.details.speaking,"attempted");assert.equal(entry.details.usedHint,true);
-  assert.equal(entry.details.speakingAssessed,false);assert.equal(entry.details.sentencePracticed,true);h.leave();
+  assert.equal(entry.details.speakingAssessed,false);assert.equal(entry.details.sentencePracticed,false);h.leave();
 });
 
 test("free word cards offer audio only and cannot start a single-word recording flow", async () => {
   const h=harness();await h.app.open({itemId:"english-cat"});
   assert.ok(h.root.querySelector("#english-word-play"));assert.equal(h.root.querySelector("#english-single"),null);
   assert.equal(h.app.inspect(),null);assert.match(h.root.innerHTML,/不记录学习/);
-  await h.audio.complete();const clip=h.click("english-sentence-play");await h.audio.complete();await clip;
+  await h.audio.complete();const clip=h.click("english-meaning-play");await h.audio.complete();await clip;
   assert.equal(h.commits.length,0);h.leave();
 });
 
@@ -355,10 +361,15 @@ test("a one-word due review ends after its first correct listening answer", asyn
 test("a failed review switches to supported practice without replacing its first answer", async () => {
   const h=harness(),group=h.makeGroup("english-cat","review");
   group.items=[{...group.items[0],phase:"review"}];
-  await h.app.open({group});await h.reachRecall("english-cat",true,true);await h.click("english-next");
+  await h.app.open({group});
+  await h.audio.complete(); await h.answer("english-cat", true);
+  assert.equal(h.button("english-step-count").textContent, "1 / 3 步");
+  assert.doesNotMatch(h.button("english-step-dots").innerHTML, /说一句|句子/);
+  await h.answer("english-cat"); h.click("english-next"); await h.audio.complete();
+  h.click("english-next"); await h.audio.complete(); await h.click("english-next");
   const entry=h.commits[0][0];
   assert.equal(entry.result,"supported");assert.equal(entry.details.firstTryCorrect,false);
-  assert.equal(entry.details.attempts,2);assert.equal(entry.details.sentencePracticed,true);
+  assert.equal(entry.details.attempts,2);assert.equal(entry.details.sentencePracticed,false);
   assert.equal(h.checkpoints.length,1);h.leave();
 });
 
@@ -373,7 +384,7 @@ test("mixed groups use each item's phase and reset review exposure after a resum
   assert.equal(h.app.inspect().entries[0].details.observedExposure,true);
   assert.equal(h.app.inspect().entries[1].details.observedExposure,false);
   assert.equal(h.app.inspect().entries[1].result,"independent");
-  assert.equal(h.app.inspect().steps.length,4);
+  assert.equal(h.app.inspect().steps.length,3);
   await h.reachRecall(group.items[2].id,false,true);await h.click("english-next");
   assert.equal(h.commits[0].length,3);assert.equal(h.checkpoints.length,3);h.leave();
 });
@@ -462,4 +473,52 @@ test("next-day draft recovery allows the unfinished review word to show independ
   assert.deepEqual(h.commits[0][0],group.entries[0],"The previously saved result stays unchanged");
   const entry=h.commits[0][1];assert.equal(entry.result,"independent");
   assert.equal(entry.details.observedExposure,false);assert.equal(entry.details.exposureFirst,false);h.leave();
+});
+
+
+test("fruit cards follow the category order, stop old audio and restore the original list position", async () => {
+  const h = harness(); await h.app.open();
+  await h.clickData("data-english-theme", "fruit");
+  const fruit = curriculum.items.filter(item => item.theme === "fruit");
+  assert.equal(fruit.length, 20);
+  assert.deepEqual(h.root.querySelectorAll("[data-english-card]").map(card => card.dataset.englishCard), fruit.map(item => item.id));
+  h.scrollTo(520);
+  await h.clickData("data-english-card", fruit[0].id);
+  assert.equal(h.button("english-card-previous").disabled, true);
+  assert.match(h.root.innerHTML, /水果篮子 · 1 \/ 20/);
+  assert.equal(h.root.querySelector("#english-sentence-play"), null);
+  for (let i = 1; i < fruit.length; i++) {
+    await h.click("english-card-next");
+    await flush();
+    assert.deepEqual(h.plays.at(-1), [fruit[i].id + "-word"]);
+    assert.match(h.root.innerHTML, new RegExp(`水果篮子 · ${i + 1} / 20`));
+    assert.equal(h.getScroll(), 0);
+  }
+  assert.match(h.root.innerHTML, /看完了，返回分类/);
+  await h.click("english-card-previous");
+  assert.deepEqual(h.plays.at(-1), [fruit.at(-2).id + "-word"]);
+  await h.click("english-card-next");
+  await h.click("english-card-next");
+  await flush();
+  assert.equal(h.audio.pending, false);
+  assert.equal(h.getScroll(), 520);
+  assert.deepEqual(h.root.querySelectorAll("[data-english-card]").map(card => card.dataset.englishCard), fruit.map(item => item.id));
+  assert.equal(h.commits.length, 0);
+  assert.equal(h.checkpoints.length, 0);
+});
+
+test("opening a card directly uses its own category and switching categories resets navigation", async () => {
+  const h = harness(); await h.app.open();
+  await h.clickData("data-english-theme", "food");
+  await h.app.open({itemId:"english-rambutan"});
+  assert.match(h.root.innerHTML, /水果篮子 · 2 \/ 20/);
+  await h.click("english-card-next");
+  assert.deepEqual(h.plays.at(-1), ["english-durian-word"]);
+  await h.click("english-back");
+  await h.clickData("data-english-theme", "animals");
+  const animals = curriculum.items.filter(item => item.theme === "animals");
+  await h.clickData("data-english-card", animals[0].id);
+  await h.click("english-card-next");
+  assert.deepEqual(h.plays.at(-1), [animals[1].id + "-word"]);
+  h.leave();
 });

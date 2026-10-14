@@ -1,6 +1,6 @@
 # Bundled stroke data
 
-These 152 JSON files are selected from **hanzi-writer-data 2.0.1**, the stroke outlines and drawing medians used by Hanzi Writer. The collection includes the application's 150 selectable characters and the existing classroom/name examples 辰、明 (春 is now part of the selectable curriculum).
+These 199 JSON files are selected from **hanzi-writer-data 2.0.1**, the stroke outlines and drawing medians used by Hanzi Writer. The collection includes the application's 150 selectable characters, 47 retired characters retained for saved study drafts and existing custom classroom cards, and the classroom/name examples 辰、明. Retired characters such as 春 keep their data without appearing in the default library or new default study plans.
 
 - Upstream: https://github.com/chanind/hanzi-writer-data
 - Exact archive: https://registry.npmjs.org/hanzi-writer-data/-/hanzi-writer-data-2.0.1.tgz
@@ -9,4 +9,4 @@ These 152 JSON files are selected from **hanzi-writer-data 2.0.1**, the stroke o
 
 Each JSON file is copied byte for byte from the pinned package; outlines and medians have not been edited. Only the selection and filenames differ: the original character filename becomes its lowercase hexadecimal Unicode code point, for example `大.json` → `5927.json`.
 
-`../writing-strokes.json` records each character's local URL, stroke count and SHA-256. Run `python3 scripts/fetch-writing-strokes.py` from the repository root to regenerate the files and manifest. The script checks the archive's pinned SHA-512 before extracting any selected files and preserves the original license. Network access is needed only for regeneration, not for normal playback.
+`../writing-strokes.json` records each character's local URL, stroke count and SHA-256. Run `python3 scripts/fetch-writing-strokes.py` from the repository root to regenerate the files and manifest. Selection comes from `public/writing-vocabulary.js`, including retained vocabulary, plus the two classroom/name examples. The script checks the archive's pinned SHA-512 before extracting any selected files and preserves the original license. Network access is needed only for regeneration, not for normal playback.

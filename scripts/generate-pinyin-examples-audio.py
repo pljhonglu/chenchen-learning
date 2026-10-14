@@ -99,6 +99,26 @@ def verify(clip, manifest, writing):
     entry = manifest.get(clip["id"])
     if not entry:
         raise ValueError(f"Missing recording: {clip['id']}")
+    from unified_voice import PROVIDER, verify_source
+    if entry.get("provider") == PROVIDER:
+        verify_source(entry, clip, clip["text"] + "。", clip["language"])
+        expected_entry = {"src": f"/audio/pinyin/examples/{clip['id']}.mp3",
+                          **{key: value for key, value in clip.items() if key != "id"},
+                          **inspect_audio(OUTPUT / f"{clip['id']}.mp3")}
+        for key, value in expected_entry.items():
+            if entry.get(key) != value:
+                raise ValueError(f"Recording verification failed: {clip['id']} ({key})")
+        if entry.get("origin", {}).get("type") == "reuse":
+            original = writing[clip["id"]]
+            for key in ("src", "sha256", "sourceHash"):
+                if entry["origin"].get(key) != original[key]:
+                    raise ValueError(f"Stale writing reuse: {clip['id']} ({key})")
+            if entry["sha256"] != inspect_audio(PUBLIC / original["src"].lstrip("/"))["sha256"]:
+                raise ValueError(f"Copied audio differs from writing source: {clip['id']}")
+        elif entry.get("origin") != {"type": "synthesis", "generator": "scripts/generate-unified-audio.py",
+                                     "dependencies": {"mlx-audio": "0.5.8", "mutagen": "1.48.1"}}:
+            raise ValueError(f"Unknown synthesis provenance: {clip['id']}")
+        return
     for key, value in expected(clip, writing).items():
         if entry.get(key) != value:
             raise ValueError(f"Recording needs regeneration: {clip['id']} ({key})")

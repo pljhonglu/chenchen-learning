@@ -2,6 +2,7 @@
 """Generate bundled character/word MP3s from public/writing-vocabulary.js.
 
 Build-only dependencies: edge-tts==7.2.8 mutagen==1.47.0.
+--provider macos uses the installed Tingting voice plus say, ffmpeg and lame for new clips.
 --dry-run lists input without network; --check verifies existing audio offline.
 The published app plays the generated files without a speech service.
 """
@@ -11,6 +12,8 @@ import asyncio
 import hashlib
 import json
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +23,12 @@ OUTPUT = ROOT / "public/audio/writing-vocabulary"
 VERSION = 1
 VOICE = "zh-CN-XiaoxiaoNeural"
 RATE = "-8%"
+PROVIDERS = {
+    "edge": {"provider": "Microsoft Edge Read Aloud", "voice": VOICE, "rate": RATE,
+             "label": "自然语音（AI 合成）"},
+    "macos": {"provider": "Apple macOS Speech", "voice": "Tingting (中文（中国大陆）)",
+              "rate": "175 wpm", "label": "普通话语音（系统合成）"},
+}
 
 
 def recording_id(kind, text):
@@ -68,11 +77,16 @@ def all_clips():
     return list(clips.values())
 
 
-def source(clip):
+def source(clip, provider="edge"):
+    settings = PROVIDERS[provider]
     speech = clip.get("characterSpeech", clip["text"])
     text = speech if speech.endswith(("。", "！", "？", ".", "!", "?")) else speech + "。"
-    value = {"version": VERSION, "voice": VOICE, "rate": RATE,
+    value = {"version": VERSION, "voice": settings["voice"], "rate": settings["rate"],
              "text": text, "clip": clip}
+    # Preserve existing Edge recipes and hashes; make the local renderer explicit.
+    if provider == "macos":
+        value.update(provider=settings["provider"], renderer="say + ffmpeg + lame",
+                     sampleRate=24000, bitrate=48000)
     digest = hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     return value, digest
 
@@ -91,7 +105,22 @@ def verify(clip, manifest):
     entry = manifest.get(clip["id"])
     if not entry:
         raise ValueError(f"Missing recording: {clip['id']}")
-    value, digest = source(clip)
+    from unified_voice import PROVIDER, verify_source
+    if entry.get("provider") == PROVIDER:
+        text = source(clip)[0]["text"]
+        verify_source(entry, clip, text, clip["language"], "guide" if clip["kind"] == "guide" else "word")
+        expected = {"src": f"/audio/writing-vocabulary/{clip['id']}.mp3",
+                    **{key: value for key, value in clip.items() if key != "id"},
+                    **inspect_audio(OUTPUT / f"{clip['id']}.mp3")}
+        for key, value in expected.items():
+            if entry.get(key) != value:
+                raise ValueError(f"Recording verification failed: {clip['id']} ({key})")
+        return
+    provider = next((key for key, settings in PROVIDERS.items()
+                     if settings["provider"] == entry.get("provider")), None)
+    if provider is None:
+        raise ValueError(f"Unknown recording provider: {clip['id']}")
+    value, digest = source(clip, provider)
     expected = {"src": f"/audio/writing-vocabulary/{clip['id']}.mp3",
                 **{key: val for key, val in clip.items() if key != "id"},
                 "sourceHash": digest, "voice": value["voice"], "rate": value["rate"],
@@ -110,8 +139,21 @@ def save_manifest(manifest):
     temporary.replace(MANIFEST)
 
 
-async def generate(clips, manifest, force, concurrency):
-    import edge_tts
+def synthesize_macos(text, target):
+    settings = PROVIDERS["macos"]
+    with tempfile.TemporaryDirectory(prefix="chenchen-speech-") as directory:
+        raw = Path(directory) / "speech.aiff"
+        pcm = Path(directory) / "speech.wav"
+        subprocess.run(["say", "-v", settings["voice"], "-r", "175", "-o", str(raw), text],
+                       check=True, capture_output=True, timeout=45)
+        subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                        "-i", str(raw), "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le", str(pcm)],
+                       check=True, capture_output=True, timeout=30)
+        subprocess.run(["lame", "--silent", "--noreplaygain", "-b", "48", "-m", "m", str(pcm), str(target)],
+                       check=True, capture_output=True, timeout=30)
+
+
+async def generate(clips, manifest, force, concurrency, provider):
     OUTPUT.mkdir(parents=True, exist_ok=True)
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     semaphore = asyncio.Semaphore(concurrency)
@@ -127,14 +169,18 @@ async def generate(clips, manifest, force, concurrency):
                 return
             except (ValueError, KeyError, OSError):
                 pass
-        value, digest = source(clip)
+        value, digest = source(clip, provider)
         target = OUTPUT / f"{clip['id']}.mp3"
         temporary = target.with_suffix(".mp3.part")
         async with semaphore:
             for attempt in range(4):
                 try:
-                    speech = edge_tts.Communicate(value["text"], value["voice"], rate=value["rate"])
-                    await asyncio.wait_for(speech.save(str(temporary)), timeout=45)
+                    if provider == "macos":
+                        await asyncio.to_thread(synthesize_macos, value["text"], temporary)
+                    else:
+                        import edge_tts
+                        speech = edge_tts.Communicate(value["text"], value["voice"], rate=value["rate"])
+                        await asyncio.wait_for(speech.save(str(temporary)), timeout=45)
                     details = inspect_audio(temporary)
                     temporary.replace(target)
                     break
@@ -147,8 +193,8 @@ async def generate(clips, manifest, force, concurrency):
             manifest[clip["id"]] = {
                 "src": f"/audio/writing-vocabulary/{clip['id']}.mp3",
                 **{key: val for key, val in clip.items() if key != "id"},
-                "label": "自然语音（AI 合成）", "synthetic": True,
-                "provider": "Microsoft Edge Read Aloud", "voice": value["voice"],
+                "label": PROVIDERS[provider]["label"], "synthetic": True,
+                "provider": PROVIDERS[provider]["provider"], "voice": value["voice"],
                 "rate": value["rate"], "sourceHash": digest,
                 "synthesisText": value["text"], **details,
             }
@@ -168,6 +214,8 @@ def main():
     parser.add_argument("--check", action="store_true", help="Verify recordings offline")
     parser.add_argument("--dry-run", action="store_true", help="Show synthesis input without network")
     parser.add_argument("--concurrency", type=int, default=4, choices=range(1, 9))
+    parser.add_argument("--provider", choices=PROVIDERS, default="edge",
+                        help="Provider for new or forced recordings; valid existing clips are kept")
     args = parser.parse_args()
     clips = all_clips()
     if args.id:
@@ -178,7 +226,7 @@ def main():
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
     if args.dry_run:
         for clip in clips:
-            value, digest = source(clip)
+            value, digest = source(clip, args.provider)
             print(json.dumps({"id": clip["id"], **value, "sourceHash": digest}, ensure_ascii=False))
     elif args.check:
         if not args.id and set(manifest) != {clip["id"] for clip in clips}:
@@ -190,7 +238,7 @@ def main():
         if not args.id:
             ids = {clip["id"] for clip in clips}
             manifest = {key: value for key, value in manifest.items() if key in ids}
-        asyncio.run(generate(clips, manifest, args.force, args.concurrency))
+        asyncio.run(generate(clips, manifest, args.force, args.concurrency, args.provider))
 
 
 if __name__ == "__main__":

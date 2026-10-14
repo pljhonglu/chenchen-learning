@@ -53,9 +53,9 @@
       const ok = await audio.play(lastAudio);
       if (ok && token === generation && round) {
         const phase = stage(), item = current();
-        const required = item.id + (phase === "sentence" ? "-sentence" : "-word");
+        const required = item.id + "-word";
         if (lastAudio.includes(required)) {
-          if (phase === "learn" || phase === "sentence") {
+          if (phase === "learn") {
             const next = root().querySelector("#english-next");
             if (next) next.disabled = false;
             const turn = root().querySelector("#english-turn");
@@ -78,7 +78,7 @@
         if (!Array.isArray(content.items) || !content.items.length || !Array.isArray(content.themes) || !art || typeof art !== "object") throw new Error("英语内容格式有误。");
         const ids = new Set();
         for (const item of content.items) {
-          if (!/^english-[a-z-]+$/.test(item.id) || ids.has(item.id) || !item.word || !item.sentence || !item.meaning || !["classroom","extension"].includes(item.source)) throw new Error("英语词卡格式有误。");
+          if (!/^english-[a-z-]+$/.test(item.id) || ids.has(item.id) || !item.word || !item.meaning || !content.themes.some(t => t.id === item.theme) || !["classroom","extension"].includes(item.source)) throw new Error("英语词卡格式有误。");
           ids.add(item.id);
         }
         data = content; illustrations = art;
@@ -124,32 +124,38 @@
       themeScroll = root().querySelector(".english-themes")?.scrollLeft || 0;
     }
     function returnToLibrary() { renderHome(); scrollTo(libraryScroll); }
+    function libraryItems() { return data.items.filter(item => theme === "all" || item.theme === theme); }
+    function themeTitle() { return data.themes.find(t => t.id === theme)?.title || "全部词卡"; }
     function renderHome() {
       round = null; detailItemId = null; audio.stop(); generation++; audioError = "";
-      const items = data.items.filter(item => theme === "all" || item.theme === theme);
+      const items = libraryItems();
       const themes = data.themes.filter(t => data.items.some(i => i.theme === t.id));
-      root().innerHTML = `<div class="english-library">${hooks.groupStartHtml()}<div class="english-library-heading"><h1>英语词卡 <span class="english-library-count">${data.items.length} 张</span></h1></div><div class="english-themes" aria-label="选择英语主题"><button data-english-theme="all" class="${theme === "all" ? "active" : ""}" aria-pressed="${theme === "all"}">全部</button>${themes.map(t => `<button data-english-theme="${escape(t.id)}" class="${theme === t.id ? "active" : ""}" aria-pressed="${theme === t.id}">${escape(t.title)}</button>`).join("")}</div><div class="english-word-grid">${items.map(card).join("")}</div></div>`;
+      root().innerHTML = `<div class="english-library">${hooks.groupStartHtml()}<div class="english-library-heading"><h1>英语词卡 <span class="english-library-count">${items.length} 张</span></h1></div><div class="english-themes" aria-label="选择英语主题"><button data-english-theme="all" class="${theme === "all" ? "active" : ""}" aria-pressed="${theme === "all"}">全部</button>${themes.map(t => `<button data-english-theme="${escape(t.id)}" class="${theme === t.id ? "active" : ""}" aria-pressed="${theme === t.id}">${escape(t.title)}</button>`).join("")}</div><div class="english-word-grid">${items.map(card).join("")}</div></div>`;
       root().querySelector("[data-start-study]").onclick = hooks.startStudy;
       const filters = root().querySelector(".english-themes");
       if (filters) filters.scrollLeft = themeScroll;
       root().querySelectorAll("[data-english-card]").forEach(button => button.onclick = () => detail(data.items.find(i => i.id === button.dataset.englishCard)));
       root().querySelectorAll("[data-english-theme]").forEach(button => button.onclick = () => { rememberLibraryPosition(); theme = button.dataset.englishTheme; libraryScroll = 0; renderHome(); scrollTo(0); });
     }
-    function detail(item) {
-      rememberLibraryPosition();
+    function detail(item, rememberPosition = true) {
+      if (rememberPosition) rememberLibraryPosition();
       generation++; audio.stop(); round = null; audioError = "";
       detailItemId = item.id;
-      root().innerHTML = `<div class="card english-detail"><button class="back-btn" id="english-back">← 全部词卡</button><div class="english-detail-layout"><button class="english-main-picture" id="english-picture" aria-label="听单词 ${escape(item.meaning)}">${art(item)}<span aria-hidden="true">◖))</span></button><div class="english-detail-copy"><h1><button class="english-read-word" id="english-word-play" lang="en" aria-label="听单词 ${escape(item.word)}">${escape(item.word)} <span aria-hidden="true">◖))</span></button></h1><button class="english-meaning english-read-meaning" id="english-meaning-play" aria-label="听中文 ${escape(item.meaning)}">${escape(item.meaning)} <span aria-hidden="true">◖))</span></button><button class="english-sentence" id="english-sentence-play" aria-label="听句子 ${escape(item.sentence)}"><span class="english-sentence-text" lang="en">${escape(item.sentence)} <i aria-hidden="true">◖))</i></span><span>${escape(item.translation)}</span></button>${item.action ? `<p class="english-action">${escape(item.action.zh)}</p>` : ""}${item.note ? `<details class="english-content-note"><summary>家长小提示</summary><p>${escape(item.note)}</p></details>` : ""}<p class="english-browse-note">自由听读 · 不记录学习，不获得水滴</p></div></div>${soundBar(true)}</div>`;
+      const items = libraryItems(), index = items.findIndex(candidate => candidate.id === item.id);
+      const title = themeTitle(), last = index === items.length - 1;
+      root().innerHTML = `<div class="card english-detail"><div class="english-detail-top"><button class="back-btn" id="english-back">← ${escape(title)}</button><span class="english-card-position" role="status">${escape(title)} · ${index + 1} / ${items.length}</span></div><div class="english-detail-layout"><button class="english-main-picture" id="english-picture" aria-label="听单词 ${escape(item.meaning)}">${art(item)}<span aria-hidden="true">◖))</span></button><div class="english-detail-copy"><h1><button class="english-read-word" id="english-word-play" lang="en" aria-label="听单词 ${escape(item.word)}">${escape(item.word)} <span aria-hidden="true">◖))</span></button></h1><button class="english-meaning english-read-meaning" id="english-meaning-play" aria-label="听中文 ${escape(item.meaning)}">${escape(item.meaning)} <span aria-hidden="true">◖))</span></button><p class="english-browse-note">自由听读 · 不记录学习，不获得水滴</p></div></div>${soundBar(true)}<div class="english-card-navigation" aria-label="分类词卡切换"><button class="btn btn-ghost" id="english-card-previous" ${index === 0 ? "disabled" : ""}>← 上一个</button><button class="btn btn-primary" id="english-card-next">${last ? "看完了，返回分类 ✓" : "下一个 →"}</button></div></div>`;
       bindSound();
       root().querySelector("#english-back").onclick = returnToLibrary;
-      for (const [id, key] of [["english-picture","word"],["english-word-play","word"],["english-sentence-play","sentence"],["english-meaning-play","meaning"]]) root().querySelector("#" + id).onclick = () => play(item.id + "-" + key);
+      root().querySelector("#english-card-previous").onclick = () => { if (index > 0) detail(items[index - 1], false); };
+      root().querySelector("#english-card-next").onclick = () => last ? returnToLibrary() : detail(items[index + 1], false);
+      for (const [id, key] of [["english-picture","word"],["english-word-play","word"],["english-meaning-play","meaning"]]) root().querySelector("#" + id).onclick = () => play(item.id + "-" + key);
       scrollTo(0);
       play(item.id + "-word");
     }
     function setupItem() {
       const item = current(), existing = progress(item);
       const reviewing = item.phase === "review";
-      round.steps = reviewing ? ["listen"] : item.source === "extension" && !existing ? ["learn","listen","sentence","recall"] : ["listen","learn","sentence","recall"];
+      round.steps = reviewing ? ["listen"] : item.source === "extension" && !existing ? ["learn","listen","recall"] : ["listen","learn","recall"];
       round.step = 0;
       const observedExposure = exposure(item.id) || !!(round.group.resumed && round.group.resumeExposure !== false && round.index === round.resumeIndex);
       round.result = {attempts:0, firstTryCorrect:null, heardPrompt:false, assisted:false, speaking:"listened", usedHint:false, observedExposure, exposureFirst:round.steps[0] === "learn" || observedExposure};
@@ -179,10 +185,10 @@
     function renderStep() {
       audio.stop(); generation++; audioError = "";
       const item = current(), phase = stage(), result = round.result;
-      const labels = {listen:"听声音，找图片",learn:"听单词，跟着说",sentence:"一起说一句",recall:"看图，试着自己说"};
+      const labels = {listen:"听声音，找图片",learn:"听单词，跟着说",recall:"看图，试着说单词"};
       let content;
       if (phase === "listen") content = `<button class="btn btn-primary english-listen-button" id="english-prompt">◖)) 听一听</button><div class="english-choices">${round.choices.map((choice,i) => `<button class="english-choice" data-english-choice="${escape(choice.id)}" aria-label="选择图片 ${i + 1}：${escape(choice.meaning)}" disabled>${art(choice)}<span>${i + 1}</span></button>`).join("")}</div><p class="english-feedback" id="english-feedback" role="status">先听声音，再选图片。</p><button class="btn btn-primary english-next" id="english-next" disabled>找到了，继续 →</button>`;
-      else content = `<div class="english-practice-layout"><button class="english-main-picture" id="english-repeat-picture" aria-label="再听${phase === "sentence" ? "句子" : "单词"}">${art(item)}<span>◖)) ${phase === "recall" ? "需要提示时，点这里" : "点图片，再听一次"}</span></button><div class="english-practice-copy">${phase === "recall" ? `<p class="english-recall-title">轮到你啦</p><p>可以说单词，也可以试着说一句。</p>` : `<h2 lang="en">${escape(phase === "sentence" ? item.sentence : item.word)}</h2><p class="english-meaning">${escape(phase === "sentence" ? item.translation : item.meaning)}</p>`}<div class="btn-row"><button class="btn btn-ghost" id="english-word-hint">◖)) ${phase === "recall" ? "听单词提示" : "听单词"}</button><button class="btn btn-ghost" id="english-sentence-hint">◖)) ${phase === "recall" ? "听句子提示" : "听句子"}</button></div>${item.action && phase === "sentence" ? `<p class="english-action">${escape(item.action.zh)}</p>` : ""}<p class="english-turn" id="english-turn" role="status">${phase === "recall" ? "慢慢想，想不起来也没关系。" : "先听一听，稍后轮到你说。"}</p><button class="btn btn-primary english-next" id="english-next" ${phase === "recall" ? "" : "disabled"}>${phase === "recall" ? "我试着说了 ✓" : "我准备好了，继续 →"}</button>${phase === "recall" ? `<button class="text-btn english-listen-only" id="english-listen-only">今天先听听，也可以</button><p class="english-speech-note">记录一次开口尝试，不评判发音对错。</p>` : ""}</div></div>`;
+      else content = `<div class="english-practice-layout"><button class="english-main-picture" id="english-repeat-picture" aria-label="再听单词">${art(item)}<span>◖)) ${phase === "recall" ? "需要提示时，点这里" : "点图片，再听一次"}</span></button><div class="english-practice-copy">${phase === "recall" ? `<p class="english-recall-title">轮到你啦</p><p>看着图片，试着说出这个单词。</p>` : `<h2 lang="en">${escape(item.word)}</h2><p class="english-meaning">${escape(item.meaning)}</p>`}<div class="btn-row"><button class="btn btn-ghost" id="english-word-hint">◖)) ${phase === "recall" ? "听单词提示" : "听单词"}</button><button class="btn btn-ghost" id="english-meaning-hint">◖)) 听中文</button></div><p class="english-turn" id="english-turn" role="status">${phase === "recall" ? "慢慢想，想不起来也没关系。" : "先听一听，稍后轮到你说。"}</p><button class="btn btn-primary english-next" id="english-next" ${phase === "recall" ? "" : "disabled"}>${phase === "recall" ? "我试着说了 ✓" : "我准备好了，继续 →"}</button>${phase === "recall" ? `<button class="text-btn english-listen-only" id="english-listen-only">今天先听听，也可以</button><p class="english-speech-note">记录一次开口尝试，不评判发音对错。</p>` : ""}</div></div>`;
       root().innerHTML = `<div class="english-round-top"><button class="text-btn" id="english-exit">← 先休息</button><span>英语${item.phase === "review" ? "复习" : "学习"} ${round.index + 1} / ${round.items.length}</span><span id="english-step-count">${round.step + 1} / ${round.steps.length} 步</span></div><p class="study-group-note">${round.group.items[round.index]?.afterPractice ? "顺便温习 · 原定复习日期不变" : Object.values(state().garden?.groups || {}).filter(group=>group.day===hooks.todayStr() && group.waterAwarded).length >= 3 ? "今天水滴已领完，本组仍会记录学习" : `学完本组 ${round.items.length} 个词，收获 1 滴水 · 完成的词会保存，可继续学习`}</p><div class="english-step-dots" id="english-step-dots">${round.steps.map((s,i) => `<span class="${i === round.step ? "now" : i < round.step ? "done" : ""}">${labels[s]}</span>`).join("")}</div><div class="card english-practice"><div class="english-practice-heading"><p class="eyebrow">中文带着玩 · 英文慢慢说</p><h1>${labels[phase]}</h1></div>${content}${soundBar()}<p id="english-save-error" class="form-error" role="alert"></p></div>`;
       bindSound();
       root().querySelector("#english-exit").onclick = () => {
@@ -196,13 +202,13 @@
         playPrompt();
       } else {
         const hint = kind => { if (phase === "recall") result.usedHint = true; return play(item.id + "-" + kind); };
-        root().querySelector("#english-repeat-picture").onclick = () => hint(phase === "sentence" ? "sentence" : "word");
+        root().querySelector("#english-repeat-picture").onclick = () => hint("word");
         root().querySelector("#english-word-hint").onclick = () => hint("word");
-        root().querySelector("#english-sentence-hint").onclick = () => hint("sentence");
+        root().querySelector("#english-meaning-hint").onclick = () => hint("meaning");
         if (phase === "recall") { root().querySelector("#english-listen-only").onclick = () => finishItem("listened"); play("guide-recall"); }
         else {
           const token = generation;
-          const keys = phase === "learn" ? ["guide-learn",item.id + "-meaning",item.id + "-word","guide-your-turn"] : ["guide-sentence",item.id + "-sentence","guide-your-turn"];
+          const keys = ["guide-learn",item.id + "-meaning",item.id + "-word","guide-your-turn"];
           play(keys).then(ok => { if (ok && token === generation) {root().querySelector("#english-next").disabled = false; root().querySelector("#english-turn").textContent = "轮到你说啦，准备好了再继续。";} });
         }
       }
@@ -226,9 +232,9 @@
       if (!correct) {
         result.assisted = true; button.disabled = true; button.dataset.wrong = "true";
         if (current().phase === "review" && round.steps.length === 1) {
-          round.steps = ["listen","learn","sentence","recall"];
-          root().querySelector("#english-step-count").textContent = "1 / 4 步";
-          root().querySelector("#english-step-dots").innerHTML = '<span class="now">听声音，找图片</span><span>听单词，跟着说</span><span>一起说一句</span><span>看图，试着自己说</span>';
+          round.steps = ["listen","learn","recall"];
+          root().querySelector("#english-step-count").textContent = `1 / ${round.steps.length} 步`;
+          root().querySelector("#english-step-dots").innerHTML = '<span class="now">听声音，找图片</span><span>听单词，跟着说</span><span>看图，试着说单词</span>';
         }
         root().querySelector("#english-feedback").textContent = "再听一遍，找找另一个小伙伴。";
         play(["guide-retry",current().id + "-word"]); return;
@@ -255,7 +261,7 @@
         result.speaking = speaking;
         active.pendingEntries = [...active.entries,{
           id:item.id,type:"english",title:`${item.word} · ${item.meaning}`,skill:"english-listening",result:listeningResult(result),source:"automatic",
-          details:{attempts:result.attempts,firstTryCorrect:result.firstTryCorrect,exposureFirst:result.exposureFirst,observedExposure:result.observedExposure,assisted:result.assisted,speaking,usedHint:result.usedHint,speakingAssessed:false,sentencePracticed:active.steps.includes("sentence")}
+          details:{attempts:result.attempts,firstTryCorrect:result.firstTryCorrect,exposureFirst:result.exposureFirst,observedExposure:result.observedExposure,assisted:result.assisted,speaking,usedHint:result.usedHint,speakingAssessed:false,sentencePracticed:false}
         }];
       }
       const nextButton = root().querySelector("#english-next"), listenOnly = root().querySelector("#english-listen-only");
@@ -299,7 +305,7 @@
         await ensure();
         if (token !== generation || !hooks.isActive()) return;
         if (options.group) start(options.group);
-        else if (options.itemId) {const item=data.items.find(item=>item.id===options.itemId);if(!item) throw new Error("没有找到这张英语词卡。");detail(item);}
+        else if (options.itemId) {const item=data.items.find(item=>item.id===options.itemId);if(!item) throw new Error("没有找到这张英语词卡。");theme=item.theme;libraryScroll=0;detail(item,false);}
         else { libraryScroll = 0; renderHome(); scrollTo(0); }
       } catch (error) {
         if (token !== generation || !hooks.isActive()) return;

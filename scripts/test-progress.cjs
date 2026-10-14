@@ -354,7 +354,7 @@ test('one writing library sorts by stroke count and preserves custom identity, p
   const character={id:'custom-classroom-mu',c:'木',strokes:'4画',tip:'老师的提示'};
   const e=environment({customCharacters:{[character.id]:character}}),t=e.subject;await e.connect();
   const cards=t.writingCharacters(),counts=cards.map(ch=>Number.parseInt(ch.strokes,10));
-  assert.equal(cards.length,151);assert.equal(cards[0].c,'一');assert.equal(cards.at(-1).c,'蓝');
+  assert.equal(cards.length,151);assert.equal(cards[0].c,'一');assert.equal(cards.at(-1).c,'船');
   assert.ok(counts.every((count,index)=>!index || count>=counts[index-1]),'Simpler stroke counts must come first');
   const custom=cards.find(ch=>ch.id===character.id);
   assert.equal(custom.id,character.id);assert.equal(custom.tip,'老师的提示');assert.equal(custom.pinyin,'mù');
@@ -374,6 +374,37 @@ test('writing opens a list of all 150 characters without a canvas, media or prog
   assert.doesNotMatch(html,/<canvas\b|id="write-strokes-play"|id="write-finish"/,'The library must not include writing-detail controls');
   assert.equal(media.viewers.length,0);assert.equal(media.voices.length,0);
   assert.deepEqual(e.db(),before);assert.ok(e.requests.every(request=>request.method==='GET'));
+});
+
+test('a retired character stays out of new plans while an existing draft resumes and completes that exact character',async()=>{
+  const id='write-char-84dd',nextId='write-char-6728';
+  const draft={id:'older-writing-plan',type:'write',mode:'learn',createdAt:'2026-09-30T12:00:00Z',entries:[],
+    items:[{id,type:'write',title:'汉字·蓝',phase:'learn'},{id:nextId,type:'write',title:'汉字·木',phase:'learn'}]};
+  const history={'old-blue':{id,type:'write',title:'汉字·蓝',day:'2026-09-29',result:'supported'}};
+  const e=environment({studySessions:{[draft.id]:draft},activity:history,items:{[id]:course(id,'write')}}),t=e.subject;
+  await e.connect();const media=writingMediaProbe(e);
+  assert.equal(t.writingCharacters().length,150);
+  assert.ok(!t.writingCharacters().some(ch=>ch.id===id));
+  assert.ok(!(await t.studyCatalog()).some(item=>item.id===id),'Retired cards must not enter new plans');
+  await t.startStudyGroup('write','learn');await flush();
+  assert.equal(t.getWritingId(),id,'Resuming a removed card must not fall back to the first current character');
+  assert.equal(media.practices.at(-1).options.character,'蓝');
+  assert.match(e.element('write-detail-content').innerHTML,/lán/);
+  await media.practices.at(-1).complete();await flush();
+  assert.equal(t.getSession().entries[0].id,id);
+  assert.equal(t.getWritingId(),nextId);
+  await media.practices.at(-1).complete();await flush();
+  assert.equal(t.getSession(),null);assert.ok(!e.db().studySessions[draft.id]);
+  assert.deepEqual(e.db().activity['old-blue'],history['old-blue'],'Previous learning history must survive');
+  assert.ok(e.db().garden.groups[draft.id].contentIds.includes(id));
+});
+
+test('an existing custom card for a retired character retains its identity, reading and word examples',async()=>{
+  const custom={id:'classroom-blue',c:'蓝',tip:'课堂提示'};
+  const e=environment({customCharacters:{[custom.id]:custom}});await e.connect();
+  const card=e.subject.writingCharacters().find(ch=>ch.id===custom.id);
+  assert.equal(card.c,'蓝');assert.equal(card.pinyin,'lán');assert.equal(card.strokes,'13画');
+  assert.equal(card.tip,custom.tip);assert.equal(card.words.length,3);
 });
 
 
@@ -577,10 +608,9 @@ test('writing review automatically records an unassisted stroke quiz without par
 });
 
 test('mistakes and every form of writing help produce supported evidence',async()=>{
-  for(const assistance of ['mistake','hint','auto-hint','words','demo','restart','outline']) {
+  for(const assistance of ['mistake','auto-hint','words','demo','restart','outline']) {
     const e=environment(),t=e.subject;await e.connect();const media=writingMediaProbe(e);
     let practice=beginWritingReview(e,media);await flush();
-    if(assistance==='hint')await e.element('write-hint').onclick();
     if(assistance==='auto-hint')practice.state('active',{hintsUsed:1,totalMistakes:3});
     if(assistance==='words')e.element('write-show-words').onclick();
     if(assistance==='demo'){
@@ -592,7 +622,7 @@ test('mistakes and every form of writing help produce supported evidence',async(
     const entry=t.getSession().entries[0];
     assert.equal(entry.result,'supported',`${assistance}: assisted writing must not become independent evidence`);
     assert.equal(entry.source,'automatic');
-    if(['hint','auto-hint','words','demo','restart'].includes(assistance)) assert.equal(entry.details.afterPractice,true,`${assistance}: practice exposure must be retained`);
+    if(['auto-hint','words','demo','restart'].includes(assistance)) assert.equal(entry.details.afterPractice,true,`${assistance}: practice exposure must be retained`);
     if(assistance==='words')assert.equal(practice.options.showOutline,false,'Word reveal alone must not change initial quiz mode');
   }
 });
@@ -619,7 +649,7 @@ test('writing cannot complete during a demonstration or after a data loading err
     assert.ok(e.requests.every(request=>request.method==='GET'));
     if(mode==='error'){
       assert.equal(e.element('write-retry').hidden,false);
-      assert.equal(e.element('write-hint').disabled,true);
+      assert.equal(e.element('write-clear').disabled,true);
     }
   }
 });

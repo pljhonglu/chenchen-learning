@@ -11,9 +11,8 @@
 采样率、码率、合成输入哈希和文件 SHA-256。播放时按汉字笔顺使用对应序号，
 不需要把多段报画音频拼接成文件。
 
-音频使用 **Microsoft Edge Read Aloud 的 AI 合成语音**，中文声音统一为
-`zh-CN-XiaoxiaoNeural`，速度 `-8%`，与英语模块的中文引导一致。
-标准来源标签为“自然语音（AI 合成）”，不是真人录制。
+音频统一使用 **Qwen3-TTS 的 Serena 女声**，与英语单词、中文释义及汉字组词使用同一说话人。
+标准来源标签为“自然女声（AI 合成）”，不是真人录制。
 
 应用运行时只需读取同域静态 MP3，无需调用外部语音服务，也无需家长设备安装声音。
 浏览器可能要求先点击播放按钮。页面切换、停止或重新播放时，播放器应取消前一次播报和动画；
@@ -21,36 +20,23 @@
 
 ## 重新生成与检查
 
-仅生成时需要 Python、网络和以下依赖；部署运行不需要：
+按[统一音频说明](unified-audio.md)生成到临时目录、核验后发布。现有专用脚本继续支持离线检查：
 
 ```sh
-python3 -m pip install edge-tts==7.2.8 mutagen==1.47.0
-python3 scripts/generate-writing-audio.py --dry-run
-python3 scripts/generate-writing-audio.py
 python3 scripts/generate-writing-audio.py --check
 ```
 
-可以只重做一段：
-
-```sh
-python3 scripts/generate-writing-audio.py --id stroke-01 --force
-python3 scripts/generate-writing-audio.py --id stroke-01 --check
-```
-
-`--dry-run` 只显示生成输入，不连接语音服务。`--check` 离线核对全部文本、声音、
-路径及 MP3 元数据和哈希。每完成一段都会保存清单，中断后重跑会保留已验证有效的音频。
-修改报画文本、声音或语速后，需要重新生成对应音频并完成检查。
-文件检查能确认资源完整和版本对应，不能代替实际听审。
-
-技术来源：[edge-tts 官方项目](https://github.com/rany2/edge-tts)。
+检查包括文本、来源参数、路径、MP3 元数据与哈希；不替代实际听审。
 
 ## 汉字与组词点读
 
-`public/writing-vocabulary.js` 是汉字、带声调拼音与每字三组常用词的单一来源。
+`public/writing-vocabulary.js` 是汉字、带声调拼音与每字三组常用词的单一来源，
+包含 150 个当前字和 47 个仅供旧学习组、自定义课堂字兼容的旧字。
 `scripts/generate-writing-vocabulary-audio.py` 读取其中的 JSON 数组，不执行 JavaScript，
 将字音和去重后的词语分别生成到 `public/audio/writing-vocabulary/`。
-当前 150 个汉字各有三组词，共 450 处词语展示；词语去重后为 403 个，
-加上 150 段字音，共 553 段点读音频。
+当前 150 个汉字各有三组词，共 450 处词语展示；词语去重后为 409 个，
+加上 150 段字音，共 559 段点读音频。连同旧字兼容资源共 731 段；
+默认字库与新的自动学习计划仍只有 150 字，旧字的历史记录和已保存草稿继续可用。
 相同词语在不同汉字下共用一段音频；若词库给同一个词标注不同拼音，脚本会报错，
 需要先确认其读音后再生成。
 
@@ -61,17 +47,12 @@ python3 scripts/generate-writing-audio.py --id stroke-01 --check
 - 多音字可以在词库设置 `characterSpeech`，用包含目标读音的简短词句作为合成输入；
   清单保留该字段与 `synthesisText`，界面显示的汉字与拼音仍来自原条目。
   未设置时直接合成该汉字。词语按整个词合成，不逐字拼接音频。
-- 声音、速度与来源标签沿用上述中文报画音频配置。
+- 731 段字词录音全部采用 Serena，使用与笔顺提示、英文和中文释义相同的模型及音量处理。
+  原来的晓晓、婷婷混合录音已统一替换；模型与来源记录见[统一音频说明](unified-audio.md)。
 
 ```sh
-python3 scripts/generate-writing-vocabulary-audio.py --dry-run
-python3 scripts/generate-writing-vocabulary-audio.py
 python3 scripts/generate-writing-vocabulary-audio.py --check
-python3 scripts/generate-writing-vocabulary-audio.py --id char-4e00 --force
 ```
-
-生成支持中断续跑，默认同时生成四段；`--check` 离线核对清单中的全部 ID、文本、拼音、
-合成输入、音频元数据及文件哈希。
 
 `ChenchenWritingAudio.create()` 返回 `playStroke(index, signal)`、
 `playReading(id, signal)`、`stop()` 和 `destroy()`。字、词与报画共用一个 Audio 元素，
