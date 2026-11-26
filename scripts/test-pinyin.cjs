@@ -150,7 +150,7 @@ function harness(initial = {}) {
       return { ok: true, status: 200, json: async () => ({ ok: true, found: true, payload: copy(database) }) };
     },
   });
-  for (const script of ["writing-vocabulary.js", "pinyin-data.js", "pinyin-audio.js", "learning-model.js", "study-groups.js"]) vm.runInContext(read(script), context);
+  for (const script of ["writing-vocabulary.js", "pinyin-data.js", "pinyin-audio.js", "learning-model.js", "math-model.js", "study-groups.js"]) vm.runInContext(read(script), context);
   vm.runInContext(instrumented, context, { filename: "app.js" });
   context.subject.prime(copy(database));
   context.subject.navigate("pinyin");

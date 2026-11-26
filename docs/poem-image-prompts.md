@@ -200,3 +200,51 @@ An ancient Chinese farmer in plain simple clothes sits idly on the ground beside
 网页文件：`public/images/poems/poem-40.webp`。
 
 原图来源：`/Users/neo/.codex/generated_images/01a16b9b-dffb-72b3-85e5-ef3dfc14ca8b/exec-2f2920a3-825b-4261-bcfc-6afdf5604e9a.png`。
+
+## 2026-11-27 新增篇目
+
+每篇使用内置 `image_gen` 单独生成一张图。将以下通用提示词与对应场景拼接。网页图以 `public/images/poems/<ID>.webp` 保存（960 × 640，WebP 质量 84）。
+
+```text
+Use case: illustration-story. Create one original wide landscape 3:2 illustration for a Chinese-poem learning card for a 5-year-old kindergarten child. Simple warm children's picture book, soft traditional watercolor and matte gouache on gently textured cream paper, softly rounded but distinct silhouettes, 2–4 large subject groups, clear easy-to-read composition in small thumbnails, sparse background and gentle colors. One coherent scene filling the whole canvas. No writing of any kind, no Chinese characters, captions, border, panels, collage, watermark, or photorealism.
+```
+
+### poem-41 · 暮江吟
+
+Sunset over a broad quiet river. One low warm red sun casts a long coral-red reflection across exactly one side of the water; the other side remains deep jade green. Higher in the lilac twilight is one very thin bow-shaped crescent moon. In the close foreground, a few large pearl-like dew beads on simple blades of grass. Show only a single crescent moon, never a full moon. No people, boats, or buildings.
+
+### poem-42 · 题西林壁
+
+Mountain peaks of Mount Lu with a winding path. One gentle ancient Chinese traveler in a simple muted Song-era robe stands small on the path between the slopes, looking toward a round elongated wooded ridge on the left and a tall pointed peak on the right. A few fog wisps and hazier faraway peaks suggest different distances. One coherent landscape in calm moss-green, warm cream, and blue-gray.
+
+### poem-43 · 元日
+
+Early Song-era Chinese New Year morning: in a clear central foreground, an adult hangs a fresh unlettered flat peachwood plaque beside a dark red wooden front door while a child holds the worn old plaque safely. A small scattered cluster of red paper firecracker remnants rests away from the pair. Warm golden sunrise illuminates two simple nearby rooftops. No live firecrackers, no explosions, no writing on the plain plaques.
+
+### poem-44 · 雪梅（其一）
+
+One large dark curved plum branch with a few clean coral-pink plum blossoms stretches over soft fresh white snow. A small Song-era poet at a simple open window in the middle distance pauses, brush set down beside blank paper, looking at the snow and plum blossoms. Emphasize the bold white snow, gentle pink blossoms and calm visual comparison. No writing or lettering even on the paper.
+
+### poem-45 · 精卫填海
+
+Jingwei, one small magical bird based on an ancient Chinese legend, flies over a broad calm teal East Sea carrying one clearly visible small twig in its beak. The bird has a subtly patterned head, white beak and red feet. A few rounded pebbles and softly layered distant green western hills; bird and twig large enough to read in a thumbnail. Quiet waves. No people, no drowning, no frightening imagery.
+
+### poem-46 · 出塞
+
+An old Chinese frontier pass at night, viewed from outside its simple stone walls. One luminous full moon above an ancient gate and gently layered silhouette of the far Yin Mountains. One tiny resting horse and a single distant travel figure can appear near the gate, safely at rest. Slate blue and moonlit ivory. A quiet landscape about distance from home. No battle, weapons, banners with text, or injury.
+
+### poem-47 · 凉州词
+
+A Tang-era northwest frontier camp at dusk, quietly recalling a poem. In the foreground a small pale jade luminous cup stands beside a little cluster of purple grapes on a simple low wooden table. A robed musician in the middle distance holds a clearly pear-shaped four-string Chinese pipa lute, with a quiet horse silhouette and two rolling sandy hills farther behind. Copper gold and muted violet. No battle, weapons, drinking, or injury.
+
+### poem-48 · 夏日绝句
+
+At the quiet bank of a wide ancient eastern Chinese river, a brave solitary historical traveler inspired by Xiang Yu stands in a simple traditional cloak, with dignified posture, facing the broad waters and far shore. One empty little wooden ferry is tied near the bank and calm gray-green river fills the view. A light wind moves the cloak. Use muted teal, ocher and pale cream. No combat, weapons, injury, death, or ghosts.
+
+### poem-49 · 清明
+
+Gentle Qingming spring rain over an ancient Jiangnan countryside path. A kind Tang-era traveler with a plain bamboo hat and pale umbrella pauses as a young herder riding a calm water buffalo points with one finger to a tiny village nestled among pink apricot blossoms in the distance. Clear diagonal path, sparse soft rain, fresh green and cream, child-friendly faces. No signs or lettering.
+
+### poem-50 · 九月九日忆山东兄弟
+
+Double Ninth festival in the Tang era. In the foreground one solitary Chinese traveler in a pale robe holds a small unlettered dogwood sprig with a few red berries and looks thoughtfully toward a distant hill. On one far hill path, three small robed family members walk together, one carrying a dogwood sprig, suggesting a family gathering far from the traveler. Soft golden autumn slopes, warm sepia, moss, and light blue, tender longing. One continuous landscape, no panels.

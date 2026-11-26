@@ -196,9 +196,14 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 	if !validGardenID(group.ID) || (group.Mode != "learn" && group.Mode != "review") {
 		return bad("需要有效的小组编号和学习方式")
 	}
-	sizes := map[string]int{"poem": 5, "pinyin": 10, "write": 5, "english": 5, "math": 1, "decomp": 1}
-	skills := map[string]string{"poem": "poem-recitation", "pinyin": "pinyin-reading", "write": "hanzi-writing", "english": "english-listening", "math": "math-solving", "decomp": "math-solving"}
+	sizes := map[string]int{"poem": 5, "pinyin": 10, "write": 5, "english": 5}
+	skills := map[string]string{"poem": "poem-recitation", "pinyin": "pinyin-reading", "write": "hanzi-writing", "english": "english-listening"}
 	count, exists := sizes[group.Type]
+	math := isMathType(group.Type)
+	skill := skills[group.Type]
+	if math {
+		count, exists, skill = 1, true, "math-solving"
+	}
 	if !exists || len(group.Entries) < 1 || len(group.Entries) > count {
 		return bad("请完成这一学科规定数量的小练习")
 	}
@@ -207,12 +212,12 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 	content := make([]string, 0, count)
 	for _, entry := range group.Entries {
 		if !validGardenID(entry.ID) || seen[entry.ID] || (entry.Type != "" && entry.Type != group.Type) ||
-			(entry.SchemaVersion != 0 && entry.SchemaVersion != 2) || entry.Skill != skills[group.Type] ||
+			(entry.SchemaVersion != 0 && entry.SchemaVersion != 2) || entry.Skill != skill ||
 			strings.TrimSpace(entry.Title) == "" || len(entry.Title) > 2000 ||
 			(entry.Result != "independent" && entry.Result != "supported" && entry.Result != "again") {
 			return bad("小组中的内容、数量或确认结果不完整")
 		}
-		automatic := group.Type == "math" || group.Type == "decomp" || group.Type == "english" || group.Type == "write" && entry.Source == "automatic"
+		automatic := math || group.Type == "english" || group.Type == "write" && entry.Source == "automatic"
 		if automatic && entry.Source != "automatic" || !automatic && entry.Source != "parent" {
 			return bad("请使用该学科实际的确认方式")
 		}
@@ -231,7 +236,7 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 		seen[entry.ID] = true
 		content = append(content, entry.ID)
 	}
-	if group.Type == "math" || group.Type == "decomp" {
+	if math {
 		entry := group.Entries[0]
 		var detail struct {
 			Total        int      `json:"total"`
@@ -241,6 +246,9 @@ func validateStudyGroup(group studyGroupRequest) (string, int, error) {
 		raw, err := json.Marshal(entry.Details)
 		if err != nil || json.Unmarshal(raw, &detail) != nil || detail.Total < 1 || detail.Total > 10 || detail.Correct == nil || *detail.Correct < 0 || *detail.Correct > detail.Total || len(detail.QuestionKeys) != detail.Total {
 			return bad("数学小组需要一到十题完整的首次作答结果")
+		}
+		if id := crossTenCourseID(group.Type); id != "" && (entry.ID != id || entry.Details["mode"] != group.Type) {
+			return bad("数学专题与练习结果不一致")
 		}
 		result := "supported"
 		if *detail.Correct == detail.Total {

@@ -4,7 +4,8 @@
 
   const escape = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const count = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
-  const typeClass = type => ["poem", "english", "write", "pinyin", "math", "decomp"].includes(type) ? type : "other";
+  const mathTypes = ["math", "decomp", "make10", "flat10"];
+  const typeClass = type => ["poem", "english", "write", "pinyin", ...mathTypes].includes(type) ? type : "other";
   function validDate(day) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day || "")) return false;
     const date = new Date(day + "T12:00:00Z");
@@ -81,7 +82,7 @@
       return `<section class="records-history"><div class="records-section-heading"><h2>每天的小记录</h2></div>${days.length ? days.map((day, index) => `<details class="records-day"${mode !== "week" || index === 0 ? " open" : ""}><summary><span><strong>${escape(dateLabel(day.day))}</strong><small>${count(day.contentCount)} 项内容</small></span><span class="records-day-caret" aria-hidden="true">⌄</span></summary><div class="records-day-body">${(day.subjects || []).map(subject => {
         const sources = new Set((subject.items || []).flatMap(item => (item.skills || []).filter(skill => count(skill.confirmationCount)).map(skill => skill.source)));
         const sourceText = [sources.has("automatic") ? "程序判断" : "", sources.has("parent") ? "家长确认" : ""].filter(Boolean).join(" · ");
-        const groupText = ["math", "decomp"].includes(subject.type) ? `${count(subject.activityCount)} 组` : "";
+        const groupText = mathTypes.includes(subject.type) ? `${count(subject.activityCount)} 组` : "";
         return `<div class="records-day-subject records-type-${typeClass(subject.type)}"><div class="records-day-subject-heading"><h3>${escape(subject.label || model().typeLabel(subject.type))}${groupText ? ` · ${groupText}` : ""}</h3>${sourceText ? `<small>${sourceText}</small>` : ""}</div><div class="records-content-list">${(subject.items || []).map(itemChip).join("")}</div><div class="records-result-summary">${resultSummary(subject)}</div></div>`;
       }).join("")}</div></details>`).join("") : `<div class="records-empty"><span aria-hidden="true">♧</span><p>${mode === "week" ? "这几天" : "这一天"}还没有练习记录</p></div>`}</section>`;
     }

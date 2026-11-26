@@ -136,12 +136,10 @@ test('retired empty arithmetic facts do not keep a learned subject in new-conten
 
 test('every subject can start another recorded round after all daily work and three water rewards',()=>{
   for(const type of Object.keys(Model.CONFIG)) {
-    const state=fresh(),cards=['math','decomp'].includes(type)
-      ? [{id:type==='math'?'math-addsub-10':'math-decomp-10',type,title:type}]
-      : catalog(type,Model.CONFIG[type].count);
+    const mode=context.ChenchenMath.modeForType(type);
+    const state=fresh(),cards=mode ? [context.ChenchenMath.courses[mode]] : catalog(type,Model.CONFIG[type].count);
     for(const item of cards) state.items[item.id]={learned:true,reviewDay:today,nextReview:'2026-10-20'};
-    if(['math','decomp'].includes(type)) {
-      const mode=type==='math'?'addsub':'decomp';
+    if(mode) {
       state.items[cards[0].id].mathKnowledge=Object.fromEntries(context.ChenchenMath.pool(mode).map(q=>[q.knowledgeId,{reviewDay:today,nextReview:'2026-10-20'}]));
     }
     for(let i=0;i<3;i++) state.garden.groups['earned-'+i]={day:today,waterAwarded:1,contentIds:cards.map(item=>item.id)};

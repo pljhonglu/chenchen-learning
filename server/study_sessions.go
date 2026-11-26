@@ -54,8 +54,11 @@ func sameStudyEntry(a, b studyEntry, kind string) bool {
 }
 
 func validateSession(request *studySessionRequest) error {
-	sizes := map[string]int{"poem": 5, "write": 5, "english": 5, "pinyin": 10, "math": 1, "decomp": 1}
+	sizes := map[string]int{"poem": 5, "write": 5, "english": 5, "pinyin": 10}
 	size, exists := sizes[request.Type]
+	if isMathType(request.Type) {
+		size, exists = 1, true
+	}
 	if !exists || !validGardenID(request.ID) || (request.Mode != "review" && request.Mode != "learn") || len(request.Items) < 1 || len(request.Items) > size || len(request.Entries) > len(request.Items) {
 		return gardenError(http.StatusBadRequest, "invalid_study_session", "学习计划或已完成数量不正确")
 	}
@@ -70,6 +73,9 @@ func validateSession(request *studySessionRequest) error {
 		}
 		if !validGardenID(item.ID) || item.Type != request.Type || item.Title == "" || len(item.Title) > 2000 || seen[item.ID] || (item.Phase != "review" && item.Phase != "learn") || len(item.Source) > 100 {
 			return gardenError(http.StatusBadRequest, "invalid_study_session", "学习计划中存在不合法或重复内容")
+		}
+		if id := crossTenCourseID(request.Type); id != "" && item.ID != id {
+			return gardenError(http.StatusBadRequest, "invalid_study_session", "数学专题与学习计划不一致")
 		}
 		seen[item.ID] = true
 	}
@@ -272,8 +278,8 @@ func finalizeStudySession(group studyGroupRequest, state, sessions map[string]js
 	group.Entries = entries
 	raw, exists := sessions[group.ID]
 	if !exists {
-		if group.Type == "math" || group.Type == "decomp" {
-			if err := restoreMathAnswerTimes(group.Entries[0].Details, nil, now); err != nil {
+		if isMathType(group.Type) {
+			if err := restoreMathAnswerTimes(group.Type, group.Entries[0].Details, nil, now); err != nil {
 				return group, err
 			}
 		}
@@ -307,8 +313,8 @@ func finalizeStudySession(group studyGroupRequest, state, sessions map[string]js
 			group.Entries[index] = saved
 		}
 	}
-	if group.Type == "math" || group.Type == "decomp" {
-		if err := restoreMathAnswerTimes(group.Entries[0].Details, session.Progress, now); err != nil {
+	if isMathType(group.Type) {
+		if err := restoreMathAnswerTimes(group.Type, group.Entries[0].Details, session.Progress, now); err != nil {
 			return group, err
 		}
 	}
@@ -330,17 +336,18 @@ func mergeSessionProgress(old, incoming map[string]any, kind string, now time.Ti
 	raw, _ := json.Marshal(incoming)
 	var next map[string]any
 	_ = json.Unmarshal(raw, &next)
-	if kind != "math" && kind != "decomp" {
+	if !isMathType(kind) {
 		return next, nil
 	}
 	before, after := sessionPractice(old), sessionPractice(next)
+	crossTen := crossTenCourseID(kind) != ""
 	if questions, exists := before["questions"]; exists && !reflect.DeepEqual(questions, after["questions"]) {
 		return nil, sessionConflict("已经开始的题目计划不能改写")
 	}
 	questions, _ := after["questions"].([]any)
 	questionKeys := map[string]bool{}
 	if _, exists := after["questions"]; exists {
-		if len(questions) < 1 || len(questions) > 10 {
+		if len(questions) < 1 || len(questions) > 10 || crossTen && after["mode"] != kind {
 			return nil, sessionConflict("数学计划需要一到十道题")
 		}
 		for _, raw := range questions {
@@ -377,7 +384,13 @@ func mergeSessionProgress(old, incoming map[string]any, kind string, now time.Ti
 				return nil, sessionConflict("数学作答顺序与原题目计划不一致")
 			}
 		}
-		if supplied, exists := answer["answer"]; exists {
+		if crossTen {
+			raw, _ := json.Marshal(answer)
+			var result mathQuestionResult
+			if json.Unmarshal(raw, &result) != nil || !validCrossTenAnswer(kind, result) {
+				return nil, sessionConflict("拆数、结果与对错判断不一致")
+			}
+		} else if supplied, exists := answer["answer"]; exists {
 			value, ok := supplied.(float64)
 			if !ok || value < 0 || value > 10 || value != float64(int(value)) || answer["correct"] != (int(value) == mathAnswerForKey(kind, key)) {
 				return nil, sessionConflict("数学首答与对错判断不一致")
@@ -408,7 +421,7 @@ func mergeSessionProgress(old, incoming map[string]any, kind string, now time.Ti
 	return next, nil
 }
 
-func restoreMathAnswerTimes(details, progress map[string]any, now time.Time) error {
+func restoreMathAnswerTimes(kind string, details, progress map[string]any, now time.Time) error {
 	practice := sessionPractice(progress)
 	saved, _ := practice["questionResults"].([]any)
 	questions, _ := practice["questions"].([]any)
@@ -425,6 +438,10 @@ func restoreMathAnswerTimes(details, progress map[string]any, now time.Time) err
 	if len(incoming) < len(saved) || len(questions) > 0 && len(incoming) != len(questions) {
 		return sessionConflict("数学完整结果缺少已保存的首次答案")
 	}
+	fields := []string{"key", "knowledgeId", "correct"}
+	if crossTenCourseID(kind) != "" {
+		fields = append(fields, "answer", "steps")
+	}
 	for index, answer := range incoming {
 		if len(questions) > 0 {
 			question, ok := questions[index].(map[string]any)
@@ -440,7 +457,7 @@ func restoreMathAnswerTimes(details, progress map[string]any, now time.Time) err
 		if !ok {
 			return errors.New("stored math answer is invalid")
 		}
-		for _, field := range []string{"key", "knowledgeId", "correct"} {
+		for _, field := range fields {
 			if !reflect.DeepEqual(answer[field], previous[field]) {
 				return sessionConflict("数学完整结果改写了首次答案")
 			}

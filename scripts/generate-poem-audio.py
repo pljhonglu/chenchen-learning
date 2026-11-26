@@ -36,6 +36,8 @@ PRONUNCIATIONS = {
     ("调", "diào"): "掉", ("阙", "què"): "确", ("胜", "shèng"): "圣",
     ("绮", "qǐ"): "起", ("侵", "qīn"): "钦",
     ("曾", "zēng"): "增", ("曾", "céng"): "层", ("几", "jī"): "机", ("为", "wéi"): "围",
+    ("铺", "pū"): "扑", ("降", "xiáng"): "详", ("堙", "yīn"): "音",
+    ("塞", "sài"): "赛", ("将", "jiàng"): "匠", ("教", "jiào"): "叫",
 }
 
 
@@ -55,9 +57,11 @@ def build_input(poem):
                                     "spokenAs": replacement})
         return "".join(rendered)
 
-    segments = [correct(poem["title"], poem.get("titlePy", []), "title"),
-                correct(poem.get("dynasty", ""), poem.get("dynastyPy", []), "dynasty")
-                + "，" + correct(poem.get("author", ""), poem.get("authorPy", []), "author")]
+    segments = [correct(poem["title"], poem.get("titlePy", []), "title")]
+    attribution = [correct(poem[key], poem.get(f"{key}Py", []), key)
+                   for key in ("dynasty", "author") if poem.get(key)]
+    if attribution:
+        segments.append("，".join(attribution))
     for index, line in enumerate(poem["lines"]):
         assert line["text"] == "".join(x["c"] for x in line["chars"]), poem["id"]
         segments.append(correct(line["text"], [x["p"] for x in line["chars"]], f"line-{index + 1}"))

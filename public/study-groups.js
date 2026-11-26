@@ -3,7 +3,9 @@
   "use strict";
   const CONFIG = Object.freeze({
     poem:{title:"古诗",count:5,unit:"首",newCount:0}, math:{title:"加减法",count:10,unit:"题",newCount:0},
-    decomp:{title:"分解组合",count:10,unit:"题",newCount:0}, pinyin:{title:"拼音",count:10,unit:"个",newCount:4},
+    decomp:{title:"分解组合",count:10,unit:"题",newCount:0},
+    make10:{title:"凑十法",count:10,unit:"题",newCount:0}, flat10:{title:"平十法",count:10,unit:"题",newCount:0},
+    pinyin:{title:"拼音",count:10,unit:"个",newCount:4},
     write:{title:"汉字",count:5,unit:"个字",newCount:2}, english:{title:"英语",count:5,unit:"个词",newCount:2},
   });
   function day(date = new Date()) {
@@ -19,7 +21,7 @@
   function select(catalog, state, type, mode, today) {
     const config = CONFIG[type];
     if (!config) return null;
-    const math = type === "math" || type === "decomp";
+    const math = config.unit === "题";
     const items = state.items || {};
     const draft = pending(state,type);
     if (draft) {
@@ -43,7 +45,8 @@
       const hasKnowledge = Object.keys(stored?.mathKnowledge || {}).length>0;
       if (mode==="review" && !hasKnowledge && doneToday(item.id)) return null;
       const due=mathDue(stored,today);
-      const unseen=global.ChenchenMath?.practicePool(type==="decomp" ? "decomp" : "addsub").some(question=>!stored?.mathKnowledge?.[question.knowledgeId]);
+      const model=global.ChenchenMath;
+      const unseen=model?.practicePool(model.modeForType(type)).some(question=>!stored?.mathKnowledge?.[question.knowledgeId]);
       if (mode==="review" && !due) return null;
       const phase=due || stored?.learned && !unseen ? "review" : "learn";
       return {...config,type,mode:phase,items:[{...item,phase}],dueCount:due ? 1 : 0};

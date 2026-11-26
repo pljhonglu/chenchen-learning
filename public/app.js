@@ -309,7 +309,7 @@
   // ---------- Home / Review ----------
   function typeIcon(type) {
     return (
-      { poem: "📜", math: "➕", decomp: "🔢", pinyin: "🔤", write: "✍️", english:"🔊" }[type] ||
+      { poem: "📜", math: "➕", decomp: "🔢", make10:"➕", flat10:"➖", pinyin: "🔤", write: "✍️", english:"🔊" }[type] ||
       "📌"
     );
   }
@@ -319,6 +319,8 @@
         poem: "古诗",
         math: "加减法",
         decomp: "分解组合",
+        make10: "凑十法",
+        flat10: "平十法",
         pinyin: "拼音",
         write: "写字",
         english: "英语",
@@ -388,8 +390,7 @@
     const writable = catalogs[2].status === "fulfilled" ? catalogs[2].value : new Set();
     return [
       ...POEMS.map(item=>({id:item.id,type:"poem",title:item.title})),
-      {id:"math-addsub-10",type:"math",title:"10以内加减法"},
-      {id:"math-decomp-10",type:"decomp",title:"10以内分解组合"},
+      ...Object.values(window.ChenchenMath.courses).map(({id,type,title})=>({id,type,title})),
       ...[...INITIALS,...FINALS].map(symbol=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`})),
       ...writingCharacters().filter(item=>writable.has(item.c)).map(item=>({id:item.id,type:"write",title:`汉字·${item.c}`})),
       ...english,
@@ -409,7 +410,7 @@
     const config = window.ChenchenStudyGroups.CONFIG[type];
     const draft = window.ChenchenStudyGroups.pending(loadState(),type);
     const remaining = Math.max(0,3-waterEarnedToday());
-    const amount = ["math","decomp"].includes(type) ? "最多 10 题，复习容易出错的知识点" : `每次最多 ${config.count} ${config.unit}，到期内容优先`;
+    const amount = config.unit === "题" ? "最多 10 题，复习容易出错的知识点" : `每次最多 ${config.count} ${config.unit}，到期内容优先`;
     return `<section class="study-start-card"><div><p class="eyebrow">每天一点点，记得更久</p><h3>${amount}</h3><p>${remaining ? `每组完成获得 1 滴水 · 今天还可获得 ${remaining} 滴` : "今天已获得 3 滴水，继续学习仍会记录并更新复习安排"}</p><small>${draft ? "上次的进度已保存，可以接着完成。" : "到期内容优先，今天学完后也可以再学一轮。"}</small></div><button class="btn btn-primary study-start-button" data-start-study="${type}">▶ ${draft ? "继续上次学习" : "开始学习"}</button></section>`;
   }
 
@@ -510,7 +511,7 @@
   function sessionBanner() {
     if (!reviewSession) return "";
     const phase=currentStudyPhase();
-    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title} · ${["math","decomp"].includes(reviewSession.type) ? `${reviewSession.count} 题` : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${phase==="review" ? "复习 · 先自己想一想" : "新内容 · 先学一学"} · 休息后可继续</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
+    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title} · ${reviewSession.unit === "题" ? `${reviewSession.count} 题` : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${phase==="review" ? "复习 · 先自己想一想" : "新内容 · 先学一学"} · 休息后可继续</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
   }
 
   function bindSessionExit() {
@@ -606,6 +607,7 @@
   }
 
   function openReviewItem(id, type) {
+    const math = window.ChenchenMath.modeForType(type);
     if (type === "english") {
       showView("english");
       getEnglishModule().open({group:reviewSession});
@@ -614,9 +616,9 @@
       poemListScroll = 0;
       showView("poem-detail");
       renderPoemDetail(id);
-    } else if (type === "math" || type === "decomp") {
+    } else if (math) {
       showView("math");
-      renderMath(type === "decomp" ? "decomp" : "addsub");
+      renderMath(math);
     } else if (type === "pinyin") {
       showView("pinyin");
       pyPracticed = new Set();
@@ -1047,7 +1049,7 @@
       renderBondPanel();
       document.getElementById("math-fb").textContent = `正确答案：${item.n} = ${answerLeft} + ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。`;
     }
-    finishMathQuestion(good);
+    finishMathQuestion(good,item.answers[need[0]]);
   }
 
   function renderBondPanel() {
@@ -1074,6 +1076,57 @@
     bindBondSheet(panel);
   }
 
+  function renderMathMethod() {
+    const panel = document.getElementById("math-panel");
+    const {meta:{a,b,op},steps,answer,method} = currentQ;
+    const {values,active,result} = method;
+    const addition = op === "+";
+    const sign = addition ? "+" : "−";
+    const title = addition ? "凑十法" : "平十法";
+    const labels = ["拆出的第一部分","拆出的第二部分","第一步的结果","最后答案"];
+    const solution = [...steps,answer];
+    const blank = index => result ? mathAnswerHtml(values[index],solution[index])
+      : `<button type="button" class="nb-box ${active === index ? "is-active" : ""}" data-slot="${index}" aria-pressed="${active === index}" aria-label="${labels[index]}${values[index] === null ? "，未填写" : `，${values[index]}`}">${values[index] ?? "?"}</button>`;
+    const written = index => (result ? solution[index] : values[index]) ?? "?";
+    panel.innerHTML = `
+      <div class="ten-method">
+        <h3>${title} <small>20 以内${addition ? "进位加法" : "退位减法"}</small></h3>
+        ${result ? mathVerdictHtml(result.correct) : `<p class="nb-sheet-hint">${addition ? `想想 ${a} 还差几到 10` : `先看 ${a} 的个位`}，把 ${b} 拆成两部分。点空格，再点数字。</p>`}
+        <div class="ten-equation">
+          <span>${a}</span><span>${sign}</span><span>${b}</span><span>=</span><span>${blank(3)}</span>
+          <span class="ten-fork" aria-hidden="true"></span><div class="ten-parts">${blank(0)}${blank(1)}</div>
+        </div>
+        <div class="ten-work">
+          <div><span>${addition ? "先凑成 10" : "先减到 10"}</span><strong>${a} ${sign} ${written(0)} = ${blank(2)}</strong></div>
+          <div><span>${addition ? "再加剩下的" : "再减剩下的"}</span><strong>${written(2)} ${sign} ${written(1)} = ${written(3)}</strong></div>
+        </div>
+      </div>
+      ${result ? `<p class="sr-only" role="status">${result.correct ? "答对啦" : "看看正确填法"}。${b} 拆成 ${steps[0]} 和 ${steps[1]}，最后答案是 ${answer}。</p>`
+        : `<div class="nb-pad ten-pad" role="group" aria-label="数字键盘">${Array.from({length:21},(_,n)=>`<button type="button" data-n="${n}">${n}</button>`).join("")}</div>`}`;
+    if (result) return;
+    panel.querySelectorAll("[data-slot]").forEach(button=>button.onclick=()=>{
+      method.active = Number(button.dataset.slot);
+      renderMathMethod();
+      panel.querySelector(`[data-slot="${method.active}"]`)?.focus?.();
+    });
+    panel.querySelectorAll("[data-n]").forEach(button=>button.onclick=event=>{
+      if (mathSaving || mathQuestionAnswered) return;
+      values[active] = Number(button.dataset.n);
+      const next = values.findIndex(value=>value === null);
+      if (next !== -1) {
+        method.active = next;
+        renderMathMethod();
+        if (event?.detail === 0) panel.querySelector(`[data-n="${button.dataset.n}"]`)?.focus?.();
+        return;
+      }
+      method.result = window.ChenchenMath.answerResult(currentQ,values[3],values.slice(0,3));
+      mathScore.total++;
+      if (method.result.correct) mathScore.ok++;
+      renderMathMethod();
+      finishMathQuestion(method.result.correct,method.result.answer,method.result.steps);
+    });
+  }
+
   function choicesFor(ans) {
     const set = new Set([ans]);
     while (set.size < 4) {
@@ -1096,17 +1149,19 @@
       return;
     }
     if (reviewSession) reviewSession.practice = practice || window.ChenchenMath.plan(mathMode,loadState(),todayStr(),MATH_ROUND_SIZE);
-    mathRoundSize = reviewSession ? reviewSession.practice.questions.length : MATH_ROUND_SIZE;
+    mathQuestions = reviewSession?.practice?.questions || window.ChenchenMath.plan(mathMode,{items:{}},todayStr(),MATH_ROUND_SIZE).questions;
+    mathRoundSize = mathQuestions.length;
     if (reviewSession) reviewSession.count = mathRoundSize;
     const results = reviewSession?.practice?.questionResults || [];
     mathScore = {ok:results.filter(result=>result.correct).length,total:results.length};
     mathCompleted = results.length;
     bondQIndex = 0;
-    mathQuestions = reviewSession?.practice?.questions || window.ChenchenMath.plan(mathMode,{items:{}},todayStr(),MATH_ROUND_SIZE).questions;
     mathQuestionKeys = mathQuestions.map(question=>question.key);
+    const courses = window.ChenchenMath.courses;
+    const course = courses[mathMode];
     const el = document.getElementById("math-content");
-    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml(mathMode === "decomp" ? "decomp" : "math")}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">${mathCompleted} / ${mathRoundSize} 题</span></div>
-      ${reviewSession ? "" : `<div class="tabs-mini"><button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button><button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button></div>`}
+    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml(course.type)}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">${mathCompleted} / ${mathRoundSize} 题</span></div>
+      ${reviewSession ? "" : `<div class="tabs-mini math-tabs" aria-label="数学专题">${Object.entries(courses).map(([mode,item])=>`<button type="button" data-m="${mode}" class="${mathMode === mode ? "active" : ""}" aria-pressed="${mathMode === mode}">${item.tab}</button>`).join("")}</div>`}
       <p class="practice-instruction">做 ${mathRoundSize} 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
       <div class="btn-row practice-controls"><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div><div id="math-save-error" role="status" hidden><span id="math-save-message"></span><button class="btn btn-ghost" id="math-save-retry" hidden>重试保存这一题</button></div></div>`;
     bindStudyStart(el);
@@ -1173,13 +1228,12 @@
     else nextMathQ();
   }
 
-  function finishMathQuestion(correct) {
+  function finishMathQuestion(correct,answer,steps) {
     if (mathQuestionAnswered) return;
     mathQuestionAnswered = true;
     mathCompleted++;
     if (reviewSession?.practice) {
-      const answer = mathMode === "decomp" ? bondSheet.item.answers[Object.keys(bondSheet.item.blanks).find(slot=>bondSheet.item.blanks[slot])] : currentQ.attempt;
-      window.ChenchenMath.record(reviewSession.practice,answer);
+      window.ChenchenMath.record(reviewSession.practice,answer,steps);
     }
     const progress = document.getElementById("math-progress");
     if(progress) progress.textContent = `${mathCompleted} / ${mathRoundSize} 题`;
@@ -1194,10 +1248,12 @@
 
   function renderMathFinish() {
     stopSpeechSafe();
-    const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
+    const {id,type,title} = window.ChenchenMath.courses[mathMode];
     const result = mathScore.ok >= mathRoundSize ? "independent" : mathScore.ok > 0 ? "supported" : "again";
-    const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法",
-      enroll:true,source:"automatic",skill:"math-solving",details:{correct:mathScore.ok,total:mathRoundSize,mode:mathMode,questionKeys:mathQuestionKeys,questionResults:(reviewSession?.practice?.questionResults || []).map(({key,knowledgeId,correct})=>({key,knowledgeId,correct}))}};
+    const questionResults = (reviewSession?.practice?.questionResults || []).map(({key,knowledgeId,correct,answer,steps})=>
+      ({key,knowledgeId,correct,...(steps ? {answer,steps} : {})}));
+    const meta = {type,title,enroll:true,source:"automatic",skill:"math-solving",
+      details:{correct:mathScore.ok,total:mathRoundSize,mode:mathMode,questionKeys:mathQuestionKeys,questionResults}};
     const panel = document.getElementById("math-panel");
     panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${mathRoundSize} 道题，真棒！</h3><p>${assessmentBadge(result)}</p><p>首次答对 ${mathScore.ok} / ${mathRoundSize} 题</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "保存这一组，休息一下" : "自由练习完成，休息一下"}</button></div>`;
     document.querySelector("#math-content .practice-controls").hidden = true;
@@ -1213,9 +1269,9 @@
     mathQuestionAnswered = false;
     const next = document.getElementById("math-next");
     if (next) { next.disabled = true; next.hidden = true; }
+    const saved = reviewSession?.practice?.questionResults[reviewSession.practice.index];
     if (mathMode === "decomp") {
       bondSheet = genBondSheet();
-      const saved = reviewSession?.practice?.questionResults[reviewSession.practice.index];
       if (saved) {
         const item = bondSheet.item,slot = Object.keys(item.blanks).find(slot=>item.blanks[slot]);
         item.answers[slot] = saved.answer; item.status = saved.correct ? "ok" : "bad";
@@ -1227,6 +1283,12 @@
       return;
     }
     currentQ = reviewSession?.practice ? JSON.parse(JSON.stringify(mathQuestions[reviewSession.practice.index])) : genAddSub();
+    if (currentQ.steps) {
+      currentQ.method = {values:saved ? [...saved.steps,saved.answer] : [null,null,null,null],active:0,result:saved};
+      renderMathMethod();
+      if (saved) restoreMathAnswer(saved);
+      return;
+    }
     const panel = document.getElementById("math-panel");
     if (!panel) return;
     const opts = currentQ.choices || choicesFor(currentQ.answer);
@@ -1249,10 +1311,9 @@
         mathScore.total++;
         if (correct) mathScore.ok++;
         showArithmeticAnswer(v);
-        finishMathQuestion(correct);
+        finishMathQuestion(correct,v);
       };
     });
-    const saved = reviewSession?.practice?.questionResults[reviewSession.practice.index];
     if (saved) { showArithmeticAnswer(saved.answer); restoreMathAnswer(saved); }
   }
 

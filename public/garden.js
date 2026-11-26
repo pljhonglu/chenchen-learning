@@ -6,6 +6,8 @@
     poem: { title: "古诗", count: 5, unit: "首", icon: "诗", view: "poems" },
     math: { title: "数学", count: 10, unit: "题", icon: "+", view: "math" },
     decomp: { title: "分解组合", count: 10, unit: "题", icon: "+", view: "math" },
+    make10: { title: "凑十法", count: 10, unit: "题", icon: "+", view: "math" },
+    flat10: { title: "平十法", count: 10, unit: "题", icon: "−", view: "math" },
     pinyin: { title: "拼音", count: 10, unit: "个", icon: "a", view: "pinyin" },
     write: { title: "汉字", count: 5, unit: "个", icon: "字", view: "write" },
     english: { title: "英语", count: 5, unit: "个", icon: "Aa", view: "english" },

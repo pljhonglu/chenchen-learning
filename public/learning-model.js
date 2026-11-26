@@ -7,7 +7,7 @@
     Object.freeze({id:"supported", label:"提示后完成", icon:"◐"}),
     Object.freeze({id:"again", label:"还要练习", icon:"↻"}),
   ]);
-  const TYPE_LABELS = Object.freeze({poem:"古诗", english:"英语", write:"汉字", pinyin:"拼音", math:"数学", decomp:"分解组合", other:"其他"});
+  const TYPE_LABELS = Object.freeze({poem:"古诗", english:"英语", write:"汉字", pinyin:"拼音", math:"数学", decomp:"分解组合", make10:"凑十法", flat10:"平十法", other:"其他"});
   const SKILL_LABELS = Object.freeze({
     "poem-recitation":"背诵", "english-listening":"听音辨认", "english-speaking":"开口表达",
     "hanzi-recognition":"认字", "hanzi-writing":"书写", "pinyin-reading":"拼音认读", "math-solving":"解题",

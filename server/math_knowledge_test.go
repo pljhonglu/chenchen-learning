@@ -196,3 +196,46 @@ func TestMathCompletedRoundCannotReplacePersistedAnswerOrPlan(t *testing.T) {
 	_, err = app.store.completeStudyGroup(ctx, forged)
 	gardenErrorCode(t, err, "study_session_conflict")
 }
+
+func TestCrossTenRoundKeepsFirstSplitEvenWithCorrectFinalAnswer(t *testing.T) {
+	app := testApp(t)
+	ctx := context.Background()
+	const kind = "flat10"
+	result := map[string]any{"key": "13-6", "knowledgeId": "flat10-13", "correct": false, "answer": 7, "steps": []int{2, 4, 10}}
+	group := mathGroup("flat-ten-first", []map[string]any{result})
+	group.Type, group.Entries[0].Type = kind, kind
+	group.Entries[0].ID = crossTenCourseID(kind)
+	group.Entries[0].Details["mode"] = kind
+
+	draft := sessionFor(group)
+	draft.Progress = map[string]any{"practice": map[string]any{
+		"mode":            kind,
+		"questions":       []any{map[string]any{"key": "13-6", "knowledgeId": "flat10-13"}},
+		"questionResults": []any{result},
+	}}
+	if _, err := app.store.saveStudySession(ctx, draft); err != nil {
+		t.Fatal(err)
+	}
+	result["steps"] = []int{1, 5, 10}
+	_, err := app.store.completeStudyGroup(ctx, group)
+	gardenErrorCode(t, err, "study_session_conflict")
+
+	result["steps"] = []int{3, 3, 10}
+	_, err = app.store.completeStudyGroup(ctx, group)
+	gardenErrorCode(t, err, "invalid_study_group")
+
+	result["steps"] = []int{2, 4, 10}
+	stored, err := app.store.completeStudyGroup(ctx, group)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := decodeState(t, progressItems(t, stored)[crossTenCourseID(kind)])
+	knowledge := decodeState(t, item["mathKnowledge"])
+	var point mathKnowledge
+	if err := json.Unmarshal(knowledge["flat10-13"], &point); err != nil {
+		t.Fatal(err)
+	}
+	if point.Mistakes != 1 || point.LastCorrect || point.NextReview == "" {
+		t.Fatalf("wrong split was not scheduled for review: %+v", point)
+	}
+}

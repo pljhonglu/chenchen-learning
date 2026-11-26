@@ -1719,6 +1719,144 @@ button[hidden],*[hidden] {
   justify-content:center;
 }
 
+.math-tabs {
+  flex-wrap:wrap;
+}
+
+.ten-method {
+  max-width:460px;
+  margin:auto;
+  padding:16px 12px;
+  border:1px solid #e7dcc0;
+  border-radius:20px;
+  background:#fffaf0;
+  color:#564b32;
+  text-align:center;
+}
+
+.ten-method h3 {
+  margin:0 0 4px;
+  font-size:20px;
+}
+
+.ten-method h3 small {
+  margin-left:5px;
+  color:#6d654f;
+  font-size:13px;
+  font-weight:500;
+}
+
+.ten-method .math-verdict {
+  margin:8px auto;
+  font-size:18px;
+}
+
+.ten-equation {
+  display:grid;
+  grid-template-columns:max-content max-content 52px max-content max-content;
+  align-items:center;
+  justify-content:center;
+  gap:3px 5px;
+  margin:10px auto 14px;
+  font-size:clamp(23px,6vw,34px);
+  font-weight:750;
+}
+
+.ten-fork {
+  grid-column:3;
+  justify-self:center;
+  position:relative;
+  width:44px;
+  height:17px;
+}
+
+.ten-fork::before,.ten-fork::after {
+  content:"";
+  position:absolute;
+  top:1px;
+  left:21px;
+  width:2px;
+  height:25px;
+  border-radius:2px;
+  background:#b5a573;
+  transform-origin:top;
+}
+
+.ten-fork::before { transform:rotate(55deg); }
+.ten-fork::after { transform:rotate(-55deg); }
+
+.ten-parts {
+  grid-column:3;
+  justify-self:center;
+  display:flex;
+  width:max-content;
+  gap:9px;
+}
+
+.ten-method .nb-box {
+  width:43px;
+  height:43px;
+  font-size:23px;
+}
+
+.ten-work {
+  display:grid;
+  gap:6px;
+}
+
+.ten-work div {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  max-width:325px;
+  width:100%;
+  margin:auto;
+  padding:5px 8px;
+  background:#f0f3e7;
+  border-radius:10px;
+}
+
+.ten-work div > span {
+  font-size:clamp(12px,3.4vw,15px);
+  white-space:nowrap;
+}
+
+.ten-work strong {
+  font-size:clamp(16px,4.8vw,24px);
+  white-space:nowrap;
+}
+
+.ten-method .math-answer-result {
+  gap:2px;
+  padding:4px 0;
+}
+
+.ten-method .math-answer-correct,
+.ten-method .math-answer-result.is-wrong .math-answer-correct,
+.ten-method .math-answer-attempt {
+  width:32px;
+  height:38px;
+  font-size:20px;
+  border-width:2px;
+}
+
+.ten-method .math-answer-mark { display:none; }
+.ten-method .math-answer-arrow { font-size:13px; }
+
+.nb-pad.ten-pad {
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:5px;
+  margin:12px auto 0;
+}
+
+.nb-pad.ten-pad button {
+  min-height:42px;
+  padding:4px 0;
+  font-size:18px;
+}
+
 .pinyin-sample {
   max-width:510px;
   margin:22px auto;

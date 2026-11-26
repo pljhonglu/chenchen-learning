@@ -123,6 +123,7 @@ function environment(initial = {}) {
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/writing-vocabulary.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/pinyin-data.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/learning-model.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/math-model.js'),'utf8'),context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/study-groups.js'),'utf8'),context);
   context.window.ChenchenEnglish={create:()=>({catalog:async()=>[],stop(){},pause(){}})};
   context.window.ChenchenGarden={renderHome:hooks=>{context.lastGardenHooks=hooks;},stop(){}};

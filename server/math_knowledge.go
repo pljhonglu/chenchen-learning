@@ -17,6 +17,8 @@ type mathQuestionResult struct {
 	Key         string `json:"key"`
 	KnowledgeID string `json:"knowledgeId"`
 	Correct     *bool  `json:"correct"`
+	Answer      *int   `json:"answer,omitempty"`
+	Steps       []*int `json:"steps,omitempty"`
 	Day         string `json:"day,omitempty"`
 	At          string `json:"at,omitempty"`
 }
@@ -35,7 +37,64 @@ type mathKnowledge struct {
 	LastSeenAt       string `json:"lastSeenAt"`
 }
 
+func crossTenCourseID(kind string) string {
+	switch kind {
+	case "make10":
+		return "math-make10-20"
+	case "flat10":
+		return "math-flat10-20"
+	default:
+		return ""
+	}
+}
+
+func isMathType(kind string) bool {
+	return kind == "math" || kind == "decomp" || crossTenCourseID(kind) != ""
+}
+
+func crossTenQuestion(kind, key string) (int, [3]int, bool) {
+	match := arithmeticKey.FindStringSubmatch(key)
+	if match == nil {
+		return 0, [3]int{}, false
+	}
+	a, errA := strconv.Atoi(match[1])
+	b, errB := strconv.Atoi(match[3])
+	if errA != nil || errB != nil {
+		return 0, [3]int{}, false
+	}
+	switch kind {
+	case "make10":
+		if match[2] == "+" && a >= 6 && a <= 9 && b > 10-a && b <= a {
+			return a, [3]int{10 - a, a + b - 10, 10}, true
+		}
+	case "flat10":
+		if match[2] == "-" && a >= 11 && a <= 18 && b > a-10 && b <= 9 {
+			return a, [3]int{a - 10, 10 + b - a, 10}, true
+		}
+	}
+	return 0, [3]int{}, false
+}
+
+func validCrossTenAnswer(kind string, result mathQuestionResult) bool {
+	_, expected, valid := crossTenQuestion(kind, result.Key)
+	if !valid || result.Correct == nil || result.Answer == nil || *result.Answer < 0 || *result.Answer > 20 || len(result.Steps) != len(expected) {
+		return false
+	}
+	correct := *result.Answer == mathAnswerForKey(kind, result.Key)
+	for index, step := range result.Steps {
+		if step == nil || *step < 0 || *step > 20 {
+			return false
+		}
+		correct = correct && *step == expected[index]
+	}
+	return *result.Correct == correct
+}
+
 func validMathKnowledge(kind, key, id string) bool {
+	if crossTenCourseID(kind) != "" {
+		a, _, valid := crossTenQuestion(kind, key)
+		return valid && id == fmt.Sprintf("%s-%d", kind, a)
+	}
 	if kind == "math" {
 		match := arithmeticKey.FindStringSubmatch(key)
 		if match == nil {
@@ -72,11 +131,15 @@ func validMathKnowledge(kind, key, id string) bool {
 
 func validateMathResults(kind string, details map[string]any) error {
 	raw, exists := details["questionResults"]
-	if !exists {
-		return nil
-	} // Retain older completed-round clients.
+	crossTen := crossTenCourseID(kind) != ""
 	invalid := func() error {
 		return gardenError(http.StatusBadRequest, "invalid_study_group", "数学逐题首次结果与题目或总分不一致")
+	}
+	if !exists {
+		if crossTen {
+			return invalid()
+		}
+		return nil // Older completed-round clients did not submit per-question results.
 	}
 	encoded, err := json.Marshal(raw)
 	if err != nil {
@@ -100,7 +163,8 @@ func validateMathResults(kind string, details map[string]any) error {
 	count := 0
 	seen := map[string]bool{}
 	for index, result := range results {
-		if result.Correct == nil || index >= len(keys) || result.Key != keys[index] || seen[result.Key] || !validMathKnowledge(kind, result.Key, result.KnowledgeID) {
+		if result.Correct == nil || result.Key != keys[index] || seen[result.Key] || !validMathKnowledge(kind, result.Key, result.KnowledgeID) ||
+			crossTen && !validCrossTenAnswer(kind, result) {
 			return invalid()
 		}
 		seen[result.Key] = true
@@ -115,7 +179,7 @@ func validateMathResults(kind string, details map[string]any) error {
 }
 
 func updateMathKnowledge(item map[string]json.RawMessage, entry studyEntry, kind string) error {
-	if kind != "math" && kind != "decomp" {
+	if !isMathType(kind) {
 		return nil
 	}
 	raw, exists := entry.Details["questionResults"]
@@ -204,7 +268,7 @@ func updateMathKnowledge(item map[string]json.RawMessage, entry studyEntry, kind
 }
 
 func mathAnswerForKey(kind, key string) int {
-	if kind == "math" {
+	if kind == "math" || crossTenCourseID(kind) != "" {
 		match := arithmeticKey.FindStringSubmatch(key)
 		if match == nil {
 			return -1

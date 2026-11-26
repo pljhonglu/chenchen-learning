@@ -154,3 +154,29 @@ test("draft restoration preserves first answers, question order, options and con
     assert.equal(Model.restore(invalid,mode),null);
   }
 });
+
+test("crossing ten requires both split parts, ten, and the final answer",()=>{
+  const examples = [
+    {mode:"make10",key:"8+5",steps:[2,3,10],answer:13,count:20},
+    {mode:"flat10",key:"13-6",steps:[3,3,10],answer:7,count:36},
+    {mode:"flat10",key:"12-9",steps:[2,7,10],answer:3,count:36},
+  ];
+  for (const {mode,key,steps,answer,count} of examples) {
+    const pool=Model.pool(mode);
+    assert.equal(pool.length,count);
+    const question=pool.find(q=>q.key===key);
+    assert.deepEqual(copy(question.steps),steps);
+    assert.equal(question.answer,answer);
+    const plan={kind:"math",version:1,mode,questions:[question],index:0,questionResults:[]};
+    assert.equal(Model.record(plan,answer),null);
+    const wrong=[steps[0]+1,steps[1]-1,10];
+    const first=Model.record(plan,answer,wrong);
+    assert.equal(first.correct,false);
+    assert.equal(Model.record(plan,answer,steps),first);
+    assert.deepEqual(copy(Model.restore(copy(plan),mode)),copy(plan));
+    const altered=copy(plan);
+    altered.questionResults[0].correct=true;
+    assert.equal(Model.restore(altered,mode),null);
+    assert.equal(Model.answerResult(question,answer,steps).correct,true);
+  }
+});
