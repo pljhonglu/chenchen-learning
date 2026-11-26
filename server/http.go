@@ -215,6 +215,9 @@ func (app *application) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	// Revalidate assets after an image upgrade; browser cache remains usable.
 	w.Header().Set("Cache-Control", "no-cache")
+	if strings.HasSuffix(name, ".webmanifest") {
+		w.Header().Set("Content-Type", "application/manifest+json")
+	}
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 

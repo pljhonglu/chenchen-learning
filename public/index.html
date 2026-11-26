@@ -7,6 +7,8 @@
   <meta name="color-scheme" content="light" />
   <meta name="description" content="辰辰的复习小花园：用图片、声音和小游戏，复习古诗、数学、拼音、汉字和英语。" />
   <title>辰辰的复习小花园</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/garden-192.png" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="english.css" />
   <link rel="stylesheet" href="learning-records.css" />
@@ -17,7 +19,10 @@
   <div class="app">
     <header class="header">
       <a class="brand" href="#" id="brand-home" aria-label="回到复习首页"><span class="brand-icon" aria-hidden="true">✿</span><span>辰辰的<span class="brand-second">复习小花园</span></span></a>
-      <div class="header-actions"><span class="age-label">幼小衔接 · 每天一点点</span></div>
+      <div class="header-actions">
+        <span class="age-label">幼小衔接 · 每天一点点</span>
+        <button type="button" class="install-app" id="install-app" hidden>安装到桌面</button>
+      </div>
     </header>
     <nav class="nav" aria-label="学习导航">
       <button type="button" data-nav="home" class="active"><span class="ico" aria-hidden="true">⌂</span><span>复习小花园</span></button>
@@ -41,6 +46,7 @@
     <footer class="footer"><span aria-hidden="true">❀</span> 慢慢来，每一次想起来，都是小小的成长。</footer>
   </div>
   <div id="live-status" class="sr-only" aria-live="polite"></div>
+  <script src="install.js"></script>
   <script src="learning-model.js"></script>
   <script src="learning-records.js"></script>
   <script src="speech.js"></script>

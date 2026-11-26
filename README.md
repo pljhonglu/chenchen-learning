@@ -111,6 +111,12 @@ cd chenchen-learning
 docker compose up -d --build
 ```
 
+## 安装到主屏幕
+
+在安卓 Chrome 打开学习网站的 HTTPS 地址。在 Chrome 菜单选择「安装应用」或「添加到主屏幕」里的安装项。页眉出现「安装到桌面」时也可以直接点击。装好后，点「辰辰小花园」图标即可在独立窗口打开。
+
+NAS 部署时，用手机信任的 HTTPS 域名反向代理到现有容器端口，并把整个站点（包括 `/api/`）转发到同一个容器。学习进度仍保存在该容器挂载的 `/data/progress.db`。安装后的学习和记录保存都需要设备能访问 NAS。
+
 ## 从 Python 版本升级
 
 Go 版本沿用 `/data/progress.db`、`progress` 表和原有 API，原来的学习记录无需转换。升级前先停止旧容器并备份数据卷，替换镜像时挂载原来的 `chenchen-learning-data` 卷。不要运行 `docker compose down -v`，这个命令会删除数据卷。

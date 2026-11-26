@@ -29,6 +29,25 @@ wait_ready() {
 }
 wait_ready
 curl -fsS "$base/" | grep -q '辰辰'
+python3 - "$base" <<'PY'
+import json
+import struct
+import sys
+from urllib.request import urlopen
+
+base = sys.argv[1]
+with urlopen(base + "/manifest.webmanifest") as response:
+    assert response.headers.get_content_type() == "application/manifest+json"
+    manifest = json.load(response)
+assert manifest["display"] == "standalone" and manifest["start_url"] == "/"
+assert {"192x192", "512x512"} <= {icon["sizes"] for icon in manifest["icons"] if icon["purpose"] == "any"}
+for icon in manifest["icons"]:
+    with urlopen(base + icon["src"]) as response:
+        assert response.headers.get_content_type() == "image/png"
+        header = response.read(24)
+    assert header.startswith(b"\x89PNG\r\n\x1a\n")
+    assert struct.unpack(">II", header[16:24]) == tuple(map(int, icon["sizes"].split("x")))
+PY
 poem_ids="$(curl -fsS "$base/data/poems.json" | python3 -c 'import json,sys; poems=json.load(sys.stdin); ids=[p["id"] for p in poems]; assert ids and len(set(ids)) == len(ids) and "poem-01" in ids; print(json.dumps(ids))')"
 curl -fsS "$base/data/poem-illustrations.json" | python3 -c 'import json,sys; assert set(json.load(sys.stdin)) == set(json.loads(sys.argv[1]))' "$poem_ids"
 curl -fsS "$base/images/poems/poem-01.webp" | python3 -c 'import sys; b=sys.stdin.buffer.read(); assert b[:4] == b"RIFF" and b[8:12] == b"WEBP"'
