@@ -152,7 +152,8 @@ func TestConcurrentCreatePreservesAlreadyReviewedCourse(t *testing.T) {
 	state := decodeState(t, stored.Payload)
 	items := decodeState(t, state["items"])
 	poems := decodeState(t, state["customPoems"])
-	if string(items["course"]) != `{"nextReview":"2026-10-08","stage":3,"title":"课文"}` || string(poems["course"]) != `{"title":"家长更正后的标题"}` {
+	item := decodeState(t, items["course"])
+	if string(item["stage"]) != "3" || jsonString(item["nextReview"]) != "2026-10-08" || jsonString(item["title"]) != "课文" || item["learned"] != nil || string(poems["course"]) != `{"title":"家长更正后的标题"}` {
 		t.Fatalf("concurrent create overwrote existing data: %s", stored.Payload)
 	}
 }
@@ -162,7 +163,7 @@ func TestDeletedCourseCannotBeRevivedByLateReview(t *testing.T) {
 	ctx := context.Background()
 	_, err := app.store.patch(ctx, []progressOperation{
 		operation("set", "customPoems", "poem-1", `{"title":"静夜思"}`),
-		operation("set", "items", "poem-1", `{"level":1}`),
+		operation("set", "items", "poem-1", `{"level":1,"title":"静夜思"}`),
 		operation("set", "items", "other", `{"level":2}`),
 		operation("set", "activity", "known-event", `{"id":"poem-1","day":"2026-10-01"}`),
 		operation("set", "activity", "other-event", `{"id":"other","day":"2026-10-01"}`),
@@ -182,8 +183,13 @@ func TestDeletedCourseCannotBeRevivedByLateReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := decodeState(t, deleted.Payload)
-	if len(decodeState(t, state["items"])) != 1 || len(decodeState(t, state["customPoems"])) != 0 || len(decodeState(t, state["activity"])) != 1 {
-		t.Fatalf("delete left progress or activity behind: %s", deleted.Payload)
+	if len(decodeState(t, state["items"])) != 1 || len(decodeState(t, state["customPoems"])) != 0 || len(decodeState(t, state["activity"])) != 3 {
+		t.Fatalf("delete did not preserve practice history: %s", deleted.Payload)
+	}
+	for _, key := range []string{"known-event", "new-event"} {
+		if jsonString(decodeState(t, decodeState(t, state["activity"])[key])["title"]) != "静夜思" {
+			t.Fatalf("missing legacy title snapshot: %s", state["activity"])
+		}
 	}
 	// Even operations before the failing merge must roll back together.
 	late := request(app, http.MethodPatch, "/api/progress", `{"operations":[{"op":"set","collection":"activity","key":"ghost","value":{"id":"poem-1"}},{"op":"merge","collection":"items","key":"poem-1","value":{"level":3}}]}`)
@@ -250,13 +256,13 @@ func TestInvalidPatchIsAtomic(t *testing.T) {
 func TestPatchTotalStorageLimitRollsBack(t *testing.T) {
 	app := testApp(t)
 	initial, err := app.store.patch(context.Background(), []progressOperation{
-		operation("set", "customPoems", "large", fmt.Sprintf(`{"text":%q}`, strings.Repeat("a", 350_000))),
+		operation("set", "customPoems", "large", fmt.Sprintf(`{"text":%q}`, strings.Repeat("a", maxStoredProgressBytes-200_000))),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	body, _ := json.Marshal(map[string]any{"operations": []progressOperation{
-		operation("set", "customPoems", "overflow", fmt.Sprintf(`{"text":%q}`, strings.Repeat("b", 200_000))),
+		operation("set", "customPoems", "overflow", fmt.Sprintf(`{"text":%q}`, strings.Repeat("b", 250_000))),
 	}})
 	response := request(app, http.MethodPatch, "/api/progress", string(body))
 	if response.Code != http.StatusRequestEntityTooLarge {

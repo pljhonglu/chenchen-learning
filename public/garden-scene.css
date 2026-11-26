@@ -1,0 +1,22 @@
+/* Painted scenery fills the frame; the growing parts share one SVG coordinate system. */
+.g-scene-host { position:absolute;inset:0;pointer-events:none; }
+.g-painted-backdrop { display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center; }
+.g-scene-svg { display:block;position:absolute;width:100%;height:100%;inset:0;overflow:visible; }
+.g-world { min-height:475px;background:radial-gradient(ellipse at 72% 12%,#faf4df 0,transparent 53%),linear-gradient(180deg,#f6f5e9,#edf1e0); }
+.g-scene-heading { z-index:2; }
+.g-scene-heading p { max-width:220px; }
+.g-scene-caption { position:absolute;bottom:33px;left:50%;transform:translateX(-50%);margin:0;padding:5px 13px;border:1px solid #e2e5d1aa;border-radius:20px;background:#fffef2df;white-space:nowrap;text-align:center;color:#758266;font-size:12px;line-height:1.6;letter-spacing:1px; }
+.g-earth-label { bottom:13px;color:#697951;font-size:9px;letter-spacing:.6px;text-shadow:0 1px 3px #fffdef; }
+.g-home.g-performing .g-water-button { cursor:wait; }
+.g-gift-celebration { top:43%;width:226px; }
+.g-gift-slot:empty { display:none; }
+/* A small vector-like wrapped present; no character image atlas is needed. */
+.g-gift-art { width:78px;height:78px;margin:16px auto 20px;background:none; }
+.g-gift-art::before { content:"";position:absolute;inset:24px 9px 0;border-radius:5px 5px 10px 10px;background:linear-gradient(90deg,transparent 42%,#9aad7c 42% 58%,transparent 58%),linear-gradient(#e9ca90 0 19%,#f3dbad 19%);box-shadow:0 4px 0 #d5ba8420; }
+.g-gift-art::after { content:"";position:absolute;width:32px;height:19px;border:5px solid #9aad7c;border-radius:70% 10% 65% 15%;transform:rotate(32deg);left:23px;top:3px; }
+.g-calendar-heading-art { background:none;position:relative;transform:none; }
+.g-calendar-heading-art::before { content:"";position:absolute;width:32px;height:56px;border-radius:90% 0 90% 0;background:#acc18e;transform:rotate(-35deg);left:22px;top:20px; }
+.g-calendar-heading-art::after { content:"";position:absolute;width:27px;height:47px;border-radius:0 90% 0 90%;background:#ccd8ae;transform:rotate(25deg);left:53px;top:27px; }
+@media(max-width:1050px) and (min-width:901px) { .g-world{min-height:450px}.g-scene-heading{left:23px}.g-scene-caption{font-size:11px} }
+@media(max-width:900px) { .g-world{height:450px;min-height:0}.g-scene-svg{height:100%;width:100%}.g-scene-caption{bottom:30px}.g-gift-celebration{top:44%} }
+@media(max-width:600px) { .g-world{height:395px}.g-scene-svg{width:155%;height:100%;left:-27.5%;top:35px}.g-scene-heading{left:21px;top:20px}.g-scene-heading h2{font-size:19px}.g-scene-heading p{font-size:11px}.g-scene-caption{bottom:34px;font-size:11px}.g-earth-label{bottom:15px;font-size:8px}.g-gift-celebration{width:205px;top:48%} }

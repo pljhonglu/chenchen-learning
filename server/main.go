@@ -58,6 +58,10 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	store.writingCharacters, err = loadWritingCharacters(public)
+	if err != nil {
+		return err
+	}
 	app := &application{store: store, public: public, logger: logger}
 	server := &http.Server{
 		Addr:              net.JoinHostPort(envOr("HOST", "0.0.0.0"), port),

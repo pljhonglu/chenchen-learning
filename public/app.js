@@ -2,7 +2,38 @@
 (function () {
   "use strict";
 
-  const INTERVALS = [1, 2, 4, 7, 15, 30]; // days
+  const Learning = window.ChenchenLearning;
+  const REVIEW_RESULT = {independent:"remember",supported:"fuzzy",again:"forgot",practice:"fuzzy"};
+  const ASSESSMENT_RESULT = {remember:"independent",fuzzy:"supported",forgot:"again"};
+
+  function assessmentButtons(prefix, title) {
+    return `<div class="learning-assessment" role="group" aria-label="${escapeHtml(title)}"><p class="assessment-title">${escapeHtml(title)}</p><div class="assessment-options">${Learning.RATINGS.map(r=>`<button type="button" class="assessment-option assessment-${r.id}" id="${prefix}-${r.id}" data-assessment="${r.id}"><span aria-hidden="true">${r.icon}</span>${r.label}</button>`).join("")}</div><p class="assessment-error" id="${prefix}-error" role="alert"></p></div>`;
+  }
+
+  function assessmentBadge(result) {
+    const rating = Learning.RATINGS.find(r=>r.id===result);
+    return rating ? `<span class="assessment-badge assessment-${rating.id}"><span aria-hidden="true">${rating.icon}</span> ${rating.label}</span>` : "";
+  }
+
+  function bindAssessment(prefix, id, onChoose) {
+    const buttons = Learning.RATINGS.map(r=>document.getElementById(`${prefix}-${r.id}`));
+    const error = document.getElementById(`${prefix}-error`);
+    const updateRetry = () => {
+      const pending = pendingPracticeAttempt?.id===id && pendingPracticeAttempt.operations ? pendingPracticeAttempt : null;
+      buttons.forEach((button,index)=>{
+        const chosen = ASSESSMENT_RESULT[pending?.result] === Learning.RATINGS[index].id;
+        button.disabled = !!pending && !chosen;
+        if (pending && chosen) button.textContent = `重试保存 · ${Learning.RATINGS[index].label}`;
+      });
+      error.textContent = pending ? "还没保存成功，请重试。" : "";
+    };
+    buttons.forEach((button,index)=>button.onclick=async()=>{
+      buttons.forEach(b=>b.disabled=true);
+      try { await onChoose(Learning.RATINGS[index].id); }
+      finally { updateRetry(); }
+    });
+    updateRetry();
+  }
   // Same-origin /api/* (Docker SQLite). Override only if API is on another host.
   const API_BASE = "";
 
@@ -57,45 +88,54 @@
   let serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {} };
   let stateReady = false;
   let serverQueue = Promise.resolve();
-  let lastServerContact = null;
-  let syncStatus = { text: "正在连接服务器…", kind: "busy" };
 
   function loadState() { return serverState; }
 
-  function setSyncStatus(text, kind) {
-    syncStatus = { text, kind: kind || "muted" };
-    const el = document.getElementById("sync-status");
-    if (el) { el.textContent = text; el.dataset.kind = syncStatus.kind; }
-  }
-
   async function apiFetch(path, opts) {
-    const res = await fetch(API_BASE + path, {
-      ...opts,
-      cache: "no-store",
-      headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
-    });
-    let data;
-    try { data = await res.json(); }
-    catch (_) { throw new Error("服务器响应不是有效的 JSON，请稍后重试"); }
-    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("服务器返回了无效的进度数据");
-    if (!res.ok) {
-      const error = new Error(data.error || "server_unavailable");
-      error.status = res.status;
-      error.data = data;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(API_BASE + path, {
+        ...opts,
+        cache: "no-store",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
+      });
+      let data;
+      try { data = await res.json(); }
+      catch (error) {
+        if (controller.signal.aborted) throw error;
+        throw new Error("服务器响应不是有效的 JSON，请稍后重试");
+      }
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("服务器返回了无效的进度数据");
+      if (!res.ok) {
+        const error = new Error(data.message || data.error || "server_unavailable");
+        error.status = res.status;
+        error.data = data;
+        throw error;
+      }
+      const method = (opts?.method || "GET").toUpperCase();
+      const hasPayload = validPayload(data.payload);
+      if (method === "GET" && !(data.found === true && hasPayload || data.found === false && (data.payload === null || data.payload === undefined))) {
+        throw new Error("服务器进度格式不正确，请稍后重试");
+      }
+      if (["PATCH", "POST", "DELETE"].includes(method) && !(data.ok === true && hasPayload)) throw new Error("服务器尚未确认保存，请重试");
+      return data;
+    } catch (error) {
+      if (controller.signal.aborted) {
+        // Aborting a request does not undo a server commit. Keep this an
+        // unknown outcome so the group or watering action retries its same ID.
+        const timeout = new Error("服务器确认超时，请重试确认；不会重复记录或扣水。");
+        timeout.name = "TimeoutError";
+        throw timeout;
+      }
       throw error;
-    }
-    const method = (opts?.method || "GET").toUpperCase();
-    const hasPayload = validPayload(data.payload);
-    if (method === "GET" && !(data.found === true && hasPayload || data.found === false && (data.payload === null || data.payload === undefined))) {
-      throw new Error("服务器进度格式不正确，请稍后重试");
-    }
-    if (method === "PATCH" && !(data.ok === true && hasPayload)) throw new Error("服务器尚未确认保存，请重试");
-    return data;
+    } finally { clearTimeout(timer); }
   }
 
   function isRecord(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
   function validPayload(value) {
-    return isRecord(value) && isRecord(value.items) && ["activity", "customPoems", "customCharacters", "hiddenCourses"].every(key=>value[key] === undefined || isRecord(value[key]));
+    return isRecord(value) && isRecord(value.items) && ["activity", "customPoems", "customCharacters", "hiddenCourses", "studySessions"].every(key=>value[key] === undefined || isRecord(value[key]));
   }
 
   function acceptServerState(data) {
@@ -104,9 +144,7 @@
     const payload = empty ? {} : data.payload;
     serverState = { items: {}, activity: {}, customPoems: {}, customCharacters: {}, hiddenCourses: {}, ...payload };
     stateReady = true;
-    lastServerContact = Date.now();
     POEMS = [...BUILTIN_POEMS, ...Object.values(serverState.customPoems)];
-    setSyncStatus("已保存到服务器 · " + new Date().toLocaleTimeString("zh-CN", {hour:"2-digit",minute:"2-digit"}), "ok");
     return serverState;
   }
 
@@ -116,120 +154,43 @@
     return next;
   }
 
-  function commitOperations(operations) {
-    return queueServerTask(async () => {
-      if (!stateReady) throw new Error("尚未连接学习服务器");
-      setSyncStatus("正在保存到服务器…", "busy");
-      try {
-        const response = await apiFetch("/api/progress", {method:"PATCH", body:JSON.stringify({operations})});
-        return acceptServerState(response);
-      } catch (error) {
-        setSyncStatus("保存未完成，请保持页面打开并重试", "err");
-        if (error.status === 409) {
-          if (validPayload(error.data?.payload)) acceptServerState(error.data);
-          else {
-            const response = await apiFetch("/api/progress", {method:"GET"}).catch(() => null);
-            if (response) acceptServerState(response);
-          }
-          toast("这项内容已在另一台设备删除，请回首页刷新。");
-        } else toast("还没保存成功，请检查网络后再点一次。");
-        throw error;
-      }
-    });
-  }
-
   async function syncNow() {
     try {
       await queueServerTask(async () => {
-        setSyncStatus("正在读取服务器进度…", "busy");
         acceptServerState(await apiFetch("/api/progress", {method:"GET"}));
       });
       if (currentView === "home" && !showingCelebration) renderHome();
       return true;
     } catch (error) {
-      setSyncStatus("暂时无法连接服务器，请检查网络后重试", "err");
       return false;
     }
   }
 
-  function syncPanelHtml() {
-    const last = lastServerContact ? new Date(lastServerContact).toLocaleString("zh-CN", {month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "尚未连接";
-    return `<div class="card sync-card" id="sync-card"><h2>💾 服务器进度</h2><p class="sync-desc">课堂内容与复习进度仅保存在服务器 SQLite 中。手机、平板访问同一地址，就能接着复习。需要连接服务器才能保存练习。</p><div class="btn-row sync-actions"><button type="button" class="btn btn-learn" id="sync-now">刷新服务器进度</button></div><div class="sync-status" id="sync-status" data-kind="${escapeHtml(syncStatus.kind)}">${escapeHtml(syncStatus.text)}</div><div class="sync-meta">上次连接：${escapeHtml(last)}</div></div>`;
-  }
-
-  function bindSyncPanel(root) {
-    const btn = (root || document).querySelector("#sync-now");
-    if(btn) btn.onclick = async () => {
-      btn.disabled = true;
-      const ok = await syncNow();
-      btn.disabled = false;
-      if (ok && document.getElementById("parent-dialog").open) openParent();
-    };
-  }
-
   function todayStr() {
-    return localDate(new Date());
+    return window.ChenchenStudyGroups.day();
   }
-  function localDate(d) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // Ephemeral evidence only: free browsing still makes no learning record.
+  // Keep actual exposure across page/group changes, but never across days.
+  let exposureDay = "";
+  const dailyExposures = new Set();
+  function observedExposure(type, id, remember = false) {
+    const day = todayStr();
+    if (exposureDay !== day) { exposureDay = day; dailyExposures.clear(); }
+    const key = `${type}:${id}`;
+    if (remember) dailyExposures.add(key);
+    return dailyExposures.has(key);
   }
-  function addDays(dateStr, days) {
-    const d = new Date(dateStr + "T12:00:00");
-    d.setDate(d.getDate() + days);
-    return localDate(d);
-  }
-
   function getItem(id) {
     const s = loadState();
     return s.items[id] || null;
-  }
-
-  function newClassroomItem(id, meta) {
-    return { id, ...meta, learned: true, stage: 0, nextReview: todayStr(), lastResult:"enrolled", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
-  }
-
-  function reviewPatch(cur, result) {
-    const startingStage = cur.reviewDay === todayStr() ? (cur.reviewStartStage || 0) : (cur.stage || 0);
-    const days = result === "remember" ? INTERVALS[Math.min(startingStage, INTERVALS.length - 1)] : 1;
-    const stage = result === "remember" ? Math.min(startingStage + 1, INTERVALS.length - 1) : 0;
-    return { stage, lastResult:result, reviewDay:todayStr(), reviewStartStage:startingStage, nextReview:addDays(todayStr(),days), updatedAt:new Date().toISOString() };
-  }
-
-  async function markLearned(id, meta, extraOperations = []) {
-    const existing = getItem(id);
-    const operations = extraOperations.slice();
-    if (loadState().hiddenCourses[id]) operations.unshift({op:"delete",collection:"hiddenCourses",key:id});
-    if (existing && !existing.learned) {
-      const value = {learned:true,updatedAt:new Date().toISOString()};
-      if (!existing.nextReview) value.nextReview = todayStr();
-      operations.push({op:"merge",collection:"items",key:id,value});
-    } else if (!existing) {
-      operations.push({op:"create",collection:"items",key:id,value:newClassroomItem(id,meta)});
-    }
-    if (operations.length) await commitOperations(operations);
-    return getItem(id);
-  }
-
-  async function removeClassroomItem(id) {
-    const state = loadState();
-    const operations = [{op:"delete",collection:"items",key:id}];
-    if (BUILTIN_POEMS.some(poem=>poem.id===id)) operations.push({op:"set",collection:"hiddenCourses",key:id,value:{removedAt:new Date().toISOString()}});
-    if(state.customPoems[id]) operations.push({op:"delete",collection:"customPoems",key:id});
-    if(state.customCharacters[id]) operations.push({op:"delete",collection:"customCharacters",key:id});
-    await commitOperations(operations);
   }
 
   function dueItems() {
     const s = loadState();
     const today = todayStr();
     return Object.values(s.items).filter(
-      (it) => it.learned && it.nextReview && it.nextReview <= today
+      (it) => (it.type === "poem" || it.learned) && it.nextReview && it.nextReview <= today
     ).sort((a, b) => a.nextReview.localeCompare(b.nextReview) || (a.createdAt || "").localeCompare(b.createdAt || ""));
-  }
-
-  function allLearned() {
-    const s = loadState();
-    return Object.values(s.items).filter((it) => it.learned);
   }
 
   // ---------- Ruby helpers ----------
@@ -261,10 +222,30 @@
 
   // ---------- Router ----------
   let currentView = "home";
+  let practiceGeneration = 0;
   let showingCelebration = false;
   let poemFilter = "all";
   let poemQuery = "";
   let selectedPoemId = null;
+  let poemListScroll = 0;
+  let poemDetailGeneration = 0;
+  let englishModule = null;
+  let recordsModule = null;
+
+  function getEnglishModule() {
+    if (!englishModule) englishModule = window.ChenchenEnglish.create({
+      loadState, todayStr, syncNow,
+      startStudy:() => startStudyGroup("english", "learn"),
+      groupStartHtml:() => groupStartHtml("english"),
+      completeGroup:entries => completeEnglishGroup(entries),
+      checkpointEnglishGroup,
+      groupSaving:() => !!(reviewSession?.saving || reviewSession?.draftSaving),
+      isActive:() => currentView === "english",
+      onHome:() => navigate("home"),
+      onExit:() => navigate("english"),
+    });
+    return englishModule;
+  }
 
 
   function stopSpeechSafe() {
@@ -273,28 +254,34 @@
     } catch (_) {}
   }
 
-  function updateSpeakButtons(state) {
+  function updateSpeakButton(state) {
     const play = document.getElementById("btn-speak");
-    const pause = document.getElementById("btn-speak-pause");
-    const stop = document.getElementById("btn-speak-stop");
     if (!play) return;
-    const speaking = state === "speaking";
-    const paused = state === "paused";
+    const playing = state === "speaking" || state === "loading";
     const loading = state === "loading";
-    play.classList.toggle("is-active", speaking || paused || loading);
-    play.textContent = loading ? "正在准备声音…" : paused ? "🔊 重新听" : speaking ? "🔊 从头听" : "🔊 听朗读";
-    play.disabled = loading;
+    play.classList.toggle("is-active", playing);
+    play.textContent = playing ? "Ⅱ 暂停" : state === "paused" ? "▶ 继续" : "▶ 朗读";
+    play.setAttribute("aria-label", playing ? "暂停朗读" : state === "paused" ? "继续朗读" : "朗读古诗");
     play.setAttribute("aria-busy", String(loading));
-    if (pause) {
-      pause.disabled = !(speaking || paused);
-      pause.textContent = paused ? "▶️ 继续" : "⏸️ 暂停";
-    }
-    if (stop) stop.disabled = !(speaking || paused || loading);
   }
 
-  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write"];
+  const views = ["home", "poems", "poem-detail", "math", "pinyin", "write", "write-detail", "english", "records"];
+
+  function resetPracticeAttempt() {
+    // A new page is a new attempt. An older request may still save, but its
+    // response must never update or lock the next page's controls.
+    practiceGeneration++;
+    pendingPracticeAttempt = null;
+    completingPractice = null;
+  }
 
   function showView(name) {
+    resetPracticeAttempt();
+    if (name !== "home") window.ChenchenGarden?.stop();
+    if (name !== "write-detail") stopWritingDemo();
+    if (name !== "pinyin") stopPinyinAudio(true);
+    if (name !== "english") englishModule?.stop();
+    if (name !== "records") recordsModule?.stop();
     if (name !== "poem-detail") stopSpeechSafe();
     currentView = name;
     document.querySelectorAll(".view").forEach((el) => {
@@ -308,18 +295,21 @@
         math: "math",
         pinyin: "pinyin",
         write: "write",
+        "write-detail": "write",
+        english: "english",
+        records: "home",
       };
       btn.classList.toggle("active", btn.dataset.nav === map[name]);
       if (btn.dataset.nav === map[name]) btn.setAttribute("aria-current", "page");
       else btn.removeAttribute("aria-current");
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: ["write", "write-detail", "poems", "poem-detail", "english"].includes(name) ? "instant" : "smooth" });
   }
 
   // ---------- Home / Review ----------
   function typeIcon(type) {
     return (
-      { poem: "📜", math: "➕", decomp: "🔢", pinyin: "🔤", write: "✍️" }[type] ||
+      { poem: "📜", math: "➕", decomp: "🔢", pinyin: "🔤", write: "✍️", english:"🔊" }[type] ||
       "📌"
     );
   }
@@ -331,6 +321,7 @@
         decomp: "分解组合",
         pinyin: "拼音",
         write: "写字",
+        english: "英语",
       }[type] || type
     );
   }
@@ -338,6 +329,7 @@
   let reviewSession = null;
   let pySelected = "a";
   let pyPracticed = new Set();
+  let pyExposures = new Set();
 
   function rabbitArt() {
     return `<svg class="rabbit-art" viewBox="0 0 420 310" aria-hidden="true">
@@ -379,240 +371,247 @@
     });
   }
 
-  async function recordPractice(id, type, result, attempt) {
-    const activityId = attempt?.activityId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const operations = [{op:"set",collection:"activity",key:activityId,value:{day:todayStr(),id,type}}];
-    const item = getItem(id);
-    if ((reviewSession || attempt?.requireClassroom) && !item?.learned) {
-      const error = new Error("这项课堂内容已经删除");
-      error.status = 409;
-      toast("这项课堂内容已经删除，请回到小花园。");
+  let writingCatalogPromise = null;
+  function availableWritingCharacters() {
+    if (!writingCatalogPromise) writingCatalogPromise = fetch("/data/writing-strokes.json").then(async response=>{
+      if (!response.ok) throw new Error("汉字笔画目录暂时没有打开，请重试。");
+      const manifest = await response.json();
+      if (!isRecord(manifest.characters) || !Object.keys(manifest.characters).length) throw new Error("汉字笔画目录暂时没有打开，请重试。");
+      return new Set(Object.keys(manifest.characters));
+    }).catch(error=>{writingCatalogPromise=null;throw error;});
+    return writingCatalogPromise;
+  }
+
+  async function studyCatalog() {
+    const catalogs = await Promise.allSettled([ensurePoems(),getEnglishModule().catalog(),availableWritingCharacters()]);
+    const english = catalogs[1].status === "fulfilled" ? catalogs[1].value : [];
+    const writable = catalogs[2].status === "fulfilled" ? catalogs[2].value : new Set();
+    return [
+      ...POEMS.map(item=>({id:item.id,type:"poem",title:item.title})),
+      {id:"math-addsub-10",type:"math",title:"10以内加减法"},
+      {id:"math-decomp-10",type:"decomp",title:"10以内分解组合"},
+      ...[...INITIALS,...FINALS].map(symbol=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`})),
+      ...writingCharacters().filter(item=>writable.has(item.c)).map(item=>({id:item.id,type:"write",title:`汉字·${item.c}`})),
+      ...english,
+    ];
+  }
+
+  function waterEarnedToday() {
+    return Object.values(loadState().garden?.groups || {}).filter(group=>group.day===todayStr() && group.waterAwarded).length;
+  }
+
+
+  function currentStudyPhase() {
+    return reviewSession?.items[reviewSession.index]?.phase || reviewSession?.mode || "learn";
+  }
+
+  function groupStartHtml(type) {
+    const config = window.ChenchenStudyGroups.CONFIG[type];
+    const draft = window.ChenchenStudyGroups.pending(loadState(),type);
+    const remaining = Math.max(0,3-waterEarnedToday());
+    const amount = ["math","decomp"].includes(type) ? "最多 10 题，复习容易出错的知识点" : `每次最多 ${config.count} ${config.unit}，到期内容优先`;
+    return `<section class="study-start-card"><div><p class="eyebrow">每天一点点，记得更久</p><h3>${amount}</h3><p>${remaining ? `每组完成获得 1 滴水 · 今天还可获得 ${remaining} 滴` : "今天已获得 3 滴水，继续学习仍会记录并更新复习安排"}</p><small>${draft ? "上次的进度已保存，可以接着完成。" : "到期内容优先，今天学完后也可以再学一轮。"}</small></div><button class="btn btn-primary study-start-button" data-start-study="${type}">▶ ${draft ? "继续上次学习" : "开始学习"}</button></section>`;
+  }
+
+  function bindStudyStart(root) {
+    root.querySelectorAll("[data-start-study]").forEach(button=>button.onclick=()=>startStudyGroup(button.dataset.startStudy,"learn"));
+  }
+
+  async function persistStudyDraft(group) {
+    const items = group.items.map(({id,type,title,phase,source,afterPractice})=>({id,type,title,phase,source,afterPractice}));
+    const body = JSON.stringify({id:group.id,type:group.type,mode:group.mode,items,entries:group.entries,
+      progress:{openedDay:todayStr(),...(group.practice ? {practice:group.practice,questionResults:group.practice.questionResults || []} : {})}});
+    group.draftSaving = true;
+    try {
+      await queueServerTask(async()=>{
+        const response = await apiFetch("/api/study-sessions",{method:"POST",body});
+        acceptServerState(response);
+      });
+      group.draftFailed = false;
+      group.draftConflict = false;
+      return true;
+    } catch(error) {
+      group.draftFailed = true;
+      group.draftConflict = error.status===409;
+      if (validPayload(error.data?.payload)) acceptServerState(error.data);
       throw error;
+    } finally {group.draftSaving=false;}
+  }
+
+  function openStudyPosition(group) {
+    if (reviewSession!==group) return;
+    showingCelebration = false;
+    if (group.index>=group.items.length) return saveStudyGroup(group);
+    if (group.resumed && group.resumeExposure!==false) {
+      observedExposure(group.type,group.items[group.index].id,true);
     }
-    // Free browsing before a scheduled day never advances the memory interval.
-    if (item?.learned) {
-      const value = item.nextReview <= todayStr() ? reviewPatch(item,result) : {};
-      operations.unshift({op:"merge",collection:"items",key:id,value});
+    if (group.type==="english") {
+      showView("english");
+      return getEnglishModule().open({group});
     }
-    await commitOperations(operations);
+    openReviewItem(group.items[group.index].id,group.type);
+  }
+
+
+  async function discardStudyDraft(group) {
+    const response=await apiFetch("/api/study-sessions?id="+encodeURIComponent(group.id),{method:"DELETE"});
+    acceptServerState(response);
+    reviewSession=null;
+    navigate("home");
+  }
+
+  function showCheckpointRetry(group, retry, message) {
+    showingCelebration=true;
+    showView("home");
+    const root=document.getElementById("home-content");
+    root.innerHTML=`<div class="card celebration"><h2>${group.draftConflict ? "学习进度已更新" : "正在记住这次进度"}</h2><p role="status">${escapeHtml(message || "还没确认保存，请重试；已经完成的答案不会重复记录。")}</p><button class="btn btn-primary" id="study-checkpoint-retry">${group.draftConflict ? "继续服务器已保存的进度" : "重试保存进度"}</button>${group.draftConflict ? '<p>如果计划里的内容已被移除，可以放弃这份未完成计划后重新安排。</p><button class="text-btn" id="study-draft-discard">放弃这份未完成计划</button>' : ""}</div>`;
+    document.getElementById("study-checkpoint-retry").onclick=async event=>{
+      event.currentTarget.disabled=true;
+      if(group.draftConflict) {
+        reviewSession=null;showingCelebration=false;
+        return startStudyGroup(group.type,group.mode);
+      }
+      try {await retry();}
+      catch(error) {showCheckpointRetry(group,retry,error.message);}
+    };
+    const discard=document.getElementById("study-draft-discard");
+    if(group.draftConflict && discard) discard.onclick=async()=>{
+      discard.disabled=true;
+      try {await discardStudyDraft(group);}
+      catch(error){showCheckpointRetry(group,retry,error.message);}
+    };
+  }
+
+  let studyStarting = false;
+  async function startStudyGroup(type, mode = "learn") {
+    if (studyStarting || reviewSession?.saving || reviewSession?.draftSaving) return;
+    studyStarting = true;
+    const generation = practiceGeneration;
+    try {
+      if (!await syncNow()) throw new Error("暂时连不上服务器，请重试。");
+      if (type === "write") await availableWritingCharacters();
+      const catalog = await studyCatalog();
+      if (generation !== practiceGeneration) return;
+      const plan = type ? window.ChenchenStudyGroups.select(catalog,loadState(),type,mode,todayStr()) : window.ChenchenStudyGroups.reviews(catalog,loadState(),todayStr())[0];
+      if (!plan) {toast(mode==="review" ? "今天的到期复习已完成，可以去学科页继续学习。" : "当前没有可用的学习内容，可以换个学科试试。");return;}
+      const group = reviewSession = {...plan,id:plan.id || globalThis.crypto?.randomUUID?.() || `group-${Date.now()}-${Math.random().toString(36).slice(2)}`,index:plan.index || 0,entries:plan.entries || [],saving:false};
+      const begin=async()=>{await persistStudyDraft(group);return openStudyPosition(group);};
+      try {await begin();}
+      catch(error) {
+        if (error.data?.error==="study_session_exists") {
+          reviewSession=null;
+          toast("另一处已开始这一学科，进度已同步，请点继续学习。");
+        } else showCheckpointRetry(group,begin,error.message);
+      }
+    } catch(error) {toast(error.message || "学习组暂时没有打开，请再试一次。");}
+    finally {studyStarting=false;}
   }
 
   function sessionBanner() {
     if (!reviewSession) return "";
-    return `<div class="session-banner"><span>小小复习 · ${reviewSession.index + 1} / ${reviewSession.items.length}</span><span>${reviewSession.items.map((_, i) => `<i class="${i < reviewSession.index ? "done" : i === reviewSession.index ? "now" : ""}"></i>`).join("")}</span><button class="text-btn" id="session-exit">先休息</button></div>`;
+    const phase=currentStudyPhase();
+    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title} · ${["math","decomp"].includes(reviewSession.type) ? `${reviewSession.count} 题` : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${phase==="review" ? "复习 · 先自己想一想" : "新内容 · 先学一学"} · 休息后可继续</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
   }
 
   function bindSessionExit() {
     const btn = document.getElementById("session-exit");
-    if (btn) btn.onclick = () => { reviewSession = null; showView("home"); renderHome(); };
+    if (btn) btn.onclick = () => navigate("home");
   }
 
-  let completingPractice = false;
+  let completingPractice = null;
   let pendingPracticeAttempt = null;
   async function completePractice(id, result, meta) {
-    if (reviewSession && reviewSession.items[reviewSession.index]?.id !== id) return true;
-    if (completingPractice) return true;
-    completingPractice = true;
-    const sessionAtStart = reviewSession;
-    const viewAtStart = currentView;
-    if (!pendingPracticeAttempt || pendingPracticeAttempt.id !== id || pendingPracticeAttempt.result !== result) {
-      pendingPracticeAttempt = {id,result,activityId:`${Date.now()}-${Math.random().toString(36).slice(2,10)}`,requireClassroom:!!getItem(id)?.learned || !!meta.requireClassroom};
-    }
-    const attemptAtStart = pendingPracticeAttempt;
-    try {
-      await recordPractice(id, meta.type, result, attemptAtStart);
-    } catch (error) {
-      completingPractice = false;
-      if (error.status === 409 && reviewSession === sessionAtStart && currentView === viewAtStart) navigate("home");
-      return true;
-    }
-    completingPractice = false;
-    if (pendingPracticeAttempt === attemptAtStart) pendingPracticeAttempt = null;
-    if (reviewSession !== sessionAtStart || currentView !== viewAtStart) return true;
-    if (!reviewSession || reviewSession.items[reviewSession.index]?.id !== id) { toast("一朵小花送给认真练习的你！"); return false; }
-    reviewSession.index++;
-    if (reviewSession.index < reviewSession.items.length) {
-      const next = reviewSession.items[reviewSession.index];
-      toast("完成啦！我们去看看下一个小伙伴。");
-      openReviewItem(next.id, next.type);
-    } else {
-      const count = reviewSession.items.length;
-      reviewSession = null;
-      showingCelebration = true;
-      showView("home");
-      const el = document.getElementById("home-content");
-      el.innerHTML = `<div class="celebration card"><div class="flower-reward" aria-hidden="true">✿</div><p class="eyebrow">今天的小小收获</p><h1>你的小花开啦！</h1><p>认真复习了 ${count} 个内容，给自己一个抱抱。</p><p class="muted">休息一下，看看远处的绿色吧。</p><button class="btn btn-primary" id="done-home">回到小花园　⌂</button></div>`;
-      document.getElementById("done-home").onclick = () => navigate("home");
-      speakGuide("你的小花开啦！认真复习完了，休息一下吧。");
-    }
+    const group = reviewSession;
+    if (!group || group.saving || group.draftSaving || group.draftFailed || group.items[group.index]?.id !== id) return true;
+    const selected = group.items[group.index];
+    const entries = meta.entries || [{id,type:meta.type,title:meta.title || selected.title,skill:meta.skill || "general",result:ASSESSMENT_RESULT[result] || result,source:meta.source || "parent",details:meta.details || {}}];
+    group.entries.push(...entries.map(entry=>({...entry,details:{...entry.details,...(selected.afterPractice ? {afterPractice:true} : {})}})));
+    const nextIndex=group.index+1;
+    const advance=async()=>{
+      await persistStudyDraft(group);
+      group.index=nextIndex;
+      group.resumed=false;
+      return openStudyPosition(group);
+    };
+    try {await advance();}
+    catch(error) {showCheckpointRetry(group,advance,error.message);}
     return true;
   }
 
-  async function startReview() {
-    if (!await syncNow()) { toast("暂时连不上服务器，请重试。"); return; }
-    await ensurePoems().catch(() => {});
-    const learned = allLearned();
-    const due = dueItems();
-    if (!learned.length) { openParent(); return; }
-    if (!due.length) { toast("今天的复习都完成啦，明天再来和小兔见面。"); return; }
-    const items = due.slice(0, 3);
-    reviewSession = { items, index: 0 };
-    openReviewItem(items[0].id, items[0].type);
+  async function checkpointEnglishGroup(entries, nextIndex) {
+    const group=reviewSession;
+    if (!group || group.type!=="english") throw new Error("本组已经关闭，请重新打开。");
+    group.entries=entries;
+    try {await persistStudyDraft(group);}
+    catch(error) {if(group.draftConflict) showCheckpointRetry(group,()=>checkpointEnglishGroup(entries,nextIndex),error.message);throw error;}
+    group.index=nextIndex;
+    group.resumed=false;
+    return true;
+  }
+
+  async function completeEnglishGroup(entries) {
+    const group = reviewSession;
+    if (!group || group.type !== "english") return;
+    group.entries = entries;
+    await saveStudyGroup(group);
+  }
+
+  async function saveStudyGroup(group) {
+    if (group.saving || reviewSession !== group) return;
+    group.saving = true;
+    group.definiteFailure = false;
+    showingCelebration = true;
+    showView("home");
+    const root = document.getElementById("home-content");
+    root.innerHTML = `<div class="card celebration study-saving"><div class="study-water-reward" aria-hidden="true">💧</div><h1>这一组完成啦</h1><p>正在保存本组学习，请稍等一下…</p><p role="status" id="study-save-status"></p><button class="btn btn-primary" id="study-save-retry" hidden>重试保存</button></div>`;
+    try {
+      await queueServerTask(async()=>{
+        const response = await apiFetch("/api/study-groups",{method:"POST",body:JSON.stringify({id:group.id,type:group.type,mode:group.mode,entries:group.entries})});
+        acceptServerState(response);
+      });
+      group.saving = false;
+      reviewSession = null;
+      const saved = Object.values(loadState().garden?.groups || {}).find(item=>item.id===group.id);
+      const rewarded = !!saved?.waterAwarded;
+      root.innerHTML = `<div class="card celebration study-finish"><div class="study-water-reward ${rewarded ? "is-earned" : ""}" aria-hidden="true">${rewarded ? "💧" : "✓"}</div><p class="eyebrow">一点点，就是成长</p><h1>${rewarded ? "收获一滴水！" : "这一组，认真完成啦"}</h1><p>${group.title} ${group.count} ${group.unit}已记入学习记录。</p><p>${rewarded ? "小水滴已装进水壶，回去照顾小树吧。" : "本组已保存，今天已获得 3 滴水，学习记录和复习安排已更新。"}</p><p class="muted">休息一下，看看远处的绿色。</p><button class="btn btn-primary" id="study-finish-home">回到我的小树 →</button></div>`;
+      document.getElementById("study-finish-home").onclick = ()=>navigate("home");
+    } catch(error) {
+      group.saving = false;
+      group.definiteFailure = error.status >= 400 && error.status < 500;
+      document.getElementById("study-save-status").textContent = "还没有确认保存。请保持页面打开，重试不会重复领奖。";
+      const button = document.getElementById("study-save-retry");
+      button.hidden = false;
+      button.onclick = ()=>saveStudyGroup(group);
+      if (group.definiteFailure) {
+        document.getElementById("study-save-status").textContent = "本组未保存，部分课堂内容可能已经更改。可以返回首页，重新开始一组。";
+        const back = document.createElement("button");
+        back.className = "btn btn-ghost"; back.textContent = "返回首页";
+        back.textContent = "放弃失效计划，返回首页";
+        back.onclick = async()=>{back.disabled=true;try{await discardStudyDraft(group);}catch(error){back.disabled=false;toast(error.message);}};root.appendChild(back);
+      }
+    }
   }
 
   async function renderHome() {
-    try { await ensurePoems(); } catch (_) {}
-    const due = dueItems();
-    const learned = allLearned();
-    const state = loadState();
-    const practiced = Object.values(state.activity || {}).filter(it => it.day === todayStr()).length;
-    const todayList = due.slice(0, 3);
-    const nextDate = learned.map(it=>it.nextReview).filter(Boolean).sort()[0];
-    const el = document.getElementById("home-content");
-    el.innerHTML = `
-      <div class="welcome-line"><span>你好，辰辰 <span aria-hidden="true">☀</span></span><span>${formatDateCN(todayStr())} · 美好的一天</span></div>
-      <div class="home-top">
-        <section class="hero">
-          <div class="hero-copy"><p class="eyebrow"><span></span> 把学过的，再想起来</p><h1>每天一点点，<br>记忆开出小花。</h1><p class="hero-description">${learned.length && !due.length ? "今天没有到期复习，安心休息一下吧。" : "和小兔一起，复习课上的小本领。"}</p><button class="btn btn-primary start-btn" id="start-review" ${learned.length && !due.length ? "disabled" : ""}><span aria-hidden="true">▶</span> ${learned.length && !due.length ? "今天复习好啦" : "开始复习"} <span aria-hidden="true">→</span></button><p class="hero-note">${due.length ? `今天有 ${due.length} 项到期 · 一次最多 3 个小练习` : learned.length ? `下次复习：${formatDateCN(nextDate || todayStr())}` : "请家长记录课上学过的内容，复习会自动安排"}</p></div>
-          <div class="hero-illustration">${rabbitArt()}<span class="art-caption">小兔陪你，一起长大</span></div>
-        </section>
-        <aside class="growth-card"><div class="growth-heading"><span class="tiny-sprout" aria-hidden="true">♧</span><span>我的小小收获</span></div><h2>${practiced ? "小花正在长大" : "今天也来浇浇水"}</h2><p>${practiced ? `今天完成了 ${practiced} 次练习` : "每认真练习一次，就收获一朵小花"}</p><div class="flower-row" aria-label="今天完成 ${practiced} 次练习">${[0,1,2].map(i => `<span class="flower ${i < practiced ? "bloomed" : ""}" aria-hidden="true">✿<i></i></span>`).join("")}</div><div class="growth-bottom"><span>${Math.min(practiced,3)} / 3 朵小花</span><span>一点点，就是进步</span></div><div class="growth-track"><span style="width:${Math.min(practiced/3,1)*100}%"></span></div></aside>
-      </div>
-      <div class="section-heading"><div><h2>我的小本领</h2><p>也可以自由看一看，课后复习由小兔安排</p></div><button class="listen-guide" id="home-guide" aria-label="听听怎么玩">◖)) <span>听听怎么玩</span></button></div>
-      <div class="subject-grid">
-        <button class="subject-card subject-poems" data-go="poems"><span class="subject-drawing poem-drawing" aria-hidden="true"><i>诗</i><span>⌁</span></span><span class="subject-text"><strong>读古诗</strong><small>听一听 · 背一背</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-math" data-go="math"><span class="subject-drawing math-drawing" aria-hidden="true"><i>2</i><i>＋</i><i>3</i></span><span class="subject-text"><strong>玩数学</strong><small>数一数 · 想一想</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-pinyin" data-go="pinyin"><span class="subject-drawing pinyin-drawing" aria-hidden="true"><i>a</i><i>o</i><i>e</i></span><span class="subject-text"><strong>读拼音</strong><small>张开嘴 · 读一读</small></span><span class="subject-arrow">↗</span></button>
-        <button class="subject-card subject-write" data-go="write"><span class="subject-drawing write-drawing" aria-hidden="true"><i>大</i><span>✎</span></span><span class="subject-text"><strong>写汉字</strong><small>看一看 · 描一描</small></span><span class="subject-arrow">↗</span></button>
-      </div>
-      <section class="today-card"><div class="today-intro"><span class="today-tag">TODAY'S LITTLE STEPS</span><h2>今天，和它们见个面</h2><p>${due.length ? "小兔按记忆间隔，找到了今天的复习内容" : learned.length ? "今天没有到期内容，休息也是成长" : "请爸爸妈妈把课上学过的内容记下来"}</p></div><div class="today-items">${todayList.length ? todayList.map((it,i) => `<button class="today-item" data-review="${escapeHtml(it.id)}" data-type="${escapeHtml(it.type)}"><span class="step-number">0${i+1}</span><span><strong>${escapeHtml(it.title)}</strong><small>${typeLabel(it.type)} · 再想一想</small></span><span class="step-go">→</span></button>`).join("") : learned.length ? `<div class="empty-setup"><span aria-hidden="true">✓</span><strong>今天不用再复习啦</strong><small>下次 ${formatDateCN(nextDate || todayStr())}，小兔会等你</small></div>` : `<button class="empty-setup" id="home-setup"><span aria-hidden="true">＋</span><strong>记录课上学过的内容</strong><small>新增古诗、汉字后，自动安排复习</small></button>`}</div></section>`;
-    document.getElementById("start-review").onclick = startReview;
-    document.getElementById("home-guide").onclick = () => speakGuide("小兔会帮你安排今天到期的复习。点开始复习，把课上学过的再想一想。复习完就休息，慢慢来。");
-    document.getElementById("home-setup")?.addEventListener("click", openParent);
-    el.querySelectorAll("[data-go]").forEach(btn => btn.onclick = () => navigate(btn.dataset.go));
-    el.querySelectorAll("[data-review]").forEach(btn => btn.onclick = () => { reviewSession = {items:[getItem(btn.dataset.review)],index:0}; openReviewItem(btn.dataset.review,btn.dataset.type); });
-  }
-
-  function customPoemFromForm(form) {
-    const body = form.elements.body.value.trim();
-    const texts = body.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-    if (!texts.length) throw new Error("请写下古诗正文，每句一行。");
-    if (texts.length > 32 || texts.some(line=>[...line].length>50)) throw new Error("每句请控制在 50 个字以内，最多 32 句。");
-    const rawPinyin = form.elements.pinyin.value;
-    const pinyinLines = rawPinyin.trim() ? rawPinyin.split(/\r?\n/).map(line=>line.trim()) : [];
-    while (pinyinLines.length > texts.length && !pinyinLines[pinyinLines.length-1]) pinyinLines.pop();
-    if (pinyinLines.length && pinyinLines.length !== texts.length) throw new Error("拼音行数需要和正文相同；不填写也可以。");
-    const lines = texts.map((text, index)=>{
-      const syllables = pinyinLines[index] ? pinyinLines[index].split(/\s+/).filter(Boolean) : [];
-      const characters = [...text];
-      const spokenCount = characters.filter(c=>/[^\s，。！？、；：,.!?;:“”‘’「」『』（）()—…《》]/u.test(c)).length;
-      if (syllables.length && syllables.length !== spokenCount) throw new Error(`第 ${index+1} 句拼音有 ${syllables.length} 个音节，正文有 ${spokenCount} 个字，请用空格隔开每个音节。`);
-      let at = 0;
-      return {text,chars:characters.map(c=>({c,p:/[^\s，。！？、；：,.!?;:“”‘’「」『』（）()—…《》]/u.test(c) ? (syllables[at++] || "") : ""}))};
+    const generation = practiceGeneration;
+    let catalog = [];
+    try {catalog = await studyCatalog();} catch(error) {console.warn("部分学习内容尚未准备好",error);}
+    if (currentView !== "home" || showingCelebration || generation !== practiceGeneration) return;
+    return window.ChenchenGarden.renderHome({
+      root:document.getElementById("home-content"),loadState,todayStr,apiFetch,acceptServerState,queueServerTask,toast,navigate,syncNow,
+      reviewGroups:window.ChenchenStudyGroups.reviews(catalog,loadState(),todayStr()),
+      startReview:type=>startStudyGroup(type,"review"),catalog:studyCatalog,
+      isActive:()=>currentView === "home" && !showingCelebration,stateReady,
     });
-    return {id:`custom-poem-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, title:form.elements.title.value.trim() || texts[0].slice(0,18), author:form.elements.author.value.trim(), dynasty:"",titlePy:[],authorPy:[],dynastyPy:[],lines};
-  }
-
-  async function openParent() {
-    if (!stateReady) { toast("先连接服务器，才能管理课堂内容。"); return; }
-    await ensurePoems().catch(() => {});
-    const dialog = document.getElementById("parent-dialog");
-    const scroll = dialog.open ? dialog.scrollTop : 0;
-    const courses = [
-      {id:"math-addsub-10", type:"math", title:"10以内加减法"},
-      {id:"math-decomp-10", type:"decomp", title:"10以内分解组合"},
-      {id:"pinyin-basic", type:"pinyin", title:"声母韵母认读"},
-    ];
-    const learned = allLearned();
-    const removedPoems = BUILTIN_POEMS.filter(poem=>loadState().hiddenCourses[poem.id]);
-    dialog.innerHTML = `
-      <div class="dialog-heading"><div><p class="eyebrow">记录课堂，复习交给小兔</p><h2 id="parent-title">课堂内容管理</h2></div><button class="close-btn" id="close-parent" aria-label="关闭课堂内容管理">×</button></div>
-      <p class="parent-description">已有古诗都是课上学过的，已自动安排复习。其他新学的内容可以在这里补充，小兔按记忆间隔挑出当天到期内容。</p>
-      <div class="memory-schedule"><span>今天巩固</span><i>→</i><span>1 天</span><i>→</i><span>2 天</span><i>→</i><span>4 天</span><i>→</i><span>7 天</span><i>→</i><span>15 天</span><i>→</i><span>30 天</span></div>
-      <p class="form-help">记得时逐步拉开间隔；需要提示或再读时，明天再巩固。同一天多练不会连续跳级。</p>
-      <h3>古诗 · 自动安排复习</h3>
-      <p class="form-help">已有诗卡无需逐首加入；新录入的古诗也会直接开始复习。</p>
-      ${removedPoems.length ? `<div class="parent-add"><select id="parent-poem" aria-label="选择要恢复复习的古诗"><option value="">已移除的诗卡…</option>${removedPoems.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`).join("")}</select><button class="btn btn-primary" id="restore-class-poem">恢复复习</button></div>` : ""}
-      <details class="classroom-section"><summary>＋ 诗库里没有？新增一首古诗</summary><form id="custom-poem-form" class="classroom-form">
-        <div class="form-two"><label>标题 <small>可选</small><input name="title" maxlength="50" placeholder="留空时使用第一句" /></label><label>作者 <small>可选</small><input name="author" maxlength="30" placeholder="如：李白" /></label></div>
-        <label>古诗正文 <textarea name="body" rows="5" maxlength="4000" required placeholder="每句一行，例如：&#10;床前明月光，&#10;疑是地上霜。"></textarea></label>
-        <label>逐行拼音 <small>可选，不自动猜读音</small><textarea name="pinyin" rows="4" maxlength="4000" placeholder="每字一个音节，以空格隔开；标点不用填写。&#10;chuáng qián míng yuè guāng&#10;yí shì dì shàng shuāng"></textarea></label>
-        <p class="form-help">拼音逐行对应正文。不填的行保留空行，也可以全部留空，仅显示汉字。</p><p class="form-error" id="poem-form-error" role="alert"></p><button class="btn btn-primary" type="submit">保存古诗，自动安排复习</button>
-      </form></details>
-      <h3>汉字 · 一个字一张复习卡</h3>
-      <form id="custom-character-form" class="classroom-form"><div class="form-two"><label>今天学的汉字<input name="character" maxlength="2" required placeholder="如：春" /></label><label>笔画 / 笔顺 <small>可选</small><input name="strokes" maxlength="120" placeholder="如：9 画" /></label></div><label>记忆或书写提示 <small>可选</small><input name="tip" maxlength="160" placeholder="写下老师教过的小提示" /></label><p class="form-error" id="character-form-error" role="alert"></p><button class="btn btn-learn" type="submit">记录这个汉字</button></form>
-      <h3>数学与拼音 · 记录已学内容</h3><div class="parent-courses">${courses.map(c=>`<button class="parent-course ${getItem(c.id)?.learned ? "selected" : ""}" data-course="${c.id}" ${getItem(c.id)?.learned ? "disabled" : ""}><span>${escapeHtml(c.title)}</span><span>${getItem(c.id)?.learned ? "✓ 已记录" : "+ 记录"}</span></button>`).join("")}</div>
-      <h3>课堂记录 <span class="muted">${learned.length} 项</span></h3><div class="parent-enrolled">${learned.length ? learned.map(it=>`<div><span>${escapeHtml(it.title)}<small>${it.nextReview <= todayStr() ? "今天到期" : "下次 "+escapeHtml(it.nextReview)} · 自动安排</small></span><button class="text-btn delete-course" data-remove="${escapeHtml(it.id)}" aria-label="删除课堂内容 ${escapeHtml(it.title)}">删除</button></div>`).join("") : '<p class="muted">还没有课堂记录。先添加今天学过的一两项就好。</p>'}</div>
-      <p class="parent-tip">陪练建议：古诗先回想再听示范；拼音请家长示范发音；写字以纸笔为主，屏幕描红用来熟悉字形。</p>${syncPanelHtml()}<button class="btn btn-primary parent-done" id="parent-done">记录好啦，回小花园</button>`;
-    if (!dialog.open) dialog.showModal();
-    dialog.scrollTop = scroll;
-    const close = () => {dialog.close(); if(currentView === "home" && !showingCelebration) renderHome();};
-    document.getElementById("close-parent").onclick = close;
-    document.getElementById("parent-done").onclick = () => {dialog.close();navigate("home");};
-    const restorePoem = document.getElementById("restore-class-poem");
-    if (restorePoem) restorePoem.onclick = async (event) => {
-      const poem = POEMS.find(p=>p.id===document.getElementById("parent-poem").value);
-      if (!poem) {toast("先选择要恢复的诗卡。");return;}
-      const button = event.currentTarget;
-      button.disabled = true;
-      try {await markLearned(poem.id,{type:"poem",title:poem.title});await openParent();toast("已恢复复习，今天先一起巩固。");}
-      catch (_) {button.disabled = false;}
-    };
-    document.getElementById("custom-poem-form").onsubmit = async event => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const error = document.getElementById("poem-form-error");
-      const button = form.querySelector('[type="submit"]');
-      error.textContent = "";
-      try {
-        const poem = customPoemFromForm(form);
-        form.pendingPoemId = form.pendingPoemId || poem.id;
-        poem.id = form.pendingPoemId;
-        button.disabled = true;
-        await markLearned(poem.id,{type:"poem",title:poem.title},[{op:"set",collection:"customPoems",key:poem.id,value:poem}]);
-        await openParent(); toast("新诗卡保存好啦，今天先一起巩固。");
-      } catch (failure) {error.textContent = failure.status ? "没有保存成功，请检查连接后再试。" : failure.message;button.disabled = false;}
-    };
-    document.getElementById("custom-character-form").onsubmit = async event => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const error = document.getElementById("character-form-error");
-      const button = form.querySelector('[type="submit"]');
-      const c = form.elements.character.value.trim();
-      error.textContent = "";
-      if ([...c].length !== 1 || !/\p{Script=Han}/u.test(c)) {error.textContent = "请只填写一个汉字，例如「春」。";return;}
-      const id = `write-char-${c.codePointAt(0).toString(16)}`;
-      const builtin = WRITE_CHARS.find(ch=>ch.c===c);
-      const ch = {id,c,strokes:form.elements.strokes.value.trim() || builtin?.strokes || "",tip:form.elements.tip.value.trim() || builtin?.tip || ""};
-      button.disabled = true;
-      try {
-        // Store the parent's optional hints even for a character in the starter library.
-        await markLearned(id,{type:"write",title:`汉字·${c}`},[{op:"set",collection:"customCharacters",key:id,value:ch}]);
-        await openParent();toast(`「${c}」已经记下啦，会单独安排复习。`);
-      } catch (_) {error.textContent = "没有保存成功，请检查连接后再试。";button.disabled = false;}
-    };
-    dialog.querySelectorAll("[data-course]").forEach(button=>button.onclick=async()=>{
-      button.disabled = true;
-      const course = courses.find(it=>it.id===button.dataset.course);
-      try {await markLearned(course.id,course);await openParent();}
-      catch (_) {button.disabled = false;}
-    });
-    dialog.querySelectorAll("[data-remove]").forEach(button=>button.onclick=async()=>{
-      button.disabled = true;
-      try {
-        const removedId = button.dataset.remove;
-        await removeClassroomItem(removedId);
-        if (currentView === "poem-detail" && selectedPoemId === removedId || currentView === "write" && selectedWriteId === removedId || reviewSession?.items.some(item=>item.id===removedId)) navigate("home");
-        await openParent();toast("课堂内容已删除，后续不再安排复习。");
-      }
-      catch (_) {button.disabled = false;}
-    });
-    bindSyncPanel(dialog);
   }
 
   function openReviewItem(id, type) {
-    if (type === "poem") {
+    if (type === "english") {
+      showView("english");
+      getEnglishModule().open({group:reviewSession});
+    } else if (type === "poem") {
       selectedPoemId = id;
+      poemListScroll = 0;
       showView("poem-detail");
       renderPoemDetail(id);
     } else if (type === "math" || type === "decomp") {
@@ -621,11 +620,18 @@
     } else if (type === "pinyin") {
       showView("pinyin");
       pyPracticed = new Set();
+      pyExposures = new Set();
+      const symbol = id.startsWith("pinyin-") ? id.slice(7).replace(/v/g,"ü") : "";
+      if (INITIALS.includes(symbol) || FINALS.includes(symbol)) {
+        pySelected = symbol;
+        pyTab = INITIALS.includes(symbol) ? "initials" : "finals";
+      }
       renderPinyin();
     } else if (type === "write") {
       selectedWriteId = id;
-      showView("write");
-      renderWrite();
+      writingListScroll = 0;
+      showView("write-detail");
+      renderWriteDetail();
     }
   }
 
@@ -640,20 +646,20 @@
     if (!art || !/^images\/poems\/[a-zA-Z0-9_-]+\.(png|webp|jpg)$/.test(art.src)) return "";
     const image = `<img src="${escapeHtml(art.src)}" alt="${escapeHtml(art.alt || poem.title)}" loading="${detail ? "eager" : "lazy"}" decoding="async" />`;
     return detail
-      ? `<figure class="poem-picture">${image}<figcaption><strong>看图想一想</strong><span>${escapeHtml(art.hint || "看着画面，试着把诗背出来吧。")}</span></figcaption></figure>`
+      ? `<figure class="poem-picture">${image}</figure>`
       : `<span class="poem-thumbnail">${image}</span>`;
   }
 
   function poemStatus(id) {
     const it = getItem(id);
-    if (!it || !it.learned) return { label: "已暂停复习", cls: "" };
+    if (!it?.nextReview) return { label: "今天再想一想", cls: "due" };
     const today = todayStr();
     if (it.nextReview && it.nextReview <= today)
       return { label: "再想一想", cls: "due" };
     return { label: "下次 " + (it.nextReview || "稍后"), cls: "learned" };
   }
 
-  async function renderPoems() {
+  async function renderPoems({restoreScroll = false} = {}) {
     const el = document.getElementById("poems-content");
     if (!POEMS.length) {
       el.innerHTML = '<div class="card"><div class="empty">小兔正在拿诗卡…</div></div>';
@@ -677,14 +683,14 @@
       const today = todayStr();
       list = list.filter((p) => {
         const it = getItem(p.id);
-        return it?.learned && it.nextReview <= today;
+        return !it?.nextReview || it.nextReview <= today;
       });
     }
 
     el.innerHTML = `
       <div class="card">
         <h2>读古诗 <span class="heading-flower">✿</span></h2>
-        <p style="color:var(--muted);font-size:0.9rem;margin-bottom:10px">先自己想一想，再听一听。会一点点也很棒！</p>
+        ${groupStartHtml("poem")}
         <div class="toolbar">
           <input type="search" id="poem-search" placeholder="搜索题目 / 作者 / 诗句…" value="${escapeHtml(
             poemQuery
@@ -711,11 +717,12 @@
                     </button>`;
                   })
                   .join("")
-              : `<div class="empty" style="grid-column:1/-1">${poemQuery ? "没有找到这首诗，换个词试试吧。" : poemFilter === "due" ? "今天的古诗都复习好啦，也可以点「全部诗卡」看看。" : "这里暂时没有诗卡，可以请家长添加或恢复。"}</div>`
+              : `<div class="empty" style="grid-column:1/-1">${poemQuery ? "没有找到这首诗，换个词试试吧。" : poemFilter === "due" ? "今天的古诗都复习好啦，也可以点「全部诗卡」看看。" : "这里暂时没有诗卡，先到其他学科学习吧。"}</div>`
           }
         </div>
       </div>`;
 
+    bindStudyStart(el);
     el.querySelector("#poem-search").addEventListener("input", (e) => {
       poemQuery = e.target.value;
       renderPoems();
@@ -733,18 +740,25 @@
       })
     );
     el.querySelectorAll(".poem-card").forEach((c) =>
-      c.addEventListener("click", () => {
-        selectedPoemId = c.dataset.id;
-        showView("poem-detail");
-        renderPoemDetail(c.dataset.id);
-      })
+      c.addEventListener("click", () => openPoemFromList(c.dataset.id))
     );
+    if (restoreScroll && currentView === "poems") window.scrollTo({top:poemListScroll,behavior:"instant"});
+  }
+
+  function openPoemFromList(id) {
+    poemListScroll = window.scrollY || 0;
+    selectedPoemId = id;
+    showView("poem-detail");
+    return renderPoemDetail(id);
   }
 
   async function renderPoemDetail(id) {
     stopSpeechSafe();
     selectedPoemId = id;
+    const generation = ++poemDetailGeneration;
+    const active = () => currentView === "poem-detail" && selectedPoemId === id && generation === poemDetailGeneration;
     try { await ensurePoems(); } catch (_) {}
+    if (!active()) return;
     const poem = POEMS.find((p) => p.id === id);
     const el = document.getElementById("poem-detail-content");
     if (!poem) {
@@ -767,9 +781,9 @@
       .join("");
 
     const it = getItem(id);
-    const enrolled = !!it?.learned;
-    const today = todayStr();
-    const isDue = enrolled && it.nextReview <= today;
+    const enrolled = !!reviewSession && reviewSession.type === "poem";
+    const recall = enrolled && currentStudyPhase() === "review";
+    if (!recall) observedExposure("poem",id,true);
 
     el.innerHTML = `
       ${sessionBanner()}<div class="poem-detail card">
@@ -787,79 +801,44 @@
           ${poem.dynasty && poem.author ? `<span class="dot-sep">·</span>` : ""}
           ${authorChars.length ? rubyChars(authorChars) : `<span class="plain-author">${escapeHtml(poem.author || "")}</span>`}
         </div>
-        ${
-          poem.note
-            ? `<div class="poem-note">${escapeHtml(poem.note)}</div>`
-            : ""
-        }
         <div class="poem-reading${POEM_ILLUSTRATIONS[id] ? " has-picture" : ""}">
           ${poemIllustration(poem, true)}
-          <div class="poem-body" id="poem-body">${body}</div>
+          <div class="poem-body" id="poem-body" ${recall ? "hidden" : ""}>${body}</div>
+          ${recall ? `<div id="poem-recall-prompt"><p>看到题目，试着自己背一背。</p><button class="btn btn-ghost" id="poem-reveal">想不起来，看看原文</button></div>` : ""}
         </div>
-        <div class="recall-tools"><button class="btn btn-ghost" id="hide-poem" aria-pressed="false">藏起汉字，试着背</button><button class="btn btn-ghost" id="hide-pinyin" aria-pressed="false">收起拼音</button></div>
-        <div class="speak-bar" role="group" aria-label="朗读控制">
-          <button type="button" class="btn btn-speak" id="btn-speak">🔊 朗读</button>
-          <button type="button" class="btn btn-speak-secondary" id="btn-speak-pause" disabled>⏸️ 暂停</button>
-          <button type="button" class="btn btn-speak-secondary" id="btn-speak-stop" disabled>⏹️ 停止</button>
+        <div class="speak-bar">
+          <button type="button" class="btn btn-speak" id="btn-speak">▶ 朗读</button>
         </div>
-        <p class="audio-caption" id="audio-caption">${BUILTIN_POEMS.some(p => p.id === id) ? "自然语音 · AI 合成" : "这首新诗还没有配音，可以和爸爸妈妈一起读。"}</p>
-        <div class="actions-bar">
-          ${
-            !enrolled
-              ? `<div class="hint">这首诗已暂停复习，可以请家长在课堂管理中恢复。</div>`
-              : `<div class="hint">${isDue ? "试着背一背，再告诉小兔吧" : "下次复习：" + escapeHtml(it.nextReview || "稍后") + "。今天也可以轻松背一背。"}</div>
-                 <div class="btn-row" style="justify-content:center">
-                   <button class="btn btn-ok" data-r="remember">😊 我记得</button>
-                   <button class="btn btn-fuzzy" data-r="fuzzy">🌱 提醒一下</button>
-                   <button class="btn btn-forget" data-r="forgot">🐰 一起再读</button>
-                 </div>`
-          }
-        </div>
+        ${enrolled ? `<div class="actions-bar">${assessmentButtons("poem-check","家长确认 · 背诵")}</div>` : ""}
       </div>`;
 
     document.getElementById("back-poems").onclick = () => navigate("poems");
-    el.querySelectorAll("[data-r]").forEach((b) => {
-      b.onclick = async () => {
-        const r = b.dataset.r;
-        if (await completePractice(id, r, {
-          type: "poem", title: displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""), requireClassroom: enrolled,
-        })) return;
-        const msg =
-          r === "remember"
-            ? "你把它想起来啦！送你一朵小花。"
-            : r === "fuzzy"
-            ? "有一点提示也很棒，我们下次再读。"
-            : "没关系，一起读一遍，明天再见。";
-        toast(msg);
-        renderPoemDetail(id);
-      };
+    if (recall) document.getElementById("poem-reveal").onclick = () => {
+      observedExposure("poem",id,true);
+      document.getElementById("poem-body").hidden=false;
+      document.getElementById("poem-recall-prompt").hidden=true;
+    };
+    if (enrolled) bindAssessment("poem-check",id,async result => {
+      const r = REVIEW_RESULT[result];
+      if (await completePractice(id,r,{type:"poem",title:displayTitle + (poem.subtitle ? "·" + poem.subtitle : ""),requireClassroom:enrolled,
+        source:"parent",skill:"poem-recitation",details:{observedExposure:observedExposure("poem",id)}})) return;
+      if (!active()) return;
+      toast("记下来啦，每一次练习都有收获。");
+      renderPoemDetail(id);
     });
 
     bindSessionExit();
-    document.getElementById("hide-poem").onclick = (event) => {
-      const hidden = document.getElementById("poem-body").classList.toggle("hide-characters");
-      event.currentTarget.textContent = hidden ? "打开汉字，看一看" : "藏起汉字，试着背";
-      event.currentTarget.setAttribute("aria-pressed", String(hidden));
-    };
-    document.getElementById("hide-pinyin").onclick = (event) => {
-      const hidden = document.getElementById("poem-body").classList.toggle("hide-pinyin");
-      event.currentTarget.textContent = hidden ? "打开拼音" : "收起拼音";
-      event.currentTarget.setAttribute("aria-pressed", String(hidden));
-    };
     const btnSpeak = document.getElementById("btn-speak");
-    const btnPause = document.getElementById("btn-speak-pause");
-    const btnStop = document.getElementById("btn-speak-stop");
-    updateSpeakButtons("idle");
+    updateSpeakButton("idle");
     if (btnSpeak) {
       btnSpeak.onclick = () => {
         if (!window.ChenchenSpeech || !ChenchenSpeech.supported(poem)) {
-          toast("暂时没有声音，可以看着文字和爸爸妈妈一起读。");
+          toast("暂时无法播放朗读。");
           return;
         }
         const st = ChenchenSpeech.getStatus();
-        if (st === "speaking" || st === "paused") {
-          ChenchenSpeech.stop();
-        }
+        if (st === "speaking" || st === "loading") { ChenchenSpeech.pause(); return; }
+        if (st === "paused") { ChenchenSpeech.resume(); return; }
         const ok = ChenchenSpeech.speakPoem(
           {
             id: poem.id,
@@ -869,57 +848,37 @@
             lines: poem.lines.map((ln) => ln.text),
           },
           {
-            onState: updateSpeakButtons,
-            onError: () => toast("朗读音频暂时没有打开，请再点一次；也可以先和爸爸妈妈一起读。"),
-            onUnsupported: () =>
-              toast("这首诗暂时没有配音，可以和爸爸妈妈一起读。"),
+            onState: state => {
+              if (!active()) return;
+              if (state === "speaking") observedExposure("poem",id,true);
+              updateSpeakButton(state);
+            },
+            onError: () => { if (active()) toast("朗读暂时打不开，请再试一次。"); },
+            onUnsupported: () => { if (active()) toast("这首诗暂未配音。"); },
           }
         );
-        if (ok) updateSpeakButtons(ChenchenSpeech.getStatus());
+        if (ok) updateSpeakButton(ChenchenSpeech.getStatus());
       };
     }
-    if (btnPause) {
-      btnPause.onclick = () => {
-        if (!window.ChenchenSpeech) return;
-        if (ChenchenSpeech.getStatus() === "paused") {
-          ChenchenSpeech.resume();
-        } else {
-          ChenchenSpeech.pause();
-        }
-        updateSpeakButtons(ChenchenSpeech.getStatus());
-      };
-    }
-    if (btnStop) {
-      btnStop.onclick = () => {
-        stopSpeechSafe();
-        updateSpeakButtons("idle");
-      };
-    }
-
   }
 
   // ---------- Math ----------
+  const MATH_ROUND_SIZE = 10;
+  let mathRoundSize = MATH_ROUND_SIZE;
+  let mathQuestions = [];
+  let mathQuestionKeys = [];
   let mathMode = "addsub";
   let mathScore = { ok: 0, total: 0 };
   let currentQ = null;
+  let mathQuestionAnswered = false;
+  let mathSaving = false;
 
   function randInt(a, b) {
     return a + Math.floor(Math.random() * (b - a + 1));
   }
 
   function genAddSub() {
-    const op = Math.random() < 0.5 ? "+" : "-";
-    let a, b, ans;
-    if (op === "+") {
-      a = randInt(0, 10);
-      b = randInt(0, 10 - a);
-      ans = a + b;
-    } else {
-      a = randInt(0, 10);
-      b = randInt(0, a);
-      ans = a - b;
-    }
-    return { text: `${a} ${op} ${b} = ?`, answer: ans, meta: { a, b, op } };
+    return JSON.parse(JSON.stringify(mathQuestions[mathCompleted]));
   }
 
   const NB_CIRCLES = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫"];
@@ -935,30 +894,7 @@
   }
 
   function genBondItem() {
-    const n = randInt(2, 10);
-    const left = randInt(0, n);
-    const right = n - left;
-    const mode = Math.random() < 0.5 ? "decomp" : "compose";
-    let blanks;
-    const r = Math.random();
-    if (mode === "decomp") {
-      if (r < 0.4) blanks = { whole: false, left: false, right: true };
-      else if (r < 0.75) blanks = { whole: false, left: true, right: false };
-      else blanks = { whole: false, left: true, right: true };
-    } else {
-      if (r < 0.5) blanks = { whole: true, left: false, right: false };
-      else if (r < 0.75) blanks = { whole: false, left: true, right: false };
-      else blanks = { whole: false, left: false, right: true };
-    }
-    return {
-      n,
-      left,
-      right,
-      mode,
-      blanks,
-      answers: { whole: null, left: null, right: null },
-      status: "open",
-    };
+    return JSON.parse(JSON.stringify(mathQuestions[mathCompleted]));
   }
 
   function firstBlankSlot(item) {
@@ -980,14 +916,24 @@
   }
 
   function genBondSheet() {
-    bondQIndex += 1;
-    const item = genBondItem();
+    bondQIndex = reviewSession?.practice ? reviewSession.practice.index + 1 : bondQIndex + 1;
+    const item = reviewSession?.practice ? JSON.parse(JSON.stringify(mathQuestions[reviewSession.practice.index])) : genBondItem();
     return {
       item,
       qIndex: bondQIndex,
       activeSlot: firstBlankSlot(item),
       checked: false,
     };
+  }
+
+  function mathVerdictHtml(correct) {
+    return `<div class="math-verdict ${correct ? "is-correct" : "is-wrong"}"><span aria-hidden="true">${correct ? "✓" : "×"}</span><strong>${correct ? "答对啦！" : "这次不对哦"}</strong></div>`;
+  }
+
+  function mathAnswerHtml(value, answer, slot = "") {
+    const correct = value === answer;
+    const label = correct ? `${value}，答对了` : `填了 ${value}，正确答案是 ${answer}`;
+    return `<span class="math-answer-result ${correct ? "is-correct" : "is-wrong"}"${slot ? ` data-slot="${slot}"` : ""} role="img" aria-label="${label}">${correct ? "" : `<span class="math-answer-attempt" aria-hidden="true"><span class="math-answer-value">${value}</span><span class="math-answer-mark">×</span></span><span class="math-answer-arrow" aria-hidden="true">→</span>`}<span class="math-answer-correct" aria-hidden="true"><span class="math-answer-value">${answer}</span><span class="math-answer-mark">✓</span></span></span>`;
   }
 
   function nbCellHtml(item, slot) {
@@ -998,12 +944,11 @@
     if (!isBlank) {
       return `<span class="nb-num">${truth}</span>`;
     }
+    if (item.solution) return mathAnswerHtml(filled, item.solution[slot], slot);
     const val = filled === null || filled === undefined ? "" : String(filled);
     let cls = "nb-box";
     if (isActive) cls += " is-active";
-    if (item.status === "ok") cls += " is-ok";
-    if (item.status === "bad") cls += " is-bad";
-    return `<button type="button" class="${cls}" data-slot="${slot}" aria-label="填写">${val || "&nbsp;"}</button>`;
+    return `<button type="button" class="${cls}" data-slot="${slot}" aria-label="填写"${bondSheet?.checked ? " disabled" : ""}>${val || "&nbsp;"}</button>`;
   }
 
   function nbCardHtml(item, qIndex) {
@@ -1034,6 +979,7 @@
     return `<div class="nb-card nb-single status-${item.status}">
       <span class="nb-no">${no}</span>
       <span class="nb-mode-tag">${modeLabel}</span>
+      ${item.status === "open" ? "" : mathVerdictHtml(item.status === "ok")}
       <div class="nb-bond nb-${item.mode}">${body}</div>
     </div>`;
   }
@@ -1041,21 +987,22 @@
   function bindBondSheet(panel) {
     panel.querySelectorAll(".nb-box").forEach((btn) => {
       btn.onclick = () => {
-        if (!bondSheet || bondSheet.checked) return;
+        if (mathSaving || !bondSheet || bondSheet.checked) return;
         bondSheet.activeSlot = btn.dataset.slot;
         renderBondPanel();
       };
     });
     panel.querySelectorAll(".nb-pad button[data-n]").forEach((btn) => {
       btn.onclick = () => {
-        if (!bondSheet || !bondSheet.activeSlot || bondSheet.checked) return;
+        if (mathSaving || !bondSheet || !bondSheet.activeSlot || bondSheet.checked) return;
         const item = bondSheet.item;
         const slot = bondSheet.activeSlot;
         if (!item?.blanks[slot]) return;
         item.answers[slot] = Number(btn.dataset.n);
         item.status = "open";
         bondSheet.activeSlot = nextBlankSlot(item, slot);
-        renderBondPanel();
+        if (firstBlankSlot(item)) renderBondPanel();
+        else checkBondSheet();
       };
     });
     const clearBtn = panel.querySelector("#nb-clear");
@@ -1068,14 +1015,10 @@
         renderBondPanel();
       };
     }
-    const checkBtn = panel.querySelector("#nb-check");
-    if (checkBtn) {
-      checkBtn.onclick = () => checkBondSheet();
-    }
   }
 
   function checkBondSheet() {
-    if (!bondSheet || bondSheet.checked) return;
+    if (mathSaving || !bondSheet || bondSheet.checked) return;
     const item = bondSheet.item;
     const need = ["whole", "left", "right"].filter(s=>item.blanks[s]);
     if (!need.every(s=>item.answers[s] !== null && item.answers[s] !== undefined)) {
@@ -1087,24 +1030,24 @@
     const right = item.blanks.right ? Number(item.answers.right) : item.right;
     const whole = item.blanks.whole ? Number(item.answers.whole) : item.n;
     const good = left >= 0 && right >= 0 && whole <= 10 && left + right === whole;
-    if (!item.attempted) mathScore.total++;
-    item.attempted = true;
+    mathScore.total++;
+    bondSheet.checked = true;
+    bondSheet.activeSlot = null;
     if(good) {
       item.status = "ok";
-      bondSheet.checked = true;
-      bondSheet.activeSlot = null;
+      item.solution = {whole,left,right};
       mathScore.ok++;
       renderBondPanel();
-      document.getElementById("math-fb").textContent = "你把数字朋友找到啦！✿";
-      document.getElementById("math-fb").className = "feedback ok";
-      finishMathQuestion();
+      document.getElementById("math-fb").textContent = "答对啦！✿";
     } else {
       item.status = "bad";
-      bondSheet.activeSlot = need[0];
+      const answerLeft = item.left;
+      const answerRight = item.right;
+      item.solution = {whole:item.n,left:answerLeft,right:answerRight};
       renderBondPanel();
-      document.getElementById("math-fb").textContent = "两边合起来，要和总数一样哦。点空格换个数字试试。";
-      document.getElementById("math-fb").className = "feedback no";
+      document.getElementById("math-fb").textContent = `正确答案：${item.n} = ${answerLeft} + ${answerRight}。${item.n} 可以分成 ${answerLeft} 和 ${answerRight}。`;
     }
+    finishMathQuestion(good);
   }
 
   function renderBondPanel() {
@@ -1118,19 +1061,16 @@
     panel.innerHTML = `
       <div class="nb-sheet-head">
         <div class="nb-sheet-title">10以内 · 一题一练</div>
-        <div class="nb-sheet-hint">${modeHint} · 点空格，再点数字</div>
+        <div class="nb-sheet-hint">${modeHint}${bondSheet.checked ? "" : " · 点空格，再点数字"}</div>
       </div>
       <div class="nb-single-wrap">
         ${nbCardHtml(item, bondSheet.qIndex)}
       </div>
-      <div class="nb-pad" id="nb-pad">
+      <div class="nb-pad" id="nb-pad"${bondSheet.checked ? " hidden" : ""}>
         ${pad}
         <button type="button" class="nb-pad-clear" id="nb-clear">清除</button>
       </div>
-      <div class="nb-actions">
-        <button type="button" class="btn btn-learn" id="nb-check"${bondSheet.checked ? " disabled" : ""}>我填好啦</button>
-      </div>
-      <div class="feedback" id="math-fb"></div>`;
+      <div class="${bondSheet.checked ? "sr-only" : "feedback"}" id="math-fb" role="status" aria-live="polite"></div>`;
     bindBondSheet(panel);
   }
 
@@ -1145,62 +1085,151 @@
 
   let mathCompleted = 0;
   function renderMath(forceMode) {
+    resetPracticeAttempt();
+    stopSpeechSafe();
     if (forceMode) mathMode = forceMode;
-    mathScore = { ok: 0, total: 0 };
-    mathCompleted = 0;
+    mathSaving = false;
+    const existing = reviewSession?.practice;
+    const practice = reviewSession ? window.ChenchenMath.restore(existing,mathMode) : null;
+    if (existing && !practice) {
+      document.getElementById("math-content").innerHTML = '<div class="card"><p>这一组的题目记录无法恢复，请返回首页重试。</p></div>';
+      return;
+    }
+    if (reviewSession) reviewSession.practice = practice || window.ChenchenMath.plan(mathMode,loadState(),todayStr(),MATH_ROUND_SIZE);
+    mathRoundSize = reviewSession ? reviewSession.practice.questions.length : MATH_ROUND_SIZE;
+    if (reviewSession) reviewSession.count = mathRoundSize;
+    const results = reviewSession?.practice?.questionResults || [];
+    mathScore = {ok:results.filter(result=>result.correct).length,total:results.length};
+    mathCompleted = results.length;
     bondQIndex = 0;
+    mathQuestions = reviewSession?.practice?.questions || window.ChenchenMath.plan(mathMode,{items:{}},todayStr(),MATH_ROUND_SIZE).questions;
+    mathQuestionKeys = mathQuestions.map(question=>question.key);
     const el = document.getElementById("math-content");
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">0 / 3 题</span></div>
+    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml(mathMode === "decomp" ? "decomp" : "math")}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">${mathCompleted} / ${mathRoundSize} 题</span></div>
       ${reviewSession ? "" : `<div class="tabs-mini"><button data-m="addsub" class="${mathMode === "addsub" ? "active" : ""}">10以内加减法</button><button data-m="decomp" class="${mathMode === "decomp" ? "active" : ""}">分解组合</button></div>`}
-      <p class="practice-instruction">做 3 道小题就休息。答错也没关系，我们一起想。</p><div class="math-panel" id="math-panel"></div>
-      <div class="btn-row practice-controls"><button class="btn btn-ghost" id="math-read">◖)) 听题目</button><button class="btn btn-primary" id="math-next" disabled>下一题 →</button></div><div id="math-review-bar"></div></div>`;
+      <p class="practice-instruction">做 ${mathRoundSize} 道小题就休息。填完就能知道对错，看完再点下一题。</p><div class="math-panel" id="math-panel"></div>
+      <div class="btn-row practice-controls"><button class="btn btn-primary" id="math-next" hidden disabled>我看懂了，下一题 →</button></div><div id="math-review-bar"></div><div id="math-save-error" role="status" hidden><span id="math-save-message"></span><button class="btn btn-ghost" id="math-save-retry" hidden>重试保存这一题</button></div></div>`;
+    bindStudyStart(el);
     el.querySelectorAll("[data-m]").forEach(btn=>btn.onclick=()=>renderMath(btn.dataset.m));
-    document.getElementById("math-next").onclick = () => {
-      if (mathCompleted >= 3) renderMathFinish();
-      else nextMathQ();
-    };
-    document.getElementById("math-read").onclick = () => {
-      if (mathMode === "decomp") {
-        const it = bondSheet.item;
-        speakGuide(it.mode === "decomp" ? `把 ${it.n} 分成两部分，点空格，再点数字。` : "两部分合起来是多少？点空格，再点数字。");
-      } else speakGuide(`${currentQ.meta.a} ${currentQ.meta.op === "+" ? "加" : "减"} ${currentQ.meta.b} 等于几？点一点击答案。`);
-    };
-    nextMathQ();
+    document.getElementById("math-next").onclick = advanceMathQuestion;
+    if (reviewSession?.practice?.index >= mathRoundSize) renderMathFinish();
+    else nextMathQ();
     bindSessionExit();
+    if (reviewSession && !practice) persistMathProgress();
   }
 
-  function finishMathQuestion() {
-    mathCompleted++;
-    const progress = document.getElementById("math-progress");
-    if(progress) progress.textContent = `${mathCompleted} / 3 题`;
+  function mathControls(locked) {
+    const root = document.getElementById("math-content");
+    root.querySelectorAll("button").forEach(button=>{
+      if (button.id === "math-save-retry") return;
+      button.disabled = locked || (mathQuestionAnswered && (button.dataset.v !== undefined || button.dataset.n !== undefined || button.dataset.slot !== undefined));
+    });
     const next = document.getElementById("math-next");
-    if(next) { next.disabled = false; next.textContent = mathCompleted >= 3 ? "完成啦 ✿" : "下一题 →"; }
+    if (next) next.disabled = locked || !mathQuestionAnswered;
+  }
+
+  async function persistMathProgress(then) {
+    if (!reviewSession) { then?.(); return true; }
+    const group = reviewSession;
+    mathSaving = true; mathControls(true);
+    const status = document.getElementById("math-save-error");
+    const retry = document.getElementById("math-save-retry");
+    if (status) status.hidden = false;
+    if (retry) retry.hidden = true;
+    const message = document.getElementById("math-save-message");
+    if (message) message.textContent = "正在保存本题进度…";
+    try {
+      await persistStudyDraft(group);
+      if (reviewSession !== group || currentView !== "math") return true;
+      mathSaving = false;
+      if (status) status.hidden = true;
+      mathControls(false);
+      then?.();
+      return true;
+    } catch(error) {
+      if (reviewSession !== group || currentView !== "math") return false;
+      if (group.draftConflict) {
+        showCheckpointRetry(group,()=>persistMathProgress(then),error.message);
+        return false;
+      }
+      if (message) message.textContent = "本题还没确认保存，请保持页面打开并重试。";
+      if (retry) { retry.hidden = false; retry.disabled = false; retry.onclick = ()=>persistMathProgress(then); }
+      return false;
+    }
+  }
+
+  function advanceMathQuestion() {
+    if (mathSaving || !mathQuestionAnswered || currentView !== "math") return;
+    if (reviewSession?.practice) {
+      reviewSession.practice.index++;
+      return persistMathProgress(()=>{
+        mathQuestionAnswered = false;
+        if (mathCompleted >= mathRoundSize) renderMathFinish();
+        else nextMathQ();
+      });
+    }
+    mathQuestionAnswered = false;
+    if (mathCompleted >= mathRoundSize) renderMathFinish();
+    else nextMathQ();
+  }
+
+  function finishMathQuestion(correct) {
+    if (mathQuestionAnswered) return;
+    mathQuestionAnswered = true;
+    mathCompleted++;
+    if (reviewSession?.practice) {
+      const answer = mathMode === "decomp" ? bondSheet.item.answers[Object.keys(bondSheet.item.blanks).find(slot=>bondSheet.item.blanks[slot])] : currentQ.attempt;
+      window.ChenchenMath.record(reviewSession.practice,answer);
+    }
+    const progress = document.getElementById("math-progress");
+    if(progress) progress.textContent = `${mathCompleted} / ${mathRoundSize} 题`;
+    const next = document.getElementById("math-next");
+    if(next) {
+      next.hidden = false;
+      next.disabled = false;
+      next.textContent = (correct ? "" : "我看懂了，") + (mathCompleted >= mathRoundSize ? "完成啦 ✿" : "下一题 →");
+    }
+    if (reviewSession) persistMathProgress();
   }
 
   function renderMathFinish() {
+    stopSpeechSafe();
     const id = mathMode === "decomp" ? "math-decomp-10" : "math-addsub-10";
-    const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法"};
+    const result = mathScore.ok >= mathRoundSize ? "independent" : mathScore.ok > 0 ? "supported" : "again";
+    const meta = {type:mathMode === "decomp" ? "decomp" : "math", title:mathMode === "decomp" ? "10以内分解组合" : "10以内加减法",
+      enroll:true,source:"automatic",skill:"math-solving",details:{correct:mathScore.ok,total:mathRoundSize,mode:mathMode,questionKeys:mathQuestionKeys,questionResults:(reviewSession?.practice?.questionResults || []).map(({key,knowledgeId,correct})=>({key,knowledgeId,correct}))}};
     const panel = document.getElementById("math-panel");
-    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 3 道题，真棒！</h3><p>今天的小数字，下次再来见面。</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "收下小花，继续 →" : "收下小花，休息一下"}</button></div>`;
+    panel.innerHTML = `<div class="mini-success"><span aria-hidden="true">✿</span><h3>认真想了 ${mathRoundSize} 道题，真棒！</h3><p>${assessmentBadge(result)}</p><p>首次答对 ${mathScore.ok} / ${mathRoundSize} 题</p><button class="btn btn-primary" id="finish-math">${reviewSession ? "保存这一组，休息一下" : "自由练习完成，休息一下"}</button></div>`;
     document.querySelector("#math-content .practice-controls").hidden = true;
     document.getElementById("finish-math").onclick = async () => {
-      const advanced = await completePractice(id, mathScore.ok >= 3 ? "remember" : "fuzzy", meta);
+      if (!reviewSession) {navigate("home");return;}
+      const advanced = await completePractice(id, REVIEW_RESULT[result], meta);
       if (!advanced) navigate("home");
     };
   }
 
   function nextMathQ() {
+    stopSpeechSafe();
+    mathQuestionAnswered = false;
     const next = document.getElementById("math-next");
-    if (next) next.disabled = true;
+    if (next) { next.disabled = true; next.hidden = true; }
     if (mathMode === "decomp") {
       bondSheet = genBondSheet();
+      const saved = reviewSession?.practice?.questionResults[reviewSession.practice.index];
+      if (saved) {
+        const item = bondSheet.item,slot = Object.keys(item.blanks).find(slot=>item.blanks[slot]);
+        item.answers[slot] = saved.answer; item.status = saved.correct ? "ok" : "bad";
+        item.solution = {whole:item.n,left:item.left,right:item.right};
+        bondSheet.checked = true; bondSheet.activeSlot = null;
+      }
       renderBondPanel();
+      if (saved) restoreMathAnswer(saved);
       return;
     }
-    currentQ = genAddSub();
+    currentQ = reviewSession?.practice ? JSON.parse(JSON.stringify(mathQuestions[reviewSession.practice.index])) : genAddSub();
     const panel = document.getElementById("math-panel");
     if (!panel) return;
-    const opts = choicesFor(currentQ.answer);
+    const opts = currentQ.choices || choicesFor(currentQ.answer);
     panel.innerHTML = `
       <div class="counting-aid" aria-label="用小圆点数一数"><span>${Array.from({length:currentQ.meta.a},()=>'<i></i>').join("") || '<b>0</b>'}</span><b>${currentQ.meta.op}</b><span class="second-dots">${Array.from({length:currentQ.meta.b},()=>'<i></i>').join("") || '<b>0</b>'}</span></div>
       <div class="math-q">${escapeHtml(currentQ.text)}</div>
@@ -1209,33 +1238,58 @@
           .map((o) => `<button data-v="${o}">${o}</button>`)
           .join("")}
       </div>
-      <div class="feedback" id="math-fb"></div>`;
+      <div class="feedback" id="math-fb" role="status" aria-live="polite"></div>`;
 
     panel.querySelectorAll(".math-opts button").forEach((btn) => {
       btn.onclick = () => {
-        if (btn.disabled) return;
+        if (btn.disabled || mathSaving || mathQuestionAnswered) return;
         const v = Number(btn.dataset.v);
+        currentQ.attempt = v;
+        const correct = v === currentQ.answer;
         mathScore.total++;
-        const fb = document.getElementById("math-fb");
-        panel.querySelectorAll(".math-opts button").forEach((b) => {
-          b.disabled = true;
-          if (Number(b.dataset.v) === currentQ.answer) b.classList.add("correct");
-        });
-        if (v === currentQ.answer) {
-          mathScore.ok++;
-          btn.classList.add("correct");
-          fb.textContent = "答对啦！真棒 ⭐";
-          fb.className = "feedback ok";
-        } else {
-          btn.classList.add("wrong");
-          fb.textContent = `我们一起数一数，答案是 ${currentQ.answer}。下次再试试！`;
-          fb.className = "feedback no";
-        }
-        finishMathQuestion();
+        if (correct) mathScore.ok++;
+        showArithmeticAnswer(v);
+        finishMathQuestion(correct);
       };
     });
+    const saved = reviewSession?.practice?.questionResults[reviewSession.practice.index];
+    if (saved) { showArithmeticAnswer(saved.answer); restoreMathAnswer(saved); }
   }
 
+  function restoreMathAnswer(saved) {
+    mathQuestionAnswered = true;
+    const next = document.getElementById("math-next");
+    next.hidden = false; next.disabled = false;
+    next.textContent = (saved.correct ? "" : "我看懂了，") + (mathCompleted >= mathRoundSize ? "完成啦 ✿" : "下一题 →");
+  }
+
+  function showArithmeticAnswer(v) {
+    const panel = document.getElementById("math-panel");
+    const btn = [...panel.querySelectorAll(".math-opts button")].find(button=>Number(button.dataset.v)===v);
+    const correct = v === currentQ.answer;
+    const fb = document.getElementById("math-fb");
+    panel.querySelectorAll(".math-opts button").forEach((b) => {
+      b.disabled = true;
+      if (Number(b.dataset.v) === currentQ.answer) {
+        b.classList.add("correct");
+        b.innerHTML = `<span>${b.dataset.v}</span><span class="math-option-mark" aria-hidden="true">✓</span>`;
+        b.setAttribute("aria-label", `${b.dataset.v}，正确答案`);
+      }
+    });
+    const {a,b,op} = currentQ.meta;
+    const equation = panel.querySelector(".math-q");
+    equation.classList.add("is-answered");
+    equation.innerHTML = `<span>${a} ${op} ${b} =</span>${mathAnswerHtml(v,currentQ.answer)}`;
+    if (correct) {
+      fb.innerHTML = mathVerdictHtml(true);
+    } else {
+      btn.classList.add("wrong");
+      btn.innerHTML = `<span>${v}</span><span class="math-option-mark" aria-hidden="true">×</span>`;
+      btn.setAttribute("aria-label", `${v}，这次不对`);
+      fb.innerHTML = `${mathVerdictHtml(false)}<span class="sr-only">正确答案是 ${currentQ.answer}：${a} ${op} ${b} = ${currentQ.answer}。看懂了，再点下一题。</span>`;
+    }
+    fb.className = "feedback math-feedback-visual";
+  }
   // ---------- Pinyin ----------
   const INITIALS = [
     "b","p","m","f","d","t","n","l","g","k","h",
@@ -1245,93 +1299,581 @@
     "a","o","e","i","u","ü","ai","ei","ui","ao","ou","iu",
     "ie","üe","er","an","en","in","un","ün","ang","eng","ing","ong",
   ];
-  // Example syllables use the actual spelling of the familiar word, not a
-  // synthetic pronunciation of an isolated initial or compound final.
-  const PY_SAMPLES = {
-    b: "bā · 八", p: "pá · 爬", m: "mā · 妈妈", f: "fēi · 飞机",
-    d: "dà · 大象", t: "tài · 太阳", n: "niú · 小牛", l: "lǎo · 老虎",
-    g: "gē · 鸽子", k: "kē · 一颗星", h: "huā · 花朵",
-    j: "jī · 小鸡", q: "qì · 气球", x: "xī · 西瓜",
-    zh: "zhī · 蜘蛛", ch: "chī · 吃饭", sh: "shū · 书本", r: "rì · 日出",
-    z: "zì · 写字", c: "cǎo · 小草", s: "sān · 三", y: "yā · 鸭子", w: "wū · 乌龟",
-    a: "ā · 啊", o: "ō · 喔", e: "é · 鹅", i: "yī · 衣服", u: "wū · 乌龟", ü: "yú · 小鱼",
-    ai: "ài · 爱", ei: "fēi · 飞机", ui: "shuǐ · 水", ao: "māo · 小猫", ou: "kǒu · 口",
-    iu: "qiú · 皮球", ie: "yè · 叶子", üe: "yuè · 月亮", er: "ěr · 耳朵",
-    an: "ān · 安静", en: "mén · 门", in: "pīn · 拼音", un: "chūn · 春天",
-    ün: "yún · 白云", ang: "yáng · 小羊", eng: "fēng · 风", ing: "xīng · 星星", ong: "hóng · 红色",
-  };
-
+  const PINYIN_DATA = window.ChenchenPinyinData;
   let pyTab = "initials";
+  let pyVoice = null;
+  let pyAudioRequest = 0;
+  let pyAudioButton = null;
+  let pyAudioExposureId = null;
+
+  function stopPinyinAudio(destroy = false) {
+    pyAudioRequest++;
+    pyVoice?.stop();
+    if (destroy) { pyVoice?.destroy(); pyVoice = null; }
+    pyAudioButton?.classList.remove("is-reading");
+    pyAudioButton?.removeAttribute("aria-busy");
+    pyAudioButton = null;
+    pyAudioExposureId = null;
+  }
+
+  async function playPinyin(kind, value, button) {
+    pyExposures.add(kind === "sound" ? value : pySelected);
+    stopSpeechSafe();
+    stopPinyinAudio();
+    const request = pyAudioRequest;
+    pyAudioExposureId = pinyinId(kind === "sound" ? value : pySelected);
+    const status = document.getElementById("py-assessment")?.hidden === false ? document.getElementById("py-check-error") : document.getElementById("py-audio-status");
+    status.textContent = "";
+    pyAudioButton = button;
+    button.classList.add("is-reading");
+    button.setAttribute("aria-busy", "true");
+    try {
+      pyVoice ||= window.ChenchenPinyinAudio.create({onPlaying: () => {
+        if (pyAudioExposureId) observedExposure("pinyin",pyAudioExposureId,true);
+      }});
+      // Start in this click's call stack so phones can unlock media playback.
+      await (kind === "sound" ? pyVoice.playSound(value) : pyVoice.playExample(value));
+    } catch (error) {
+      if (request === pyAudioRequest && currentView === "pinyin" && error.name !== "AbortError") {
+        status.textContent = "声音没播放，再点一下。";
+      }
+    } finally {
+      if (request === pyAudioRequest) {
+        button.classList.remove("is-reading");
+        button.removeAttribute("aria-busy");
+        pyAudioButton = null;
+      }
+    }
+  }
+
+  function pinyinId(symbol) { return `pinyin-${symbol.replace(/ü/g,"v")}`; }
 
   function renderPinyin() {
+    stopPinyinAudio();
+    const generation = practiceGeneration;
     const el = document.getElementById("pinyin-content");
     const list = pyTab === "initials" ? INITIALS : FINALS;
     if (!list.includes(pySelected)) pySelected = list[0];
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">读 3 张就休息</span></div><div class="tabs-mini"><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><span class="big-letter">${escapeHtml(pySelected)}</span><p>${escapeHtml(PY_SAMPLES[pySelected] || "")}</p><button class="btn btn-ghost" id="py-listen">◖)) 听例词</button><button class="btn btn-primary" id="py-read">我读过啦 ✓</button><small>拼音请跟着家长读，例词帮你记一记。</small></div><p class="practice-instruction">点一张卡片，自己读给爸爸妈妈听。</p><div class="pinyin-grid">${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已读过">✓</span>' : ""}</button>`).join("")}</div><div class="recall-footer"><span>已读过 ${pyPracticed.size} 张小卡片</span><button class="btn btn-learn" id="py-finish" ${pyPracticed.size ? "" : "disabled"}>${reviewSession ? "读好啦，继续 →" : "读好啦，收下小花"}</button></div></div>`;
-    el.querySelectorAll("[data-pt]").forEach(btn=>btn.onclick=()=>{pyTab=btn.dataset.pt;renderPinyin();});
-    el.querySelectorAll("[data-p]").forEach(btn=>btn.onclick=()=>{pySelected=btn.dataset.p;renderPinyin();});
-    document.getElementById("py-listen").onclick = () => speakGuide((PY_SAMPLES[pySelected] || "").split("·").pop().trim());
-    document.getElementById("py-read").onclick = () => {
-      pyPracticed.add(pySelected);
-      if (pyPracticed.size < 3) pySelected = list.find(p=>!pyPracticed.has(p)) || pySelected;
+    const targetId = reviewSession?.items[reviewSession.index]?.type === "pinyin" ? reviewSession.items[reviewSession.index].id : null;
+    const target = [...INITIALS,...FINALS].find(symbol=>pinyinId(symbol)===targetId);
+    const examples = PINYIN_DATA[pyTab].find(item => item.id === pySelected).examples;
+    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml("pinyin")}<div class="card practice-card pinyin-practice"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">${target ? "先试着自己读" : "自由点读 · 不留学习记录"}</span></div><div class="tabs-mini" ${target ? "hidden" : ""}><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read" ${reviewSession ? "" : "hidden"}>确认本项练习</button></div><div class="pinyin-assessment" id="py-assessment" hidden><span class="assessment-pinyin">${escapeHtml(pySelected)}</span>${assessmentButtons("py-check","家长确认 · 能自己读吗？")}<button class="text-btn" id="py-check-hint">◖)) 听提示</button><button class="text-btn" id="py-check-back">回去练一练</button></div><div class="pinyin-grid" ${target ? "hidden" : ""}>${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div></div>`;
+    bindStudyStart(el);
+    let afterPractice = true, saving = false;
+    const beginCheck = rehearsed => {
+      stopPinyinAudio();
+      afterPractice = rehearsed;
+      document.getElementById("py-assessment").hidden = false;
+      el.querySelector(".pinyin-practice").classList.add("is-assessing");
+    };
+    el.querySelectorAll("[data-pt]").forEach(btn=>btn.onclick=()=>{if(target) return;pyTab=btn.dataset.pt;renderPinyin();});
+    el.querySelectorAll("[data-p]").forEach(btn=>btn.onclick=()=>{
+      if (target) return;
+      pySelected=btn.dataset.p;
       renderPinyin();
-      toast(pyPracticed.size >= 3 ? "读了 3 张卡片啦，收下小花休息吧！" : "读得很认真！试试下一张。");
+      playPinyin("sound",pySelected,document.getElementById("py-listen"));
+      document.getElementById("py-sample").scrollIntoView?.({block:"nearest",behavior:"smooth"});
+    });
+    document.getElementById("py-listen").onclick = event => playPinyin("sound",pySelected,event.currentTarget);
+    el.querySelectorAll("[data-py-example]").forEach(btn=>btn.onclick=()=>playPinyin("example",btn.dataset.pyExample,btn));
+    document.getElementById("py-read").onclick = () => beginCheck(true);
+    document.getElementById("py-check-hint").onclick = event => {afterPractice=true;return playPinyin("sound",pySelected,event.currentTarget);};
+    document.getElementById("py-check-back").onclick = () => {
+      stopPinyinAudio();
+      document.getElementById("py-assessment").hidden = true;
+      el.querySelector(".pinyin-practice").classList.remove("is-assessing");
     };
-    document.getElementById("py-finish").onclick = async () => {
-      if(!pyPracticed.size) return;
-      if(!await completePractice("pinyin-basic","remember",{type:"pinyin",title:"声母韵母认读"})) navigate("home");
-    };
+    bindAssessment("py-check",targetId || pinyinId(pySelected),async result => {
+      if (saving || !reviewSession) return;
+      saving = true;
+      stopPinyinAudio();
+      const symbol = pySelected;
+      const entry = {id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`,skill:"pinyin-reading",source:"parent",result,
+        details:{symbol,afterPractice:afterPractice || pyExposures.has(symbol) || observedExposure("pinyin",pinyinId(symbol))}};
+      el.querySelectorAll("button").forEach(button=>button.disabled=true);
+      document.getElementById("py-check-error").textContent = "本项完成，继续这一组…";
+      try {
+        const advanced = await completePractice(targetId || entry.id,REVIEW_RESULT[result],{type:"pinyin",entries:[entry],enroll:true,retirePinyinGroup:true});
+        if (advanced || generation !== practiceGeneration || currentView !== "pinyin") return;
+        pyPracticed.add(symbol);
+        if (pyPracticed.size >= 3) {navigate("home");return;}
+        pySelected = list.find(p=>!pyPracticed.has(p)) || symbol;
+        renderPinyin();
+        toast("已记录，试试下一张。");
+      } finally { saving = false; }
+    });
+    if (currentStudyPhase() === "review" && target === pySelected && !pyPracticed.has(target)) beginCheck(false);
     bindSessionExit();
   }
 
   // ---------- Writing ----------
   const WRITE_CHARS = [
-    { c: "人", strokes: "2画 · 撇、捺", tip: "撇捺舒展，像人在走路" },
-    { c: "大", strokes: "3画 · 横、撇、捺", tip: "横要平，撇捺对称" },
-    { c: "小", strokes: "3画 · 竖钩、撇、点", tip: "中间竖钩居中" },
-    { c: "口", strokes: "3画 · 竖、横折、横", tip: "方口略扁，下横封口" },
-    { c: "日", strokes: "4画 · 竖、横折、横、横", tip: "比「口」瘦长，中间一横" },
-    { c: "月", strokes: "4画 · 撇、横折钩、横、横", tip: "外面像月牙" },
-    { c: "水", strokes: "4画 · 竖钩、横撇、撇、捺", tip: "中间竖钩为主笔" },
-    { c: "火", strokes: "4画 · 点、撇、撇、捺", tip: "两点像火苗" },
-    { c: "山", strokes: "3画 · 竖、竖折、竖", tip: "中间最高" },
-    { c: "石", strokes: "5画 · 横、撇、竖、横折、横", tip: "上面「厂」，下面「口」" },
-    { c: "田", strokes: "5画 · 竖、横折、横、竖、横", tip: "中间十字" },
-    { c: "木", strokes: "4画 · 横、竖、撇、捺", tip: "竖在横中间" },
+    {"c":"一","level":"starter","group":"数字","example":"一只","strokes":"1画","tip":"一条横线放中间。"},
+    {"c":"二","level":"starter","group":"数字","example":"二月","strokes":"2画","tip":"上面的横短，下面的横长。"},
+    {"c":"三","level":"starter","group":"数字","example":"三只","strokes":"3画","tip":"三条横线，下面一条最长。"},
+    {"c":"四","level":"starter","group":"数字","example":"四个","strokes":"5画","tip":"外面像个小方框。"},
+    {"c":"五","level":"starter","group":"数字","example":"五个","strokes":"4画","tip":"看看上下两条横的位置。"},
+    {"c":"十","level":"starter","group":"数字","example":"十个","strokes":"2画","tip":"横和竖在中间相遇。"},
+    {"c":"人","level":"starter","group":"人和身体","example":"大人","strokes":"2画","tip":"两边像站稳的两条腿。"},
+    {"c":"大","level":"starter","group":"人和身体","example":"大小","strokes":"3画","tip":"像一个张开双臂的人。"},
+    {"c":"小","level":"starter","group":"人和身体","example":"小手","strokes":"3画","tip":"中间长，两边短。"},
+    {"c":"口","level":"starter","group":"人和身体","example":"门口","strokes":"3画","tip":"像一个小小的方框。"},
+    {"c":"子","level":"starter","group":"人和身体","example":"孩子","strokes":"3画","tip":"中间的钩弯弯的。"},
+    {"c":"女","level":"starter","group":"人和身体","example":"女孩","strokes":"3画","tip":"几条线在中间相交。"},
+    {"c":"日","level":"starter","group":"自然","example":"日出","strokes":"4画","tip":"长方框里有一条横。"},
+    {"c":"月","level":"starter","group":"自然","example":"月亮","strokes":"4画","tip":"里面两条短横留点空隙。"},
+    {"c":"水","level":"starter","group":"自然","example":"喝水","strokes":"4画","tip":"中间长，两边舒展开。"},
+    {"c":"火","level":"starter","group":"自然","example":"火苗","strokes":"4画","tip":"两边的小笔画像火花。"},
+    {"c":"山","level":"starter","group":"自然","example":"大山","strokes":"3画","tip":"中间的山峰最高。"},
+    {"c":"石","level":"starter","group":"自然","example":"石头","strokes":"5画","tip":"小方框放在右下边。"},
+    {"c":"田","level":"starter","group":"植物粮食","example":"田地","strokes":"5画","tip":"里面分成四个小格子。"},
+    {"c":"木","level":"starter","group":"植物粮食","example":"木头","strokes":"4画","tip":"中间像树干，两边像树枝。"},
+    {"c":"上","level":"starter","group":"方向动作","example":"上面","strokes":"3画","tip":"长横托住上面的线。"},
+    {"c":"下","level":"starter","group":"方向动作","example":"下面","strokes":"3画","tip":"长横下面挂着小笔画。"},
+    {"c":"土","level":"starter","group":"自然","example":"泥土","strokes":"3画","tip":"下面的横比上面长。"},
+    {"c":"天","level":"starter","group":"自然","example":"天空","strokes":"4画","tip":"上面两横，下面舒展开。"},
+    {"c":"六","level":"explore","group":"数字","example":"六个","strokes":"4画","tip":"上面小点，下面两边分开。"},
+    {"c":"七","level":"explore","group":"数字","example":"七个","strokes":"2画","tip":"下面有个弯弯的小钩。"},
+    {"c":"八","level":"explore","group":"数字","example":"八个","strokes":"2画","tip":"两边分开，不碰在一起。"},
+    {"c":"九","level":"explore","group":"数字","example":"九个","strokes":"2画","tip":"右边有个大大的弯钩。"},
+    {"c":"百","level":"explore","group":"数字","example":"一百","strokes":"6画","tip":"长横下面放一个白字。"},
+    {"c":"左","level":"explore","group":"方向动作","example":"左手","strokes":"5画","tip":"下面藏着一个工字。"},
+    {"c":"右","level":"explore","group":"方向动作","example":"右手","strokes":"5画","tip":"下面藏着一个口字。"},
+    {"c":"中","level":"explore","group":"方向动作","example":"中间","strokes":"4画","tip":"一条竖穿过小方框。"},
+    {"c":"入","level":"explore","group":"方向动作","example":"入口","strokes":"2画","tip":"两条线靠在一起。"},
+    {"c":"出","level":"explore","group":"方向动作","example":"出门","strokes":"5画","tip":"上下两个口朝上，中间一条竖。"},
+    {"c":"回","level":"explore","group":"方向动作","example":"回家","strokes":"6画","tip":"大方框里面有个小方框。"},
+    {"c":"目","level":"explore","group":"人和身体","example":"目光","strokes":"5画","tip":"长方框里有两条短横。"},
+    {"c":"耳","level":"explore","group":"人和身体","example":"耳朵","strokes":"6画","tip":"里面短横要留出空隙。"},
+    {"c":"手","level":"explore","group":"人和身体","example":"小手","strokes":"4画","tip":"中间的长钩向下伸。"},
+    {"c":"牙","level":"explore","group":"人和身体","example":"牙齿","strokes":"4画","tip":"右边的长钩向下伸。"},
+    {"c":"心","level":"explore","group":"人和身体","example":"开心","strokes":"4画","tip":"弯钩旁边有小点。"},
+    {"c":"米","level":"explore","group":"植物粮食","example":"大米","strokes":"6画","tip":"几条线向四周散开。"},
+    {"c":"禾","level":"explore","group":"植物粮食","example":"禾苗","strokes":"5画","tip":"木字上面多一小撇。"},
+    {"c":"竹","level":"explore","group":"植物粮食","example":"竹子","strokes":"6画","tip":"左右两边像两棵小竹子。"},
+    {"c":"花","level":"explore","group":"植物粮食","example":"小花","strokes":"7画","tip":"草字头在上面。"},
+    {"c":"牛","level":"explore","group":"动物","example":"小牛","strokes":"4画","tip":"中间一条竖，上下两条横。"},
+    {"c":"羊","level":"explore","group":"动物","example":"小羊","strokes":"6画","tip":"上面像羊角，中间一条竖。"},
+    {"c":"马","level":"explore","group":"动物","example":"小马","strokes":"3画","tip":"里面的短横不要伸太长。"},
+    {"c":"鸟","level":"explore","group":"动物","example":"小鸟","strokes":"5画","tip":"上面的小点像鸟的眼睛。"},
+    {"c":"虫","level":"explore","group":"动物","example":"小虫","strokes":"6画","tip":"小方框放在上半边。"},
+    {"c":"鱼","level":"explore","group":"动物","example":"小鱼","strokes":"8画","tip":"中间像田，下面一条长横。"},
+    {"c":"白","level":"explore","group":"自然","example":"白云","strokes":"5画","tip":"日字上面多一小撇。"},
+    {"c":"云","level":"explore","group":"自然","example":"白云","strokes":"4画","tip":"上面两条横，下面弯弯的。"},
+    {"c":"雨","level":"explore","group":"自然","example":"下雨","strokes":"8画","tip":"里面的小点像雨滴。"},
+    {"c":"风","level":"explore","group":"自然","example":"大风","strokes":"4画","tip":"外面有个大弯，里面两线相交。"},
+    {"c":"门","level":"explore","group":"身边物品","example":"大门","strokes":"3画","tip":"像一扇敞开的大门。"},
+    {"c":"车","level":"explore","group":"身边物品","example":"汽车","strokes":"4画","tip":"中间的竖稳稳站住。"},
+    {"c":"书","level":"explore","group":"身边物品","example":"看书","strokes":"4画","tip":"右上边有一个小点。"},
+    {"c":"本","level":"explore","group":"身边物品","example":"书本","strokes":"5画","tip":"木字下面多一条短横。"},
+    {"c":"妈","level":"everyday","group":"家人与朋友","example":"妈妈","strokes":"6画","tip":"女字旁在左，马字在右。"},
+    {"c":"爸","level":"everyday","group":"家人与朋友","example":"爸爸","strokes":"8画","tip":"上面宽，下面的弯钩向右伸。"},
+    {"c":"爷","level":"everyday","group":"家人与朋友","example":"爷爷","strokes":"6画","tip":"上半边舒展，下半边窄一点。"},
+    {"c":"奶","level":"everyday","group":"家人与朋友","example":"奶奶","strokes":"5画","tip":"女字旁瘦一点，右边留出空间。"},
+    {"c":"我","level":"everyday","group":"家人与朋友","example":"我们","strokes":"7画","tip":"右边的斜钩舒展开。"},
+    {"c":"你","level":"everyday","group":"家人与朋友","example":"你好","strokes":"7画","tip":"左边窄，右边宽一点。"},
+    {"c":"他","level":"everyday","group":"家人与朋友","example":"他们","strokes":"5画","tip":"左边单人旁，右边弯钩伸展开。"},
+    {"c":"她","level":"everyday","group":"家人与朋友","example":"她们","strokes":"6画","tip":"女字旁在左，右边弯钩伸展开。"},
+    {"c":"好","level":"everyday","group":"家人与朋友","example":"你好","strokes":"6画","tip":"女字在左，子字在右。"},
+    {"c":"家","level":"everyday","group":"家人与朋友","example":"回家","strokes":"10画","tip":"宝盖头在上，下面舒展开。"},
+    {"c":"友","level":"everyday","group":"家人与朋友","example":"朋友","strokes":"4画","tip":"下半边藏着一个又字。"},
+    {"c":"学","level":"everyday","group":"校园生活","example":"学校","strokes":"8画","tip":"子字放在下半边。"},
+    {"c":"文","level":"everyday","group":"校园生活","example":"中文","strokes":"4画","tip":"小点在上，下面撇捺舒展开。"},
+    {"c":"字","level":"everyday","group":"校园生活","example":"写字","strokes":"6画","tip":"宝盖头下面藏着一个子字。"},
+    {"c":"写","level":"everyday","group":"校园生活","example":"写字","strokes":"5画","tip":"上面小盖子，下面一条横。"},
+    {"c":"画","level":"everyday","group":"校园生活","example":"画画","strokes":"8画","tip":"中间是田，下面像小托盘。"},
+    {"c":"师","level":"everyday","group":"校园生活","example":"老师","strokes":"6画","tip":"左边窄，右边的小框留出空间。"},
+    {"c":"生","level":"everyday","group":"校园生活","example":"生日","strokes":"5画","tip":"中间一竖，把几条横连起来。"},
+    {"c":"同","level":"everyday","group":"校园生活","example":"同学","strokes":"6画","tip":"外框里面有一横和一个口。"},
+    {"c":"尺","level":"everyday","group":"校园生活","example":"尺子","strokes":"4画","tip":"上面小折角，下面两边展开。"},
+    {"c":"包","level":"everyday","group":"校园生活","example":"书包","strokes":"5画","tip":"外面包着，里面有弯钩。"},
+    {"c":"开","level":"everyday","group":"日常动作","example":"开门","strokes":"4画","tip":"上面两条横，下面两边分开。"},
+    {"c":"关","level":"everyday","group":"日常动作","example":"关门","strokes":"6画","tip":"上面两点，下面像天字。"},
+    {"c":"来","level":"everyday","group":"日常动作","example":"回来","strokes":"7画","tip":"中间一竖，左右舒展开。"},
+    {"c":"去","level":"everyday","group":"日常动作","example":"出去","strokes":"5画","tip":"上面土字，下面有小折角。"},
+    {"c":"立","level":"everyday","group":"日常动作","example":"立正","strokes":"5画","tip":"小点在上，长横在下面托住。"},
+    {"c":"吃","level":"everyday","group":"日常动作","example":"吃饭","strokes":"6画","tip":"小口在左，右边有个弯钩。"},
+    {"c":"东","level":"everyday","group":"方向与比较","example":"东边","strokes":"5画","tip":"中间长钩，左右小笔画。"},
+    {"c":"西","level":"everyday","group":"方向与比较","example":"西边","strokes":"6画","tip":"里面的小笔画不要挤在一起。"},
+    {"c":"北","level":"everyday","group":"方向与比较","example":"北边","strokes":"5画","tip":"左边窄，右边的弯钩伸开。"},
+    {"c":"后","level":"everyday","group":"方向与比较","example":"后面","strokes":"6画","tip":"小口放在右下方。"},
+    {"c":"外","level":"everyday","group":"方向与比较","example":"外面","strokes":"5画","tip":"左边夕字，右边一竖一点。"},
+    {"c":"多","level":"everyday","group":"方向与比较","example":"多少","strokes":"6画","tip":"上下两个夕字错开一点。"},
+    {"c":"少","level":"everyday","group":"方向与比较","example":"多少","strokes":"4画","tip":"上半边像小，下面一撇伸展开。"},
+    {"c":"长","level":"everyday","group":"方向与比较","example":"长短","strokes":"4画","tip":"右下方的笔画舒展开。"},
+    {"c":"早","level":"everyday","group":"方向与比较","example":"早上","strokes":"6画","tip":"上面日字，下面十字。"},
+    {"c":"冬","level":"everyday","group":"四季与自然","example":"冬天","strokes":"5画","tip":"下面两个小点分开一点。"},
+    {"c":"光","level":"everyday","group":"四季与自然","example":"阳光","strokes":"6画","tip":"上面小笔画，下面两边展开。"},
+    {"c":"电","level":"everyday","group":"四季与自然","example":"电灯","strokes":"5画","tip":"中间长钩穿过小方框。"},
+    {"c":"叶","level":"everyday","group":"四季与自然","example":"树叶","strokes":"5画","tip":"口字在左，十字在右。"},
+    {"c":"果","level":"everyday","group":"四季与自然","example":"水果","strokes":"8画","tip":"田字在上，木字在下。"},
+    {"c":"红","level":"everyday","group":"颜色","example":"红花","strokes":"6画","tip":"绞丝旁在左，工字在右。"},
+    {"c":"瓜","level":"everyday","group":"食物","example":"西瓜","strokes":"5画","tip":"外面两边伸开，里面留出空间。"},
+    {"c":"肉","level":"everyday","group":"食物","example":"吃肉","strokes":"6画","tip":"外框里面，两个人上下叠着。"},
+    {"c":"衣","level":"everyday","group":"身边物品","example":"衣服","strokes":"6画","tip":"小点在上，下面撇捺舒展开。"},
+    {"c":"王","level":"explore","group":"生活常用","example":"王子","strokes":"4画","tip":"三条横线，中间一竖串起来。"},
+    {"c":"厂","level":"starter","group":"生活常用","example":"工厂","strokes":"2画","tip":"上面一横，左边一撇向下伸。"},
+    {"c":"广","level":"starter","group":"生活常用","example":"广场","strokes":"3画","tip":"上面小点，横撇像屋顶。"},
+    {"c":"太","level":"explore","group":"生活常用","example":"太阳","strokes":"4画","tip":"大字下面添一点，撇捺舒展开。"},
+    {"c":"虾","level":"explore","group":"生活常用","example":"小虾","strokes":"9画","tip":"左边虫字旁，右边一个下。"},
+    {"c":"孙","level":"explore","group":"生活常用","example":"孙子","strokes":"6画","tip":"左边子字旁，右边小字留空隙。"},
+    {"c":"片","level":"explore","group":"生活常用","example":"叶片","strokes":"4画","tip":"左边长撇，右边的折向下收。"},
+    {"c":"又","level":"starter","group":"生活常用","example":"又来","strokes":"2画","tip":"横撇和捺在中间交叉。"},
+    {"c":"皮","level":"explore","group":"生活常用","example":"皮球","strokes":"5画","tip":"长撇向下伸，下面的又展开。"},
+    {"c":"买","level":"explore","group":"生活常用","example":"买菜","strokes":"6画","tip":"上面横钩，下面两点靠左。"},
+    {"c":"酒","level":"explore","group":"生活常用","example":"米酒","strokes":"10画","tip":"左边三点水，右边方框留空隙。"},
+    {"c":"比","level":"explore","group":"生活常用","example":"比赛","strokes":"4画","tip":"左边短小，右边竖弯钩站稳。"},
+    {"c":"切","level":"explore","group":"生活常用","example":"切开","strokes":"4画","tip":"左边七，右边刀，两边留空隙。"},
+    {"c":"寸","level":"starter","group":"生活常用","example":"一寸","strokes":"3画","tip":"长横下面一竖钩，左边添一点。"},
+    {"c":"丁","level":"starter","group":"生活常用","example":"园丁","strokes":"2画","tip":"一横下面，一条竖钩向下伸。"},
+    {"c":"了","level":"starter","group":"生活常用","example":"好了","strokes":"2画","tip":"上面横撇，下面弯钩向中间收。"},
+    {"c":"狗","level":"explore","group":"生活常用","example":"小狗","strokes":"8画","tip":"左边反犬旁，右边小口放进勾里。"},
+    {"c":"公","level":"explore","group":"生活常用","example":"公园","strokes":"4画","tip":"上面八字分开，下面撇折和点靠近。"},
+    {"c":"台","level":"explore","group":"生活常用","example":"台灯","strokes":"5画","tip":"上面撇折和点，下面口字摆正。"},
+    {"c":"如","level":"explore","group":"生活常用","example":"如果","strokes":"6画","tip":"左边女字旁，右边口字小一些。"},
+    {"c":"妆","level":"explore","group":"生活常用","example":"化妆","strokes":"6画","tip":"左边点提和长竖，右边女字舒展开。"},
+    {"c":"戏","level":"explore","group":"生活常用","example":"游戏","strokes":"6画","tip":"左边又收紧，右边斜钩向外伸。"},
+    {"c":"成","level":"explore","group":"生活常用","example":"成长","strokes":"6画","tip":"长撇在左，斜钩向右下伸。"},
+    {"c":"代","level":"explore","group":"生活常用","example":"代表","strokes":"5画","tip":"左边单人旁，右边斜钩舒展开。"},
+    {"c":"思","level":"explore","group":"生活常用","example":"思念","strokes":"9画","tip":"上面田字摆正，下面心字托住。"},
+    {"c":"忠","level":"explore","group":"生活常用","example":"忠心","strokes":"8画","tip":"上面中字居中，下面心字展开。"},
+    {"c":"刀","level":"starter","group":"生活常用","example":"小刀","strokes":"2画","tip":"横折钩向下弯，里面一撇伸出来。"},
+    {"c":"习","level":"starter","group":"生活常用","example":"学习","strokes":"3画","tip":"外面的钩包住一点和一提。"},
+    {"c":"认","level":"explore","group":"生活常用","example":"认识","strokes":"4画","tip":"左边言字旁，右边人字舒展开。"},
+    {"c":"让","level":"explore","group":"生活常用","example":"让开","strokes":"5画","tip":"左边言字旁，右边上字放稳。"},
+    {"c":"讲","level":"explore","group":"生活常用","example":"讲话","strokes":"6画","tip":"左边言字旁，右边井字留出空隙。"},
+    {"c":"朵","level":"explore","group":"生活常用","example":"花朵","strokes":"6画","tip":"上面小小的，下面木字展开。"},
+    {"c":"没","level":"explore","group":"生活常用","example":"没有","strokes":"7画","tip":"左边三点水，右边上下对齐。"},
+    {"c":"船","level":"explore","group":"生活常用","example":"小船","strokes":"11画","tip":"左边舟字旁，右边小口留空隙。"},
+    {"c":"飞","level":"starter","group":"生活常用","example":"飞机","strokes":"3画","tip":"弯钩向外展开，右边两笔像翅膀。"},
+    {"c":"凤","level":"explore","group":"生活常用","example":"凤凰","strokes":"4画","tip":"外面的框留开口，里面一个又。"},
+    {"c":"几","level":"starter","group":"生活常用","example":"几个","strokes":"2画","tip":"左边一撇，右边弯钩像桌腿。"},
+    {"c":"丸","level":"starter","group":"生活常用","example":"丸子","strokes":"3画","tip":"九字里面添一点，弯钩站稳。"},
+    {"c":"队","level":"explore","group":"生活常用","example":"队伍","strokes":"4画","tip":"左边双耳旁，右边人字展开。"},
+    {"c":"阳","level":"explore","group":"生活常用","example":"太阳","strokes":"6画","tip":"左边双耳旁，右边日字摆正。"},
+    {"c":"邻","level":"explore","group":"生活常用","example":"邻居","strokes":"7画","tip":"左边令字收紧，右边双耳旁。"},
+    {"c":"及","level":"starter","group":"生活常用","example":"及时","strokes":"3画","tip":"横折折撇连着写，捺向右下伸。"},
+    {"c":"边","level":"explore","group":"生活常用","example":"旁边","strokes":"5画","tip":"先写里面的力，走之底最后托住。"},
+    {"c":"建","level":"explore","group":"生活常用","example":"建立","strokes":"8画","tip":"里面横线留空隙，建字底最后托住。"},
+    {"c":"汤","level":"explore","group":"生活常用","example":"米汤","strokes":"6画","tip":"左边三点水，右边两撇分开。"},
+    {"c":"场","level":"explore","group":"生活常用","example":"广场","strokes":"6画","tip":"左边土字旁，右边两撇分开。"},
+    {"c":"弯","level":"explore","group":"生活常用","example":"弯腰","strokes":"9画","tip":"上面点横居中，下面弓字弯弯的。"},
+  ];
+  // Retired cards only support saved study drafts and existing custom classroom cards.
+  const RETIRED_WRITE_CHARS = [
+    {"c":"足","level":"explore","group":"人和身体","example":"足球","strokes":"7画","tip":"上面一个口，下面舒展开。"},
+    {"c":"草","level":"explore","group":"植物粮食","example":"小草","strokes":"9画","tip":"草字头下面有日和十。"},
+    {"c":"哥","level":"everyday","group":"家人与朋友","example":"哥哥","strokes":"10画","tip":"上下各藏着一个小口。"},
+    {"c":"姐","level":"everyday","group":"家人与朋友","example":"姐姐","strokes":"8画","tip":"右边的小框里，短横留出空隙。"},
+    {"c":"弟","level":"everyday","group":"家人与朋友","example":"弟弟","strokes":"7画","tip":"上面两点，下面有弯弯的钩。"},
+    {"c":"妹","level":"everyday","group":"家人与朋友","example":"妹妹","strokes":"8画","tip":"女字旁在左，右边两横一长一短。"},
+    {"c":"爱","level":"everyday","group":"家人与朋友","example":"爱心","strokes":"10画","tip":"中间的小盖子下面留出空间。"},
+    {"c":"朋","level":"everyday","group":"家人与朋友","example":"朋友","strokes":"8画","tip":"两个月字并排站。"},
+    {"c":"读","level":"everyday","group":"校园生活","example":"读书","strokes":"10画","tip":"言字旁在左，右边宽一点。"},
+    {"c":"课","level":"everyday","group":"校园生活","example":"上课","strokes":"10画","tip":"言字旁在左，果字在右。"},
+    {"c":"校","level":"everyday","group":"校园生活","example":"学校","strokes":"10画","tip":"木字旁窄一点，右边舒展开。"},
+    {"c":"桌","level":"everyday","group":"校园生活","example":"桌子","strokes":"10画","tip":"木字托住上面的部分。"},
+    {"c":"笔","level":"everyday","group":"校园生活","example":"铅笔","strokes":"10画","tip":"竹字头在上，弯钩向右伸。"},
+    {"c":"走","level":"everyday","group":"日常动作","example":"走路","strokes":"7画","tip":"上面像土，下面向右展开。"},
+    {"c":"跑","level":"everyday","group":"日常动作","example":"跑步","strokes":"12画","tip":"足字旁在左，包字在右。"},
+    {"c":"坐","level":"everyday","group":"日常动作","example":"坐下","strokes":"7画","tip":"两个人坐在土字上面。"},
+    {"c":"看","level":"everyday","group":"日常动作","example":"看书","strokes":"9画","tip":"下半边是目，上面舒展开。"},
+    {"c":"听","level":"everyday","group":"日常动作","example":"听话","strokes":"7画","tip":"小口在左，右边留出空间。"},
+    {"c":"说","level":"everyday","group":"日常动作","example":"说话","strokes":"9画","tip":"言字旁窄一点，右边宽一点。"},
+    {"c":"笑","level":"everyday","group":"日常动作","example":"微笑","strokes":"10画","tip":"竹字头在上，下面撇捺舒展开。"},
+    {"c":"喝","level":"everyday","group":"日常动作","example":"喝水","strokes":"12画","tip":"左边小口，右边宽一点。"},
+    {"c":"玩","level":"everyday","group":"日常动作","example":"玩具","strokes":"8画","tip":"王字旁在左，元字在右。"},
+    {"c":"洗","level":"everyday","group":"日常动作","example":"洗手","strokes":"9画","tip":"三点水在左，右边弯钩伸展开。"},
+    {"c":"南","level":"everyday","group":"方向与比较","example":"南边","strokes":"9画","tip":"外框里面的短横留出空隙。"},
+    {"c":"前","level":"everyday","group":"方向与比较","example":"前面","strokes":"9画","tip":"右边的竖钩站直一点。"},
+    {"c":"里","level":"everyday","group":"方向与比较","example":"里面","strokes":"7画","tip":"上面像田，下面一条长横。"},
+    {"c":"短","level":"everyday","group":"方向与比较","example":"长短","strokes":"12画","tip":"右边是豆，左右靠近一点。"},
+    {"c":"高","level":"everyday","group":"方向与比较","example":"高山","strokes":"10画","tip":"上下各藏着一个小口。"},
+    {"c":"低","level":"everyday","group":"方向与比较","example":"低头","strokes":"7画","tip":"左边单人旁，右下角有个小点。"},
+    {"c":"晚","level":"everyday","group":"方向与比较","example":"晚上","strokes":"11画","tip":"日字在左，右边弯钩伸展开。"},
+    {"c":"春","level":"everyday","group":"四季与自然","example":"春天","strokes":"9画","tip":"上面几条横，日字在下面。"},
+    {"c":"夏","level":"everyday","group":"四季与自然","example":"夏天","strokes":"10画","tip":"中间像目，下面两边舒展开。"},
+    {"c":"秋","level":"everyday","group":"四季与自然","example":"秋天","strokes":"9画","tip":"禾字在左，火字在右。"},
+    {"c":"星","level":"everyday","group":"四季与自然","example":"星星","strokes":"9画","tip":"日字在上，生字在下。"},
+    {"c":"雪","level":"everyday","group":"四季与自然","example":"雪花","strokes":"11画","tip":"雨字头在上，下面短横留出空隙。"},
+    {"c":"河","level":"everyday","group":"四季与自然","example":"小河","strokes":"8画","tip":"三点水在左，右边小口留出空间。"},
+    {"c":"海","level":"everyday","group":"四季与自然","example":"大海","strokes":"10画","tip":"三点水在左，右边宽一点。"},
+    {"c":"林","level":"everyday","group":"四季与自然","example":"树林","strokes":"8画","tip":"两个木字并排，左边窄一点。"},
+    {"c":"黄","level":"everyday","group":"颜色","example":"黄色","strokes":"11画","tip":"下面两点分开一点。"},
+    {"c":"蓝","level":"everyday","group":"颜色","example":"蓝天","strokes":"13画","tip":"草字头在上，下面的皿稳稳托住。"},
+    {"c":"绿","level":"everyday","group":"颜色","example":"绿叶","strokes":"11画","tip":"绞丝旁在左，右下边舒展开。"},
+    {"c":"黑","level":"everyday","group":"颜色","example":"黑色","strokes":"12画","tip":"下面四点留出小空隙。"},
+    {"c":"豆","level":"everyday","group":"食物","example":"豆子","strokes":"7画","tip":"小口在中间，下面长横托住。"},
+    {"c":"茶","level":"everyday","group":"食物","example":"茶杯","strokes":"9画","tip":"草字头下面，两边舒展开。"},
+    {"c":"蛋","level":"everyday","group":"食物","example":"鸡蛋","strokes":"11画","tip":"虫字放在下半边。"},
+    {"c":"饭","level":"everyday","group":"食物","example":"吃饭","strokes":"7画","tip":"食字旁在左，右边舒展开。"},
+    {"c":"面","level":"everyday","group":"食物","example":"面条","strokes":"9画","tip":"外面方框，里面短横留出空隙。"},
   ];
   let selectedWriteId = null;
-  function writingCharacters() {
-    const characters = new Map(WRITE_CHARS.map(ch => { const item = {...ch,id:`write-char-${ch.c.codePointAt(0).toString(16)}`}; return [item.id,item]; }));
-    Object.values(loadState().customCharacters || {}).forEach(ch=>characters.set(ch.id,ch));
-    return [...characters.values()];
+  let writingListScroll = 0;
+  let writingDemo = null;
+  let writingPractice = null;
+  let writingVoice = null;
+  let writingGeneration = 0;
+
+  function stopWritingDemo() {
+    writingGeneration++;
+    writingDemo?.destroy();
+    writingPractice?.destroy();
+    writingVoice?.destroy();
+    writingDemo = null;
+    writingPractice = null;
+    writingVoice = null;
+  }
+
+  function writingCharacters(includeRetired = false) {
+    const vocabulary = new Map((window.ChenchenWritingVocabulary || []).map(item=>[item.c,item]));
+    const allBuiltin = [...WRITE_CHARS,...RETIRED_WRITE_CHARS];
+    const characters = new Map((includeRetired ? allBuiltin : WRITE_CHARS).map(ch => {
+      const item = {...ch,...vocabulary.get(ch.c),id:`write-char-${ch.c.codePointAt(0).toString(16)}`};
+      return [item.id,item];
+    }));
+    Object.values(loadState().customCharacters || {}).forEach(ch=>{
+      const builtin = allBuiltin.find(item=>item.c === ch.c);
+      characters.set(ch.id,{...builtin,...vocabulary.get(ch.c),...characters.get(ch.id),...ch});
+    });
+    const count = ch => Number.parseInt(ch.strokes,10) || Number.MAX_SAFE_INTEGER;
+    return [...characters.values()].sort((a,b)=>count(a)-count(b));
+  }
+
+  function writingRuby(text,pinyin) {
+    return Array.from(text).map((c,index)=>`<ruby>${escapeHtml(c)}<rt>${escapeHtml((pinyin || "").split(" ")[index] || "")}</rt></ruby>`).join("");
   }
 
   function renderWrite() {
+    stopWritingDemo();
+    stopSpeechSafe();
     const el = document.getElementById("write-content");
     const all = writingCharacters();
-    const ch = all.find(it=>it.id===selectedWriteId) || all[0];
+    el.innerHTML = `${groupStartHtml("write")}<div class="card practice-card write-library-page"><div class="practice-heading"><div><p class="eyebrow">先选一个字</p><h2>写汉字</h2></div><span class="practice-count">${all.length} 个字</span></div><p class="practice-instruction">简单的在前面，点一个字开始读写。</p><div class="write-list write-library" aria-label="从简单到复杂的汉字">${all.map(w=>`<button class="${w.id === selectedWriteId ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-label="选择汉字 ${escapeHtml(w.c)}" aria-pressed="${w.id === selectedWriteId}">${writingRuby(w.c,w.pinyin)}</button>`).join("")}</div></div>`;
+    bindStudyStart(el);
+    el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>openWriteCharacter(btn.dataset.writeId));
+  }
+
+  function openWriteCharacter(id, rememberPosition = true) {
+    if (!writingCharacters().some(ch=>ch.id === id)) return;
+    if (rememberPosition) writingListScroll = window.scrollY || 0;
+    selectedWriteId = id;
+    showView("write-detail");
+    renderWriteDetail();
+  }
+
+  function returnToWriteLibrary() {
+    navigate("write");
+    window.scrollTo({top:writingListScroll,behavior:"instant"});
+  }
+
+  function renderWriteDetail() {
+    stopWritingDemo();
+    stopSpeechSafe();
+    const token = writingGeneration;
+    const el = document.getElementById("write-detail-content");
+    const ch = writingCharacters(true).find(it=>it.id===selectedWriteId) || writingCharacters()[0];
     selectedWriteId = ch.id;
-    const shown = reviewSession ? [ch] : all;
-    el.innerHTML = `${sessionBanner()}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">小手动一动</p><h2>汉字描一描 <span class="heading-flower">✎</span></h2></div><span class="practice-count">描 1 个字就好</span></div><p class="practice-instruction">沿着浅浅的字，用手指或鼠标描一描。</p><div class="tianzige"><div class="char">${escapeHtml(ch.c)}</div><canvas id="write-canvas" width="600" height="600" aria-label="${escapeHtml(ch.c)} 字描红画布"></canvas></div><div class="stroke-hint"><b>${escapeHtml(ch.c)}</b>　${escapeHtml(ch.strokes || "")}<br>${escapeHtml(ch.tip || "请家长示范，再慢慢描一遍。")}</div><div class="btn-row practice-controls"><button class="btn btn-ghost" id="write-clear">↶ 重新描</button><button class="btn btn-ghost" id="write-listen">◖)) 听一听</button><button class="btn btn-primary" id="write-finish" disabled>描好啦 ✿</button></div><div class="write-list">${shown.map(w=>`<button class="${w.id === ch.id ? "active" : ""}" data-write-id="${escapeHtml(w.id)}" aria-pressed="${w.id === ch.id}">${escapeHtml(w.c)}</button>`).join("")}</div><p class="paper-note">也可以拿出纸和笔，照着写一遍。<button class="text-btn" id="write-paper">我在纸上写好啦 ✓</button></p></div>`;
-    el.querySelectorAll("[data-write-id]").forEach(btn=>btn.onclick=()=>{selectedWriteId=btn.dataset.writeId;renderWrite();});
-    const canvas = document.getElementById("write-canvas");
-    const ctx = canvas.getContext("2d");
-    ctx.strokeStyle = "#668753"; ctx.lineWidth = 14; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    let drawing = false;
-    let moved = false;
-    const position = event => { const r=canvas.getBoundingClientRect(); return [(event.clientX-r.left)*600/r.width,(event.clientY-r.top)*600/r.height]; };
-    canvas.onpointerdown = event => { event.preventDefault(); drawing=true; canvas.setPointerCapture(event.pointerId); ctx.beginPath(); ctx.moveTo(...position(event)); };
-    canvas.onpointermove = event => { if(!drawing)return; event.preventDefault();ctx.lineTo(...position(event));ctx.stroke();moved=true;document.getElementById("write-finish").disabled=false; };
-    canvas.onpointerup = canvas.onpointercancel = () => { drawing=false; };
-    document.getElementById("write-clear").onclick = () => {ctx.clearRect(0,0,600,600);moved=false;document.getElementById("write-finish").disabled=true;};
-    document.getElementById("write-listen").onclick = () => speakGuide(`${ch.c}。${ch.strokes || ""}。${ch.tip || "请家长示范，再慢慢描一遍。"}。`);
-    const finish = async () => {
-      const id = reviewSession?.items[reviewSession.index]?.id || ch.id;
-      const title = id === "write-basic" ? "常用汉字描红" : `汉字·${ch.c}`;
-      if(!await completePractice(id,"remember",{type:"write",title})) navigate("home");
+    const group = reviewSession;
+    const characters = writingCharacters();
+    const characterIndex = characters.findIndex(item=>item.id === ch.id);
+    const showNavigation = !group && characterIndex >= 0;
+    const lastCharacter = characterIndex === characters.length - 1;
+    const startsWithBlindCheck = !!(ch.pinyin && currentStudyPhase() === "review" && group?.items[group.index]?.type === "write");
+    const words = ch.words || [];
+    let assisted = !startsWithBlindCheck, finished = false, watching = false, readingRequest = 0, practiceRun = 0;
+    let demoReady = false, demoFailed = false, demoRun = 0;
+    let practiceState = {status:"loading",completed:0,total:0,hintsUsed:0};
+    if (!startsWithBlindCheck) observedExposure("write",ch.id,true);
+    const active = () => token === writingGeneration && currentView === "write-detail";
+    const markAssisted = () => { assisted = true; observedExposure("write",ch.id,true); };
+    el.innerHTML = `${sessionBanner()}<button class="back-btn" id="write-back">← 全部汉字</button><div class="card practice-card write-practice"><div class="practice-heading"><div><p class="eyebrow">一笔一画，慢慢写</p><h2>汉字写一写</h2></div><span class="practice-count">${group ? "写完自动记录" : "自由练习 · 不留学习记录"}</span></div><button class="write-pronounce" id="write-pronounce" aria-label="听汉字读音" ${ch.pinyin ? "" : "disabled"}><span class="write-pinyin">${escapeHtml(ch.pinyin || ch.c)}</span><span class="write-listen-cue">◖)) ${ch.pinyin ? "点一下，听读音" : "照着字形描一描"}</span></button><p class="write-instruction" id="write-instruction">${startsWithBlindCheck ? "听读音，试着自己写。需要时可以看笔顺。" : "沿着浅色字形写，每写完一笔松开手指。"}</p><div class="tianzige write-stage" id="write-stage" aria-busy="true"><div class="write-shape-loading" id="write-shape-loading">字形准备中…</div><div id="write-stroke-layer" class="write-stroke-layer" hidden aria-label="笔顺示范"></div><div id="write-practice-layer" class="write-practice-layer" hidden aria-label="汉字逐笔书写区"></div></div><div class="write-stroke-status" id="write-stroke-status" role="status" aria-live="polite"></div>${words.length ? `<button class="text-btn write-show-words" id="write-show-words" ${startsWithBlindCheck ? "" : "hidden"}>看看词语</button><div id="write-words-panel" ${startsWithBlindCheck ? "hidden" : ""}><div class="write-words" aria-label="点词语听读音">${words.map((word,index)=>`<button class="write-word" data-write-word="${index}" aria-label="听词语${escapeHtml(word.text)}">${writingRuby(word.text,word.pinyin)}</button>`).join("")}</div><p class="write-word-cue">点词语，也能听读音</p></div>` : ""}<div class="btn-row write-main-controls"><button class="btn btn-learn" id="write-strokes-play" disabled>▶ 看笔顺</button><button class="btn btn-ghost" id="write-clear" disabled>↶ 重新写</button>${showNavigation ? `<button class="btn btn-primary" id="write-next">${lastCharacter ? "返回字库 ✓" : "下一个 →"}</button>` : ""}</div><button class="btn btn-primary" id="write-retry" hidden>重试加载</button></div>`;
+    document.getElementById("write-back").onclick = returnToWriteLibrary;
+    if (showNavigation) {
+      document.getElementById("write-next").onclick = () => {
+        if (!active()) return;
+        if (lastCharacter) returnToWriteLibrary();
+        else openWriteCharacter(characters[characterIndex + 1].id, false);
+      };
+    }
+    const stage = document.getElementById("write-stage");
+    const loading = document.getElementById("write-shape-loading");
+    const layer = document.getElementById("write-stroke-layer");
+    const practiceLayer = document.getElementById("write-practice-layer");
+    const status = document.getElementById("write-stroke-status");
+    const playButton = document.getElementById("write-strokes-play");
+    const eraseButton = document.getElementById("write-clear");
+    const retryButton = document.getElementById("write-retry");
+    const pronounceButton = document.getElementById("write-pronounce");
+    const readingButtons = [pronounceButton,...el.querySelectorAll("[data-write-word]")];
+    writingVoice = window.ChenchenWritingAudio?.create() || null;
+    const voice = writingVoice;
+    const stopReading = () => {
+      readingRequest++; voice?.stop();
+      readingButtons.forEach(button=>button.classList.remove("is-reading"));
     };
-    document.getElementById("write-finish").onclick = () => {if(moved) finish();};
-    document.getElementById("write-paper").onclick = finish;
+    const progressText = () => "";
+    const updateControls = () => {
+      const busy = practiceState.status === "loading";
+      const failed = practiceState.status === "error";
+      stage.setAttribute("aria-busy",String(busy));
+      loading.hidden = !busy;
+      practiceLayer.hidden = busy || failed || watching;
+      layer.hidden = !watching;
+      eraseButton.disabled = busy || failed || (finished && !!group);
+      playButton.disabled = !demoReady || (finished && !!group);
+      playButton.textContent = watching ? "■ 停下" : demoFailed ? "↻ 重试笔顺" : "▶ 看笔顺";
+      if (demoFailed && !busy && !(finished && group)) playButton.disabled = false;
+      retryButton.hidden = !failed;
+      status.classList.toggle("is-playing",watching);
+    };
+    const returnToPractice = () => {
+      watching = false;
+      writingPractice?.resume();
+      updateControls();
+      if (!finished && practiceState.status !== "error") status.textContent = progressText();
+    };
+    const setupDemo = () => {
+      const run = ++demoRun;
+      writingDemo?.destroy();
+      layer.replaceChildren();
+      demoReady = demoFailed = false;
+      if (!window.ChenchenWritingStrokes) {demoFailed=true;updateControls();return;}
+      try {
+        writingDemo = window.ChenchenWritingStrokes.create({
+          target:layer,character:ch.c,
+          playStroke:(index,signal)=>voice?.playStroke(index,signal),
+          onState(state) {
+            if (!active() || run !== demoRun || state.status === "destroyed") return;
+            demoReady = ["ready","playing","paused","complete"].includes(state.status);
+            if (watching && state.status === "playing") status.textContent = `示范第 ${state.stroke || state.completed+1} 笔 / 共 ${state.total} 笔`;
+            if (watching && state.status === "complete") returnToPractice();
+            updateControls();
+          },
+          onError() {
+            if (!active() || run !== demoRun) return;
+            demoFailed = true; demoReady = false;
+            if (watching) returnToPractice();
+            updateControls();
+            status.textContent = "示范暂时没有打开，可以继续写，或重试笔顺。";
+          },
+        });
+      } catch (_) {demoFailed=true;updateControls();}
+    };
+    const setupPractice = () => {
+      const run = ++practiceRun;
+      writingPractice?.destroy();
+      practiceLayer.replaceChildren();
+      finished = false;
+      practiceState = {status:"loading",completed:0,total:0,hintsUsed:0};
+      updateControls();
+      const current = () => active() && run === practiceRun;
+      const unavailable = () => {
+        if (!current()) return;
+        practiceState = {...practiceState,status:"error"};
+        updateControls();
+        status.textContent = "这个字的笔画暂时没有准备好，请重试或返回字库。";
+      };
+      if (!window.ChenchenWritingPractice) {unavailable();return;}
+      try {
+        writingPractice = window.ChenchenWritingPractice.create({
+          target:practiceLayer,character:ch.c,showOutline:!startsWithBlindCheck,
+          onState(state) {
+            if (!current() || state.status === "destroyed") return;
+            const previous = practiceState;
+            practiceState = state;
+            if (state.hintsUsed > previous.hintsUsed) markAssisted();
+            updateControls();
+            if (!watching && !finished && state.status === "active" &&
+                (previous.status !== state.status || previous.completed !== state.completed || previous.hintsUsed !== state.hintsUsed)) {
+              status.textContent = state.hintsUsed > previous.hintsUsed ? "跟着提示，试着写这一笔。" : progressText();
+            }
+          },
+          onMistake(data) {
+            if (!current() || finished || watching) return;
+            status.textContent = data.isBackwards
+              ? "这一笔方向反了，换个方向再试试。"
+              : "这一笔还没对上，再试一次；也可以看笔顺。";
+          },
+          onCorrectStroke() {
+            if (!current() || finished || watching) return;
+            status.textContent = "这一笔写对了！";
+          },
+          async onComplete(summary) {
+            if (!current() || finished || watching || practiceState.status === "error") return;
+            if (!Number.isInteger(summary.totalStrokes) || summary.totalStrokes < 1 ||
+                summary.completedStrokes !== summary.totalStrokes) return;
+            finished = true;
+            stopReading();
+            updateControls();
+            const afterPractice = observedExposure("write",ch.id) || !!group?.items[group.index]?.afterPractice;
+            const supported = assisted || afterPractice || summary.outlineShown || summary.hintsUsed > 0 || summary.totalMistakes > 0;
+            const result = supported ? "supported" : "independent";
+            status.textContent = supported ? "写好啦！在帮助下完成了全部笔画。" : "写好啦！自己完成了全部笔画。";
+            if (!group || reviewSession !== group) return;
+            const details = {...summary,character:ch.c,afterPractice,assisted:supported};
+            const entry = {id:ch.id,type:"write",title:`汉字·${ch.c}`,source:"automatic",skill:"hanzi-writing",result,details};
+            const id = group.items[group.index]?.id || ch.id;
+            await completePractice(id,REVIEW_RESULT[result],{...entry,entries:[entry],enroll:true});
+          },
+          onError:unavailable,
+        });
+      } catch (_) {unavailable();}
+    };
+    setupDemo();
+    setupPractice();
+    playButton.onclick = () => {
+      if (!active() || (finished && group)) return;
+      if (watching) {writingDemo?.stop();returnToPractice();return;}
+      if (demoFailed) {setupDemo();return;}
+      if (!demoReady) return;
+      markAssisted();
+      stopSpeechSafe();stopReading();
+      writingPractice?.pause();
+      watching = true;
+      updateControls();
+      void writingDemo?.play();
+    };
+    eraseButton.onclick = () => {
+      if (eraseButton.disabled || !active()) return;
+      markAssisted();
+      stopReading();
+      if (watching) {writingDemo?.stop();watching=false;}
+      finished = false;
+      void writingPractice?.restart({showOutline:!startsWithBlindCheck});
+      updateControls();
+    };
+    retryButton.onclick = () => {
+      if (!active() || practiceState.status !== "error") return;
+      setupPractice();
+    };
+    const showWords = words.length ? document.getElementById("write-show-words") : null;
+    if (showWords) showWords.onclick = () => {
+      markAssisted();
+      document.getElementById("write-words-panel").hidden = false;
+      showWords.hidden = true;
+    };
+    const read = async (id,button) => {
+      if (!active()) return;
+      stopSpeechSafe();
+      if (watching) {writingDemo?.stop();returnToPractice();}
+      stopReading();
+      const request = readingRequest;
+      button.classList.add("is-reading");
+      try {
+        if (!voice?.playReading) throw new Error("Reading unavailable");
+        await voice.playReading(id);
+      } catch (error) {
+        if (active() && request === readingRequest && error.name !== "AbortError") status.textContent = "声音没有打开，再点一下试试。";
+      } finally {if(active() && request===readingRequest)button.classList.remove("is-reading");}
+    };
+    pronounceButton.onclick = () => {if(ch.pinyin)return read(`char-${ch.c.codePointAt(0).toString(16)}`,pronounceButton);};
+    el.querySelectorAll("[data-write-word]").forEach(button=>button.onclick=()=>{
+      const word = words[Number(button.dataset.writeWord)];
+      markAssisted();
+      return read(`word-${Array.from(word.text).map(c=>c.codePointAt(0).toString(16)).join("-")}`,button);
+    });
     bindSessionExit();
   }
 
@@ -1356,21 +1898,29 @@
 
   // ---------- Init ----------
   function navigate(v) {
+    if (reviewSession && (reviewSession.saving || reviewSession.draftSaving || reviewSession.draftFailed || !reviewSession.definiteFailure && reviewSession.entries.length >= reviewSession.items.length)) {toast("这一组正在确认保存，请保持页面打开并重试。");return;}
     if (!stateReady) { toast("先连接服务器，再开始复习。"); return; }
+    const restorePoemScroll = v === "poems" && currentView === "poem-detail";
     showingCelebration = false;
     reviewSession = null;
     showView(v);
     if (v === "home") renderHome();
-    if (v === "poems") renderPoems();
+    if (v === "poems") renderPoems({restoreScroll:restorePoemScroll});
     if (v === "math") renderMath();
-    if (v === "pinyin") {pyPracticed = new Set();renderPinyin();}
+    if (v === "pinyin") {pyPracticed = new Set();pyExposures = new Set();renderPinyin();}
     if (v === "write") renderWrite();
+    if (v === "english") getEnglishModule().open();
+    if (v === "records") {
+      recordsModule ||= window.ChenchenLearningRecords.create({root:document.getElementById("records-content"),loadState:async()=>{
+        if (!await syncNow()) throw new Error("Records could not be refreshed");
+        return loadState();
+      },todayStr,onBack:()=>navigate("home")});
+      recordsModule.open();
+    }
   }
   function bindNav() {
     document.querySelectorAll(".nav button").forEach(btn=>btn.onclick=()=>navigate(btn.dataset.nav));
     document.getElementById("brand-home").onclick = event => {event.preventDefault();navigate("home");};
-    document.getElementById("open-parent").onclick = openParent;
-    document.getElementById("parent-dialog").addEventListener("click",event=>{if(event.target===event.currentTarget){event.currentTarget.close();if(currentView==="home" && !showingCelebration)renderHome();}});
   }
 
   async function initializePage() {
@@ -1384,6 +1934,7 @@
   }
   document.addEventListener("DOMContentLoaded", () => {
     bindNav();
+    window.addEventListener("beforeunload",event=>{if(reviewSession && (reviewSession.saving || reviewSession.draftSaving || reviewSession.draftFailed || !reviewSession.definiteFailure && reviewSession.entries.length>=reviewSession.items.length)){event.preventDefault();event.returnValue="";}});
     showView("home");
     initializePage();
   });

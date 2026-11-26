@@ -1,21 +1,21 @@
 # 古诗自然朗读
 
-35 首古诗的朗读文件已存放在 `public/audio/poems/`，随网站一起发布。
+40 篇古诗文与文言文的朗读文件存放在 `public/audio/poems/`，随网站一起发布。
 播放器使用 HTML Audio，按诗歌 ID 播放对应 MP3；打开页面时不调用外部语音服务，
-也不依赖手机或电脑安装的系统中文声音。音频支持暂停、继续、停止和切换诗歌。
+也不依赖手机或电脑安装的系统中文声音。页面只显示一个朗读按钮，点击播放，再点暂停，再点从原位置继续；离开详情或切换诗歌时自动停止。
 加载失败、浏览器禁止播放或加载超过 20 秒时，会回到空闲并通知页面显示提示，
 不会悄悄切回可能读错多音字的系统朗读。页面的简短操作引导仍可使用系统语音。
 
 ## 声音与文本
 
-- 声音为 Microsoft Edge Read Aloud 的 `zh-CN-XiaoxiaoNeural`，属于 **AI 合成自然语音**，不是真人录制。
-- 合成速度为 `-22%`，依次读标题、朝代作者、所有诗句；每句使用句号留出停顿。
+- 声音为本地 Qwen3-TTS Base 使用固定 `Serena` 合成参考录音生成的女声，属于 **AI 合成自然语音**，不是真人录制。
+- 采用清晰、温和、放缓的朗读引导，依次读标题、朝代作者、所有诗句；每句使用句号留出停顿。
 - MP3 为单声道 24 kHz、48 kbps。没有转用第三方商业朗诵录音，也没有模仿指定真人。
 - `public/data/poem-audio.json` 记录来源、声音、合成输入、校音清单、时长、文件哈希及文本哈希。
 
 ## 多音字校正
 
-Edge Read Aloud 目前不支持自定义 `phoneme` SSML。因此生成脚本按“原字 + 诗歌拼音”
+为保持课程指定读音，生成脚本按“原字 + 诗歌拼音”
 匹配，在**仅供语音生成的输入**中采用同音替换，网页仍显示原诗与正确拼音。例如：
 
 | 原字与语境 | 目标读音 | 合成输入中的同音字 |
@@ -36,18 +36,14 @@ Edge Read Aloud 目前不支持自定义 `phoneme` SSML。因此生成脚本按�
 
 ## 重新生成与检查
 
-仅构建时需要 Python 3.9+、网络及以下依赖；部署运行不需要它们：
+按照[统一音频说明](unified-audio.md)重建，所有科目共用同一个说话人。离线检查：
 
 ```sh
-python3 -m pip install edge-tts==7.2.8 mutagen==1.47.0
-python3 scripts/generate-poem-audio.py --dry-run
-python3 scripts/generate-poem-audio.py
 python3 scripts/generate-poem-audio.py --check
 node scripts/test-speech.cjs
 ```
 
-可以用 `--id poem-10 --force` 仅重做某首。脚本每完成一首就写入清单，失败可重跑；
-已有且文本哈希一致的音频会保留。改变诗文、拼音、声音、语速或校音规则后，
+统一脚本可以用 `--regenerate-id poem/poem-10` 重做单首；已完成的有效录音有独立缓存，失败可重跑。改变诗文、拼音、声音、语速或校音规则后，
 `--check` 会检查旧录音是否仍与生成输入一致，必要时应重新生成。
 
 自动检查覆盖全部文件的 MP3 元数据、时长、字节数、SHA-256、诗文/拼音输入一致性，以及
@@ -56,3 +52,29 @@ node scripts/test-speech.cjs
 
 技术资料：[edge-tts 官方项目与自定义 SSML 限制](https://github.com/rany2/edge-tts#custom-ssml)、
 [Microsoft SSML 发音控制文档](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-synthesis-markup-pronunciation)。
+
+## 《水调歌头·明月几时有》
+
+`poem-36` 为苏轼的完整词正文，共 95 字、19 个短句；不将题前小序混入正文。正文核对[青岛科技大学教务处原文](https://jw.qust.edu.cn/info/1163/4463.htm)，保留“何似在人间”“何事长向别时圆”等原句。
+
+“调”标为 diào、“阙”为 què、“胜”为 shèng、“绮”为 qǐ；“不应有恨”的“应”为 yīng，两处“长”为 cháng。“胜”按[教育部公布的《普通话异读词审音表》](https://www.moe.gov.cn/jyb_sjzl/ziliao/A19/201001/W020190416497956176438.pdf)统读 shèng。朗读输入采用对应同音替换帮助校音，网页保留原字和逐字拼音；所有篇目继续使用统一女声。
+
+## 新增三年级课文
+
+`poem-37` 至 `poem-40` 对应以下四篇，保留原文与逐字拼音，沿用按分句显示和朗读的格式：
+
+| ID | 篇目与作者 | 收录范围与核对来源 |
+| --- | --- | --- |
+| `poem-37` | 苏轼《惠崇春江晚景》 | “竹外桃花三两枝”起的其一，4 句、28 字；核对[临沧市纪委监委刊载原文](https://www.lcjjjc.gov.cn/info-25-5975.html)。 |
+| `poem-38` | 曾几《三衢道中》 | 全诗 4 句、28 字，保留“绿阴”；核对[古文岛原文](https://www.gushiwen.cn/shiwenv_fbbd80710c5e.aspx)。 |
+| `poem-39` | 白居易《忆江南》 | “江南好”一阕，5 句、27 字；核对[苏州市人民政府刊载原文](https://www.suzhou.gov.cn/szsrmzf/bmdt/202405/24739f138b6b4b79917b33c33247b46b.shtml)和[人教版三年级下册电子教材](https://lywgyxx.szftedu.cn/xkjc/yw/202209/U020220910609184233192.pdf)。 |
+| `poem-40` | 韩非子《守株待兔》 | 《韩非子·五蠹》中课本常见的寓言段落，从“宋人有耕者”至“而身为宋国笑”，按 8 个分句显示，共 39 字；核对[人教版三年级下册电子教材](https://file.xdf.cn/uploads/200401/1113_200401214112Ps0mcRt7wu1tndKo.pdf)。 |
+
+特殊读音：
+
+- 《惠崇春江晚景》“蒌蒿”读 lóu hāo，“芦芽”读 lú yá，“河豚”读 hé tún；参照[古文岛注音与注释](https://www.gushiwen.cn/GuShiWen_36c8f64f8f.aspx)。
+- 《三衢道中》题中“衢”读 qú，作者“曾几”读 zēng jī，“山行”读 shān xíng，“添得”读 tiān dé；参照[教材注音](https://lywgyxx.szftedu.cn/xkjc/yw/202209/U020220910609184233192.pdf)及[古文之家逐字注音](https://www.cngwzj.com/pygushi/SongDai/64747/)。
+- 《忆江南》“旧曾谙”读 jiù céng ān，“红胜火”的“胜”读 shèng；“曾”表示曾经，不套用姓氏 zēng 的校音规则。参照[逐字注音](https://www.gushiwenku.cn/shiwen/9669172/)。
+- 《守株待兔》“折颈”读 zhé jǐng，“耒”读 lěi，“冀”读 jì；“为宋国笑”的“为”表示被，读 wéi，参照[教育部《国语小字典》“为”的被动义](https://dict.mini.moe.edu.tw/SearchIndex/word_detail?breadcrumbs=Search_&wordID=D0002104)。
+
+合成输入新增“曾 zēng → 增”“曾 céng → 层”“几 jī → 机”“为 wéi → 围”校音，页面文字不替换。《忆江南》的“旧曾谙”在语音识别回查中出现疑似姓氏读音，因此单独采用“层”明确 céng 音后重新生成；识别结果不能替代逐字听审。上述规则按原字和目标拼音共同匹配，原有 36 首的合成输入与校音清单保持不变。

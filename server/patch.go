@@ -151,12 +151,34 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 		}
 		return entries, nil
 	}
+	previousItems, err := loadCollection("items")
+	if err != nil {
+		return progress{}, err
+	}
+	previousActivity, err := loadCollection("activity")
+	if err != nil {
+		return progress{}, err
+	}
+	previousItems = copyEntries(previousItems)
+	previousActivity = copyEntries(previousActivity)
 	for _, operation := range operations {
 		entries, err := loadCollection(operation.Collection)
 		if err != nil {
 			return progress{}, err
 		}
-		if operation.Collection == "items" && s.isBuiltinPoem(operation.Key) {
+		poemItem := s.isBuiltinPoem(operation.Key)
+		if operation.Collection == "items" {
+			var oldItem map[string]json.RawMessage
+			_ = json.Unmarshal(entries[operation.Key], &oldItem)
+			poemItem = poemItem || jsonString(oldItem["type"]) == "poem"
+			custom, err := loadCollection("customPoems")
+			if err != nil {
+				return progress{}, err
+			}
+			_, customPoem := custom[operation.Key]
+			poemItem = poemItem || customPoem
+		}
+		if operation.Collection == "items" && poemItem {
 			hidden, err := loadCollection("hiddenCourses")
 			if err != nil {
 				return progress{}, err
@@ -175,23 +197,16 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 				entries[operation.Key] = operation.Value
 			}
 		case "delete":
-			delete(entries, operation.Key)
 			if operation.Collection == "items" {
-				// Delete the latest server-side history too, including events
-				// another device recorded after this client's last GET.
+				// Removing a lesson changes future assignments, not past practice.
+				// Legacy events did not include a title; snapshot it before removal.
 				activity, err := loadCollection("activity")
 				if err != nil {
 					return progress{}, err
 				}
-				for key, raw := range activity {
-					var event struct {
-						ID string `json:"id"`
-					}
-					if json.Unmarshal(raw, &event) == nil && event.ID == operation.Key {
-						delete(activity, key)
-					}
-				}
+				snapshotActivityTitles(activity, operation.Key, entries[operation.Key])
 			}
+			delete(entries, operation.Key)
 		case "set":
 			entries[operation.Key] = operation.Value
 		case "merge":
@@ -213,6 +228,9 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 			}
 		}
 	}
+	if err := reconcileAssessmentSchedules(previousItems, previousActivity, collections["items"], collections["activity"], operations); err != nil {
+		return progress{}, err
+	}
 	for collection, entries := range collections {
 		state[collection], err = json.Marshal(entries)
 		if err != nil {
@@ -228,16 +246,20 @@ func (s *progressStore) patch(ctx context.Context, operations []progressOperatio
 	if err != nil {
 		return progress{}, err
 	}
-	if len(payload) > maxProgressBytes {
-		return progress{}, &patchError{http.StatusRequestEntityTooLarge, "payload too large", "stored progress exceeds 500 KB"}
+	if len(payload) > maxStoredProgressBytes {
+		return progress{}, &patchError{http.StatusRequestEntityTooLarge, "payload too large", "stored progress exceeds 32 MiB"}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO progress (id, payload, updated_at)
 		VALUES (1, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`, string(payload), updatedAt); err != nil {
 		return progress{}, err
 	}
+	stored, err = s.ensureBuiltinPoems(ctx, tx, progress{Payload: payload, UpdatedAt: updatedAt, Found: true}, s.gardenNow())
+	if err != nil {
+		return progress{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return progress{}, err
 	}
-	return progress{Payload: payload, UpdatedAt: updatedAt, Found: true}, nil
+	return stored, nil
 }
