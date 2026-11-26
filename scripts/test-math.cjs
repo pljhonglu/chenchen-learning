@@ -364,10 +364,11 @@ test("leaving math after an answer keeps the selected page and returning starts 
 });
 
 test("arithmetic rounds contain ten questions and every answer waits for manual continuation", () => {
-  const h = harness("addsub");
+  const h = harness("addsub"),questions=[];
   assert.equal(h.find("#math-progress").textContent, "0 / 10 题");
   for (let count = 1; count <= 10; count++) {
     const question = h.state().currentQ;
+    questions.push(question);
     h.click(`[data-v="${question.answer}"]`);
     assert.equal(h.state().mathCompleted, count);
     assert.equal(h.find("#math-progress").textContent, `${count} / 10 题`);
@@ -381,6 +382,10 @@ test("arithmetic rounds contain ten questions and every answer waits for manual 
   assert.match(h.find("#math-panel").textContent, /10 道题/);
   assert.equal(h.find("#math-content .practice-controls").hidden, true);
   assert.deepEqual(h.score(), { ok: 10, total: 10 });
+  assert.equal(questions.filter(q=>q.meta.op==='+').length,5,"Free practice uses the balanced group planner");
+  assert.ok(questions.every(q=>q.meta.a>=2 && q.meta.b>=2));
+  assert.equal(new Set(questions.map(q=>q.key)).size,10);
+  assert.equal(h.requests.length,0,"Free practice must not save learning or rewards");
   assert.equal(h.timers.size, 0);
 });
 
@@ -456,6 +461,7 @@ test("number-bond rounds also finish only after ten questions and a final manual
   assert.equal(h.find("#math-progress").textContent, "0 / 10 题");
   for (let count = 1; count <= 10; count++) {
     const sheet = h.state().bondSheet;
+    assert.ok(sheet.item.left>=2 && sheet.item.right>=2,"Free bonds prefer two substantial nonzero parts");
     assert.equal(sheet.qIndex, count);
     while (!sheet.checked) {
       const slot = sheet.activeSlot;

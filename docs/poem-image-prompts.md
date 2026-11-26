@@ -1,6 +1,6 @@
 # 古诗绘本插图提示词
 
-这36张插图使用 Codex 内置 `image_gen`，每首诗单独调用生成一张原创 PNG。面向5岁幼儿，采用简洁水彩绘本风格、单一场景、无文字，帮助记住诗中关键意象。
+这40张插图使用 Codex 内置 `image_gen`，每首诗单独调用生成一张原创 PNG。面向5岁幼儿，采用简洁水彩绘本风格、单一场景、无文字，帮助记住诗中关键意象。
 
 生成后保留内置工具默认路径的原图。网页使用缩至 960 像素宽、质量 84 的 WebP 编码版本，保持完整画面，文件为 `public/images/poems/poem-XX.webp`；编码使用 sharp，仅用于减小传输体积。对应的无障碍描述和看图提示见 `public/data/poem-illustrations.json`。
 
@@ -164,3 +164,39 @@ Use case: illustration-story. Create one original wide 3:2 illustration (1536×1
 
 Scene for Su Shi's “Shui Diao Ge Tou — When Will the Bright Moon Appear”: A kind Song-dynasty Chinese poet in a simple pale traditional robe stands safely in a quiet ancient Chinese courtyard beside a low window, looking up at one large softly glowing Mid-Autumn full moon. A few rounded distant blue hills and one tiny cozy house suggest loved ones far away sharing the same moonlight. Keep poet, full moon, and distant hills-with-house as three clear visual subject groups. Soft indigo and pale blue night with warm cream moonlight; peaceful, tender longing and reassuring warmth. No flying people, moon palace, fantasy creatures, wine vessel, extra characters, or lettering.
 ```
+
+## 2026-10-24 新增篇目
+
+以下四张使用内置 `image_gen`，逐张单独调用，将上面的通用提示词与各自场景提示词拼接，不使用参考图。原始 PNG 保留在工具默认目录，网页版本使用 sharp 等比例缩为 960 × 640、WebP 质量 84。已目视确认主题意象清楚、无文字、水印或伤亡场面。
+
+### poem-37 · 惠崇春江晚景
+
+A peaceful early-spring turquoise river with two friendly ducks swimming in the foreground. On the bank, three slender green bamboo stalks frame a peach branch with a few pink blossoms. Beside the water, a small simple patch of leafy green mugwort and short fresh pointed reed shoots signals the start of spring. Soft distant hills, fresh warm sunlight. Main focus on the ducks and spring plants, no people, no fish.
+
+网页文件：`public/images/poems/poem-37.webp`。
+
+原图来源：`/Users/neo/.codex/generated_images/01a16b9b-dffb-72b3-85e5-ef3dfc14ca8b/exec-14de744a-213e-431e-a796-9dc105b15369.png`。
+
+### poem-38 · 三衢道中
+
+A kind ancient Chinese traveler walks along a simple gently climbing mountain path beside a clear small stream in bright early-summer sunshine. A nearby leafy plum branch holds several large ripe yellow plums. Fresh dense green shade arches over the path, with exactly two bright yellow orioles clearly perched on one low branch. Rounded distant green hills. The traveler is small; emphasize yellow plums, green shade, stream and singing birds, one coherent uncrowded landscape.
+
+网页文件：`public/images/poems/poem-38.webp`。
+
+原图来源：`/Users/neo/.codex/generated_images/01a16b9b-dffb-72b3-85e5-ef3dfc14ca8b/exec-2ffd145f-b5fa-46c5-b75b-3d6124d0c233.png`。
+
+### poem-39 · 忆江南
+
+A simple beautiful Jiangnan river at spring sunrise. A small round golden sun rises over distant soft hills; a few vivid red riverside blossoms glow in its warm light, reflected beside a broad calm rich emerald-blue river. One tiny white-walled dark-roofed ancient Jiangnan house far away on the bank. Strong clear contrast between warm red blossoms and cool blue-green water, spacious peaceful composition, no people.
+
+网页文件：`public/images/poems/poem-39.webp`。
+
+原图来源：`/Users/neo/.codex/generated_images/01a16b9b-dffb-72b3-85e5-ef3dfc14ca8b/exec-0161f3ed-5758-45c1-a1cb-33c981eeb1ad.png`。
+
+### poem-40 · 守株待兔
+
+An ancient Chinese farmer in plain simple clothes sits idly on the ground beside a large cut tree stump, looking expectantly toward an empty path with a patient but puzzled face. His wooden-handled hoe has been put aside against the stump. Behind him a small neglected field has sparse wilted crop rows and a few tall weeds. Make the farmer and tree stump large and clear, gentle humorous child-friendly storytelling about waiting instead of working. No rabbits, no injury, no dead animals, no violence, no frightening details.
+
+网页文件：`public/images/poems/poem-40.webp`。
+
+原图来源：`/Users/neo/.codex/generated_images/01a16b9b-dffb-72b3-85e5-ef3dfc14ca8b/exec-2f2920a3-825b-4261-bcfc-6afdf5604e9a.png`。

@@ -408,8 +408,9 @@
   function groupStartHtml(type) {
     const config = window.ChenchenStudyGroups.CONFIG[type];
     const draft = window.ChenchenStudyGroups.pending(loadState(),type);
+    const remaining = Math.max(0,3-waterEarnedToday());
     const amount = ["math","decomp"].includes(type) ? "最多 10 题，复习容易出错的知识点" : `每次最多 ${config.count} ${config.unit}，到期内容优先`;
-    return `<section class="study-start-card"><div><p class="eyebrow">每天一点点，记得更久</p><h3>${amount}</h3><p>${type==="poem" ? "学过的古诗，按每首的复习日期再想一想。" : "先复习今天到期的内容，再学一点新的。"}</p><small>${draft ? "上次的进度已保存，可以接着完成。" : "完成的项目会保存进度，休息后可以继续。"}</small></div><button class="btn btn-primary study-start-button" data-start-study="${type}">▶ ${draft ? "继续上次学习" : type==="poem" ? "开始复习" : "开始学习"}</button></section>`;
+    return `<section class="study-start-card"><div><p class="eyebrow">每天一点点，记得更久</p><h3>${amount}</h3><p>${remaining ? `每组完成获得 1 滴水 · 今天还可获得 ${remaining} 滴` : "今天已获得 3 滴水，继续学习仍会记录并更新复习安排"}</p><small>${draft ? "上次的进度已保存，可以接着完成。" : "到期内容优先，今天学完后也可以再学一轮。"}</small></div><button class="btn btn-primary study-start-button" data-start-study="${type}">▶ ${draft ? "继续上次学习" : "开始学习"}</button></section>`;
   }
 
   function bindStudyStart(root) {
@@ -492,7 +493,7 @@
       const catalog = await studyCatalog();
       if (generation !== practiceGeneration) return;
       const plan = type ? window.ChenchenStudyGroups.select(catalog,loadState(),type,mode,todayStr()) : window.ChenchenStudyGroups.reviews(catalog,loadState(),todayStr())[0];
-      if (!plan) {toast("今天安排的内容已经完成啦，可以休息，也可以自由看看卡片。");return;}
+      if (!plan) {toast(mode==="review" ? "今天的到期复习已完成，可以去学科页继续学习。" : "当前没有可用的学习内容，可以换个学科试试。");return;}
       const group = reviewSession = {...plan,id:plan.id || globalThis.crypto?.randomUUID?.() || `group-${Date.now()}-${Math.random().toString(36).slice(2)}`,index:plan.index || 0,entries:plan.entries || [],saving:false};
       const begin=async()=>{await persistStudyDraft(group);return openStudyPosition(group);};
       try {await begin();}
@@ -509,7 +510,7 @@
   function sessionBanner() {
     if (!reviewSession) return "";
     const phase=currentStudyPhase();
-    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title} · ${["math","decomp"].includes(reviewSession.type) ? `${reviewSession.count} 题` : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${phase==="review" ? "到期复习 · 先自己想一想" : "新内容 · 先学一学"} · 休息后可继续</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
+    return `<div class="session-banner study-session-banner"><div><strong>${reviewSession.title} · ${["math","decomp"].includes(reviewSession.type) ? `${reviewSession.count} 题` : `${reviewSession.index+1} / ${reviewSession.count}`}</strong><small>${phase==="review" ? "复习 · 先自己想一想" : "新内容 · 先学一学"} · 休息后可继续</small></div><button class="text-btn" id="session-exit">先休息</button></div>`;
   }
 
   function bindSessionExit() {
@@ -572,7 +573,7 @@
       reviewSession = null;
       const saved = Object.values(loadState().garden?.groups || {}).find(item=>item.id===group.id);
       const rewarded = !!saved?.waterAwarded;
-      root.innerHTML = `<div class="card celebration study-finish"><div class="study-water-reward ${rewarded ? "is-earned" : ""}" aria-hidden="true">${rewarded ? "💧" : "✓"}</div><p class="eyebrow">一点点，就是成长</p><h1>${rewarded ? "收获一滴水！" : "这一组，认真完成啦"}</h1><p>${group.title} ${group.count} ${group.unit}已记入学习记录。</p><p>${rewarded ? "小水滴已装进水壶，回去照顾小树吧。" : "本组已保存，今天不再重复发水。"}</p><p class="muted">休息一下，看看远处的绿色。</p><button class="btn btn-primary" id="study-finish-home">回到我的小树 →</button></div>`;
+      root.innerHTML = `<div class="card celebration study-finish"><div class="study-water-reward ${rewarded ? "is-earned" : ""}" aria-hidden="true">${rewarded ? "💧" : "✓"}</div><p class="eyebrow">一点点，就是成长</p><h1>${rewarded ? "收获一滴水！" : "这一组，认真完成啦"}</h1><p>${group.title} ${group.count} ${group.unit}已记入学习记录。</p><p>${rewarded ? "小水滴已装进水壶，回去照顾小树吧。" : "本组已保存，今天已获得 3 滴水，学习记录和复习安排已更新。"}</p><p class="muted">休息一下，看看远处的绿色。</p><button class="btn btn-primary" id="study-finish-home">回到我的小树 →</button></div>`;
       document.getElementById("study-finish-home").onclick = ()=>navigate("home");
     } catch(error) {
       group.saving = false;
@@ -877,18 +878,7 @@
   }
 
   function genAddSub() {
-    const op = Math.random() < 0.5 ? "+" : "-";
-    let a, b, ans;
-    if (op === "+") {
-      a = randInt(0, 10);
-      b = randInt(0, 10 - a);
-      ans = a + b;
-    } else {
-      a = randInt(0, 10);
-      b = randInt(0, a);
-      ans = a - b;
-    }
-    return { text: `${a} ${op} ${b} = ?`, answer: ans, meta: { a, b, op } };
+    return JSON.parse(JSON.stringify(mathQuestions[mathCompleted]));
   }
 
   const NB_CIRCLES = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫"];
@@ -904,8 +894,7 @@
   }
 
   function genBondItem() {
-    const questions = window.ChenchenMath.pool("decomp");
-    return questions[randInt(0,questions.length-1)];
+    return JSON.parse(JSON.stringify(mathQuestions[mathCompleted]));
   }
 
   function firstBlankSlot(item) {
@@ -1113,7 +1102,7 @@
     mathScore = {ok:results.filter(result=>result.correct).length,total:results.length};
     mathCompleted = results.length;
     bondQIndex = 0;
-    mathQuestions = reviewSession?.practice?.questions || [];
+    mathQuestions = reviewSession?.practice?.questions || window.ChenchenMath.plan(mathMode,{items:{}},todayStr(),MATH_ROUND_SIZE).questions;
     mathQuestionKeys = mathQuestions.map(question=>question.key);
     const el = document.getElementById("math-content");
     el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml(mathMode === "decomp" ? "decomp" : "math")}<div class="card practice-card"><div class="practice-heading"><div><p class="eyebrow">数一数，想一想</p><h2>玩数学 <span class="heading-flower">＋</span></h2></div><span class="practice-count" id="math-progress">${mathCompleted} / ${mathRoundSize} 题</span></div>

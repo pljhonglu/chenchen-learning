@@ -97,6 +97,22 @@ test("first evidence uses real timestamps rather than object insertion order", (
   assert.equal(result.overview.confirmationCount,1);
 });
 
+test("separate completed groups count each review and show the latest result",()=>{
+  const state={activity:{
+    'study-group:first:0':check({result:'again',at:'2026-10-02T08:00:00Z'}),
+    'study-group:second:0':check({result:'independent',at:'2026-10-02T09:00:00Z'}),
+    'study-group:third:0':check({result:'supported',at:'2026-10-02T10:00:00Z'}),
+  }};
+  const result=model.summarize(state,{today:'2026-10-02'});
+  assert.equal(result.overview.activityCount,3);
+  assert.equal(result.overview.confirmationCount,3);
+  assert.equal(result.overview.independent,1);
+  assert.equal(result.overview.again,1);
+  assert.equal(result.overview.supported,1);
+  assert.equal(result.overview.delayedConfirmationCount,0,'Same-day repeats do not invent a cross-day memory check');
+  assert.equal(result.items[0].lastResult,'supported');
+});
+
 test("missing or invalid timestamps have a stable day-start fallback", () => {
   const first = {...check({result:"supported"}),at:"not-a-time"};
   const second = {...check({result:"independent"})};

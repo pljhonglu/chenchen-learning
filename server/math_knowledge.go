@@ -176,12 +176,13 @@ func updateMathKnowledge(item map[string]json.RawMessage, entry studyEntry, kind
 					status.Mistakes++
 				}
 			}
-			if daily.at >= status.LastSeenAt {
+			latest := daily.at >= status.LastSeenAt
+			if latest {
 				status.LastSeenAt, status.LastCorrect = daily.at, daily.correct
 			}
-			// Only the first recorded attempt on a due calendar day advances its own
-			// knowledge point; another point's schedule never controls this decision.
-			if status.ReviewDay >= day || status.NextReview > day {
+			// Each new group updates the knowledge points it actually practiced.
+			// Older resumed answers still retain their history without replacing a later review.
+			if status.ReviewDay > day || !latest {
 				continue
 			}
 			stage := max(0, min(status.Stage, len(reviewIntervals)-1))

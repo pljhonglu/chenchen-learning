@@ -87,6 +87,42 @@ func earlierAssessment(a, b assessmentEvent) bool {
 	return a.key < b.key
 }
 
+// A newly completed group counts as another review, even on the same day or
+// before its due date. Group IDs handle retries before this function runs.
+func applyStudyAssessmentSchedule(item map[string]json.RawMessage, entry studyEntry) error {
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	event, valid := parseAssessment("", raw)
+	if !valid || jsonString(item["reviewDay"]) > event.Day {
+		return nil
+	}
+	var last struct {
+		At string `json:"at"`
+	}
+	_ = json.Unmarshal(item["lastAssessment"], &last)
+	if previousAt, err := time.Parse(time.RFC3339Nano, last.At); err == nil && event.time.Before(previousAt) {
+		return nil
+	}
+	stage := 0
+	_ = json.Unmarshal(item["stage"], &stage)
+	stage = max(0, min(stage, len(reviewIntervals)-1))
+	days, nextStage, result := 1, 0, "fuzzy"
+	if event.Result == "again" {
+		result = "forgot"
+	}
+	if event.Result == "independent" && !event.Details.AfterPractice && !event.Details.ObservedExposure && !event.Details.ExposureFirst {
+		days, nextStage, result = reviewIntervals[stage], min(stage+1, len(reviewIntervals)-1), "remember"
+	}
+	day, _ := time.Parse("2006-01-02", event.Day)
+	for key, value := range map[string]any{"stage": nextStage, "reviewStartStage": stage, "reviewDay": event.Day, "nextReview": day.AddDate(0, 0, days).Format("2006-01-02"), "lastResult": result} {
+		item[key], _ = json.Marshal(value)
+	}
+	item["lastAssessment"], _ = json.Marshal(map[string]any{"result": entry.Result, "source": entry.Source, "skill": entry.Skill, "at": entry.At})
+	return nil
+}
+
 // Only schema-2 confirmation batches use this guard. Legacy PATCH/PUT formats
 // retain their existing behavior. The enclosing SQLite write transaction makes
 // the decision against the current history, not a stale device snapshot.

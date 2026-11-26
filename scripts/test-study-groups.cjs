@@ -84,7 +84,7 @@ test('mathematics follows each knowledge point date instead of an aggregate date
   assert.equal(Model.select(cards,state,'math','review',today).count,10);
   state.items[cards[0].id].mathKnowledge.addition.nextReview='2026-10-15';
   state.items[cards[0].id].nextReview=today;
-  assert.equal(Model.select(cards,state,'math','learn',today),null);
+  assert.equal(Model.select(cards,state,'math','learn',today).items[0].phase,'review');
   state.items[cards[0].id].mathKnowledge.addition.nextReview=today;
   state.garden.groups.a={day:today,contentIds:[cards[0].id]};
   assert(Model.select(cards,state,'math','learn',today),'Other due knowledge points stay available after one group');
@@ -123,5 +123,41 @@ test('new mathematical knowledge remains reachable on a day with no due reviews'
   const plan=Model.select(cards,state,'math','learn',today);
   assert.equal(plan.mode,'learn');assert.equal(plan.items[0].phase,'learn');
   state.garden.groups.today={day:today,contentIds:[cards[0].id]};
-  assert.equal(Model.select(cards,state,'math','learn',today),null);
+  assert.ok(Model.select(cards,state,'math','learn',today),'New math knowledge is available after completing an earlier round');
+});
+
+test('retired empty arithmetic facts do not keep a learned subject in new-content mode',()=>{
+  vm.runInContext(fs.readFileSync('public/math-model.js','utf8'),context);
+  const id='math-addsub-10',cards=[{id,type:'math',title:'加减法'}],state=fresh();
+  state.items[id]={learned:true,mathKnowledge:Object.fromEntries(context.ChenchenMath.practicePool('addsub').map(q=>[q.knowledgeId,{nextReview:'2026-10-20'}]))};
+  assert.equal(state.items[id].mathKnowledge['add-total-0'],undefined);
+  assert.equal(Model.select(cards,state,'math','learn',today).mode,'review');
+});
+
+test('every subject can start another recorded round after all daily work and three water rewards',()=>{
+  for(const type of Object.keys(Model.CONFIG)) {
+    const state=fresh(),cards=['math','decomp'].includes(type)
+      ? [{id:type==='math'?'math-addsub-10':'math-decomp-10',type,title:type}]
+      : catalog(type,Model.CONFIG[type].count);
+    for(const item of cards) state.items[item.id]={learned:true,reviewDay:today,nextReview:'2026-10-20'};
+    if(['math','decomp'].includes(type)) {
+      const mode=type==='math'?'addsub':'decomp';
+      state.items[cards[0].id].mathKnowledge=Object.fromEntries(context.ChenchenMath.pool(mode).map(q=>[q.knowledgeId,{reviewDay:today,nextReview:'2026-10-20'}]));
+    }
+    for(let i=0;i<3;i++) state.garden.groups['earned-'+i]={day:today,waterAwarded:1,contentIds:cards.map(item=>item.id)};
+    const before=JSON.stringify(state),plan=Model.select(cards,state,type,'learn',today);
+    assert.ok(plan,type+' must remain available');
+    assert.equal(plan.items.length,cards.length);
+    assert.ok(plan.items.every(item=>item.phase==='review'));
+    assert.equal(Model.select(cards,state,type,'review',today),null,'Home only lists due work');
+    assert.equal(JSON.stringify(state),before,'Selection cannot change persisted progress');
+  }
+});
+
+test('repeat rounds rotate the least recently practiced content and respect hidden items',()=>{
+  const state=fresh(),cards=catalog('write',6);
+  for(const item of cards) state.items[item.id]={learned:true,reviewDay:today,nextReview:'2026-10-20',lastAssessment:{at:'2026-10-05T10:00:00Z'}};
+  state.items['write-06'].lastAssessment.at='2026-10-05T08:00:00Z';
+  state.hiddenCourses['write-01']=true;
+  assert.deepEqual(ids(Model.select(cards,state,'write','learn',today)),['write-06','write-02','write-03','write-04','write-05']);
 });

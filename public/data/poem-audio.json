@@ -167,7 +167,7 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -18.56,
-      "truePeakDbtp": -1.64
+      "truePeakDbtp": -1.73
     }
   },
   "poem-04": {
@@ -209,7 +209,7 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -18.42,
-      "truePeakDbtp": -2.92
+      "truePeakDbtp": -2.82
     }
   },
   "poem-05": {
@@ -301,7 +301,7 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -18.97,
-      "truePeakDbtp": -2.41
+      "truePeakDbtp": -2.42
     }
   },
   "poem-07": {
@@ -583,8 +583,8 @@
     "sampleRate": 24000,
     "bitrate": 48000,
     "loudness": {
-      "integratedLufs": -18.39,
-      "truePeakDbtp": -2.33
+      "integratedLufs": -18.4,
+      "truePeakDbtp": -2.27
     }
   },
   "poem-13": {
@@ -625,8 +625,8 @@
     "sampleRate": 24000,
     "bitrate": 48000,
     "loudness": {
-      "integratedLufs": -18.34,
-      "truePeakDbtp": -2.22
+      "integratedLufs": -18.35,
+      "truePeakDbtp": -2.23
     }
   },
   "poem-14": {
@@ -733,7 +733,7 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -18.22,
-      "truePeakDbtp": -2.8
+      "truePeakDbtp": -2.81
     }
   },
   "poem-16": {
@@ -774,7 +774,7 @@
     "sampleRate": 24000,
     "bitrate": 48000,
     "loudness": {
-      "integratedLufs": -18.82,
+      "integratedLufs": -18.83,
       "truePeakDbtp": -2.33
     }
   },
@@ -816,7 +816,7 @@
     "sampleRate": 24000,
     "bitrate": 48000,
     "loudness": {
-      "integratedLufs": -18.24,
+      "integratedLufs": -18.25,
       "truePeakDbtp": -3.31
     }
   },
@@ -859,7 +859,7 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -18.4,
-      "truePeakDbtp": -2.08
+      "truePeakDbtp": -2.09
     }
   },
   "poem-19": {
@@ -1107,7 +1107,7 @@
     "sampleRate": 24000,
     "bitrate": 48000,
     "loudness": {
-      "integratedLufs": -18.5,
+      "integratedLufs": -18.51,
       "truePeakDbtp": -2.27
     }
   },
@@ -1149,7 +1149,7 @@
     "sampleRate": 24000,
     "bitrate": 48000,
     "loudness": {
-      "integratedLufs": -18.75,
+      "integratedLufs": -18.76,
       "truePeakDbtp": -2.23
     }
   },
@@ -1318,7 +1318,7 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -17.59,
-      "truePeakDbtp": -2.32
+      "truePeakDbtp": -2.33
     }
   },
   "poem-29": {
@@ -1536,7 +1536,7 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -18.51,
-      "truePeakDbtp": -2.22
+      "truePeakDbtp": -2.21
     }
   },
   "poem-34": {
@@ -1585,7 +1585,7 @@
     "sampleRate": 24000,
     "bitrate": 48000,
     "loudness": {
-      "integratedLufs": -18.29,
+      "integratedLufs": -18.3,
       "truePeakDbtp": -3.03
     }
   },
@@ -1707,6 +1707,212 @@
     "bitrate": 48000,
     "loudness": {
       "integratedLufs": -18.41,
+      "truePeakDbtp": -2.31
+    }
+  },
+  "poem-37": {
+    "src": "/audio/poems/poem-37.mp3",
+    "pronunciationCorrections": [],
+    "label": "自然女声（AI 合成）",
+    "synthetic": true,
+    "provider": "Qwen3-TTS (local MLX)",
+    "voice": "Serena",
+    "rate": "natural",
+    "sourceVersion": 4,
+    "synthesisText": "惠崇春江晚景。\n宋，苏轼。\n竹外桃花三两枝。\n春江水暖鸭先知。\n蒌蒿满地芦芽短。\n正是河豚欲上时。",
+    "spokenText": "惠崇春江晚景。\n宋，苏轼。\n竹外桃花三两枝。\n春江水暖鸭先知。\n蒌蒿满地芦芽短。\n正是河豚欲上时。",
+    "sourceHash": "923d2867b60d04649d8283593b9bc2bacc177be2642141cbf81c99bcd153cee7",
+    "synthesis": {
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "renderer": "mlx-audio==0.5.8",
+      "speaker": "Serena",
+      "referenceText": "你好，我们一起来读一读。太阳，月亮，小船，苹果。慢慢来，每天学会一点点。",
+      "referenceSha256": "2793c83db0c7783e8e9a9eb85901eadd7ea191e1ae0ab3ff1b4ac8a993ca1b57",
+      "seed": 20261014,
+      "batchSize": 1,
+      "temperature": 0.3,
+      "topK": 20,
+      "topP": 0.8,
+      "repetitionPenalty": 1.05,
+      "sampleRate": 24000,
+      "bitrate": 48000,
+      "normalization": "measured gain to -18 LUFS +/-1; oversampled -2 dB limiter; post-MP3 true peak <= -1 dBTP; LAME 48 kbps",
+      "language": "Chinese",
+      "style": "poem",
+      "maxTokens": 2048
+    },
+    "durationSeconds": 12.384,
+    "bytes": 74304,
+    "sha256": "74c959e043fd91f8189c2df52864c69d09710243e525435770b681584c54c565",
+    "sampleRate": 24000,
+    "bitrate": 48000,
+    "loudness": {
+      "integratedLufs": -18.44,
+      "truePeakDbtp": -2.19
+    }
+  },
+  "poem-38": {
+    "src": "/audio/poems/poem-38.mp3",
+    "pronunciationCorrections": [
+      {
+        "location": "author",
+        "index": 0,
+        "character": "曾",
+        "pinyin": "zēng",
+        "spokenAs": "增"
+      },
+      {
+        "location": "author",
+        "index": 1,
+        "character": "几",
+        "pinyin": "jī",
+        "spokenAs": "机"
+      }
+    ],
+    "label": "自然女声（AI 合成）",
+    "synthetic": true,
+    "provider": "Qwen3-TTS (local MLX)",
+    "voice": "Serena",
+    "rate": "natural",
+    "sourceVersion": 4,
+    "synthesisText": "三衢道中。\n宋，增机。\n梅子黄时日日晴。\n小溪泛尽却山行。\n绿阴不减来时路。\n添得黄鹂四五声。",
+    "spokenText": "三衢道中。\n宋，增机。\n梅子黄时日日晴。\n小溪泛尽却山行。\n绿阴不减来时路。\n添得黄鹂四五声。",
+    "sourceHash": "ecd22887aad2354542f46d9b0153da56a5eecfa11b01c0bd9838e573038abae1",
+    "synthesis": {
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "renderer": "mlx-audio==0.5.8",
+      "speaker": "Serena",
+      "referenceText": "你好，我们一起来读一读。太阳，月亮，小船，苹果。慢慢来，每天学会一点点。",
+      "referenceSha256": "2793c83db0c7783e8e9a9eb85901eadd7ea191e1ae0ab3ff1b4ac8a993ca1b57",
+      "seed": 20261014,
+      "batchSize": 1,
+      "temperature": 0.3,
+      "topK": 20,
+      "topP": 0.8,
+      "repetitionPenalty": 1.05,
+      "sampleRate": 24000,
+      "bitrate": 48000,
+      "normalization": "measured gain to -18 LUFS +/-1; oversampled -2 dB limiter; post-MP3 true peak <= -1 dBTP; LAME 48 kbps",
+      "language": "Chinese",
+      "style": "poem",
+      "maxTokens": 2048
+    },
+    "durationSeconds": 11.016,
+    "bytes": 66096,
+    "sha256": "d0a11e625d1a27caab071887fdeb5e27666d3e90020901ca4c0859844b2927c1",
+    "sampleRate": 24000,
+    "bitrate": 48000,
+    "loudness": {
+      "integratedLufs": -18.53,
+      "truePeakDbtp": -3.59
+    }
+  },
+  "poem-39": {
+    "src": "/audio/poems/poem-39.mp3",
+    "pronunciationCorrections": [
+      {
+        "location": "line-2",
+        "index": 3,
+        "character": "曾",
+        "pinyin": "céng",
+        "spokenAs": "层"
+      },
+      {
+        "location": "line-3",
+        "index": 5,
+        "character": "胜",
+        "pinyin": "shèng",
+        "spokenAs": "圣"
+      }
+    ],
+    "label": "自然女声（AI 合成）",
+    "synthetic": true,
+    "provider": "Qwen3-TTS (local MLX)",
+    "voice": "Serena",
+    "rate": "natural",
+    "sourceVersion": 4,
+    "synthesisText": "忆江南。\n唐，白居易。\n江南好。\n风景旧层谙。\n日出江花红圣火。\n春来江水绿如蓝。\n能不忆江南。",
+    "spokenText": "忆江南。\n唐，白居易。\n江南好。\n风景旧层谙。\n日出江花红圣火。\n春来江水绿如蓝。\n能不忆江南。",
+    "sourceHash": "7df416f79b24ee8378ac3857e8de84e924d2a3959dc3214e70dffbed68ac74bc",
+    "synthesis": {
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "renderer": "mlx-audio==0.5.8",
+      "speaker": "Serena",
+      "referenceText": "你好，我们一起来读一读。太阳，月亮，小船，苹果。慢慢来，每天学会一点点。",
+      "referenceSha256": "2793c83db0c7783e8e9a9eb85901eadd7ea191e1ae0ab3ff1b4ac8a993ca1b57",
+      "seed": 20261014,
+      "batchSize": 1,
+      "temperature": 0.3,
+      "topK": 20,
+      "topP": 0.8,
+      "repetitionPenalty": 1.05,
+      "sampleRate": 24000,
+      "bitrate": 48000,
+      "normalization": "measured gain to -18 LUFS +/-1; oversampled -2 dB limiter; post-MP3 true peak <= -1 dBTP; LAME 48 kbps",
+      "language": "Chinese",
+      "style": "poem",
+      "maxTokens": 2048
+    },
+    "durationSeconds": 11.496,
+    "bytes": 68976,
+    "sha256": "ff86fe16732fd861ce6519fd5591dddc04db4a373dacc3f314db68ecea724c70",
+    "sampleRate": 24000,
+    "bitrate": 48000,
+    "loudness": {
+      "integratedLufs": -18.51,
+      "truePeakDbtp": -2.57
+    }
+  },
+  "poem-40": {
+    "src": "/audio/poems/poem-40.mp3",
+    "pronunciationCorrections": [
+      {
+        "location": "line-8",
+        "index": 2,
+        "character": "为",
+        "pinyin": "wéi",
+        "spokenAs": "围"
+      }
+    ],
+    "label": "自然女声（AI 合成）",
+    "synthetic": true,
+    "provider": "Qwen3-TTS (local MLX)",
+    "voice": "Serena",
+    "rate": "natural",
+    "sourceVersion": 4,
+    "synthesisText": "守株待兔。\n战国，韩非子。\n宋人有耕者。\n田中有株。\n兔走触株。\n折颈而死。\n因释其耒而守株。\n冀复得兔。\n兔不可复得。\n而身围宋国笑。",
+    "spokenText": "守株待兔。\n战国，韩非子。\n宋人有耕者。\n田中有株。\n兔走触株。\n折颈而死。\n因释其耒而守株。\n冀复得兔。\n兔不可复得。\n而身围宋国笑。",
+    "sourceHash": "ea5dbde420dbbce48c2320604f2c67d0716159708aaee386280a882477744f64",
+    "synthesis": {
+      "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit",
+      "revision": "e7dd0585652209fa0d7783659aad4e8a324de11c",
+      "renderer": "mlx-audio==0.5.8",
+      "speaker": "Serena",
+      "referenceText": "你好，我们一起来读一读。太阳，月亮，小船，苹果。慢慢来，每天学会一点点。",
+      "referenceSha256": "2793c83db0c7783e8e9a9eb85901eadd7ea191e1ae0ab3ff1b4ac8a993ca1b57",
+      "seed": 20261014,
+      "batchSize": 1,
+      "temperature": 0.3,
+      "topK": 20,
+      "topP": 0.8,
+      "repetitionPenalty": 1.05,
+      "sampleRate": 24000,
+      "bitrate": 48000,
+      "normalization": "measured gain to -18 LUFS +/-1; oversampled -2 dB limiter; post-MP3 true peak <= -1 dBTP; LAME 48 kbps",
+      "language": "Chinese",
+      "style": "poem",
+      "maxTokens": 2048
+    },
+    "durationSeconds": 15.096,
+    "bytes": 90576,
+    "sha256": "79428857868b084fc2b1f0ff847c7e5559016fad41a9d3deb89d7fc7cf17a142",
+    "sampleRate": 24000,
+    "bitrate": 48000,
+    "loudness": {
+      "integratedLufs": -18.51,
       "truePeakDbtp": -2.32
     }
   }

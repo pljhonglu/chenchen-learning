@@ -96,7 +96,7 @@ func TestStudyGroupAllSubjectsSaveWholeGroupsAndIndependentSchedules(t *testing.
 	}
 }
 
-func TestStudyGroupServerCalendarLimitsAndSignatureDedup(t *testing.T) {
+func TestStudyGroupServerCalendarLimitsAndRepeatedRounds(t *testing.T) {
 	app := testApp(t)
 	now, _ := time.Parse(time.RFC3339, "2026-10-02T16:01:00Z")
 	app.store.now = func() time.Time { return now }
@@ -115,8 +115,8 @@ func TestStudyGroupServerCalendarLimitsAndSignatureDedup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if readGarden(t, stored).Groups["reordered"].WaterAwarded != 0 {
-		t.Fatal("order or mode bypassed signature")
+	if readGarden(t, stored).Groups["reordered"].WaterAwarded != 1 {
+		t.Fatal("a new completed round must earn water while quota remains")
 	}
 	for i := 0; i < 3; i++ {
 		stored, err = app.store.completeStudyGroup(ctx, gardenTestGroup(fmt.Sprint("extra", i), "write", fmt.Sprint("new", i)))
@@ -166,7 +166,63 @@ func TestStudyGroupRetryDoesNotRewriteFirstAnswersOrNextDayQuota(t *testing.T) {
 	gardenErrorCode(t, err, "group_id_conflict")
 }
 
-func TestReviewGroupEarlyFillKeepsDatesAndDeletedEntryRollsBack(t *testing.T) {
+func TestEverySubjectRepeatedRoundsUpdateSchedulesAfterDailyWaterCap(t *testing.T) {
+	for _, kind := range []string{"poem", "pinyin", "write", "english", "math", "decomp"} {
+		t.Run(kind, func(t *testing.T) {
+			app := testApp(t)
+			ctx := context.Background()
+			now := gardenTestTime("2026-10-03")
+			app.store.now = func() time.Time { return now }
+			group := gardenTestGroup("round", kind, kind)
+			if kind == "write" {
+				group = automaticWritingGroup("round")
+			}
+			for round, next := range []string{"2026-10-04", "2026-10-05", "2026-10-07", "2026-10-10"} {
+				group.ID = fmt.Sprintf("round-%d", round)
+				now = now.Add(time.Minute)
+				stored, err := app.store.completeStudyGroup(ctx, group)
+				if err != nil {
+					t.Fatal(err)
+				}
+				item := decodeState(t, progressItems(t, stored)[group.Entries[0].ID])
+				assertSchedule(t, item, round+1, next, "remember")
+				water := 1
+				if round >= 3 {
+					water = 0
+				}
+				if readGarden(t, stored).Groups[group.ID].WaterAwarded != water {
+					t.Fatal("water quota changed learning eligibility")
+				}
+				if len(decodeState(t, decodeState(t, stored.Payload)["activity"])) != (round+1)*len(group.Entries) {
+					t.Fatal("repeated round lost its learning records")
+				}
+				retry, err := app.store.completeStudyGroup(ctx, group)
+				if err != nil || !reflect.DeepEqual(stored, retry) {
+					t.Fatal("retry advanced a schedule or awarded water twice")
+				}
+			}
+			group.ID = "needs-more-practice"
+			group.Entries[0].Result = "supported"
+			group.Entries[0].Details["afterPractice"] = true
+			if kind == "write" {
+				group.Entries[0].Details["assisted"] = true
+			}
+			if kind == "math" || kind == "decomp" {
+				group.Entries[0].Details["correct"] = 5
+			}
+			stored, err := app.store.completeStudyGroup(ctx, group)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertSchedule(t, decodeState(t, progressItems(t, stored)[group.Entries[0].ID]), 0, "2026-10-04", "fuzzy")
+			if readGarden(t, stored).Groups[group.ID].WaterAwarded != 0 {
+				t.Fatal("late round bypassed the three-water cap")
+			}
+		})
+	}
+}
+
+func TestReviewGroupEarlyPracticeUpdatesDatesAndDeletedEntryRollsBack(t *testing.T) {
 	app := testApp(t)
 	app.store.now = func() time.Time { return gardenTestTime("2026-10-03") }
 	group := gardenTestGroup("review", "poem", "poem")
@@ -190,11 +246,11 @@ func TestReviewGroupEarlyFillKeepsDatesAndDeletedEntryRollsBack(t *testing.T) {
 	state := decodeState(t, stored.Payload)
 	items := decodeState(t, state["items"])
 	assertSchedule(t, decodeState(t, items[group.Entries[0].ID]), 4, "2026-10-10", "remember")
-	assertSchedule(t, decodeState(t, items[group.Entries[1].ID]), 3, "2026-10-20", "remember")
+	assertSchedule(t, decodeState(t, items[group.Entries[1].ID]), 4, "2026-10-10", "remember")
 	activity := decodeState(t, state["activity"])
 	early := decodeState(t, activity["study-group:review:1"])
-	if string(decodeState(t, early["details"])["afterPractice"]) != "true" {
-		t.Fatal("early practice lacks evidence flag")
+	if string(decodeState(t, early["details"])["afterPractice"]) == "true" {
+		t.Fatal("an early review must not invent exposure to a hint")
 	}
 	if _, err := app.store.patch(context.Background(), []progressOperation{operation("delete", "items", group.Entries[4].ID, "")}); err != nil {
 		t.Fatal(err)

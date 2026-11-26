@@ -61,8 +61,8 @@ func TestMathKnowledgeSchedulesAndMistakesAreIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	addition = mathStatus(t, stored, "add-total-3")
-	if addition.Stage != 1 || addition.Attempts != 2 || addition.NextReview != "2026-10-04" {
-		t.Fatal("same day advanced knowledge")
+	if addition.Stage != 2 || addition.Attempts != 2 || addition.NextReview != "2026-10-05" {
+		t.Fatal("a new same-day round did not advance knowledge")
 	}
 	day = "2026-10-04"
 	next := mathGroup("next-day", []map[string]any{{"key": "3+0", "knowledgeId": "add-total-3", "correct": true}})
@@ -71,7 +71,7 @@ func TestMathKnowledgeSchedulesAndMistakesAreIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	addition, subtraction = mathStatus(t, stored, "add-total-3"), mathStatus(t, stored, "sub-whole-5")
-	if addition.Stage != 2 || addition.NextReview != "2026-10-06" || subtraction.Stage != 0 || subtraction.Attempts != 1 {
+	if addition.Stage != 3 || addition.NextReview != "2026-10-08" || subtraction.Stage != 0 || subtraction.Attempts != 1 {
 		t.Fatal("another knowledge point changed")
 	}
 	if readGarden(t, stored).Groups["next-day"].Count != 1 {
@@ -84,8 +84,8 @@ func TestMathKnowledgeSchedulesAndMistakesAreIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	addition = mathStatus(t, stored, "add-total-3")
-	if addition.Stage != 2 || addition.NextReview != "2026-10-06" || addition.Mistakes != 1 {
-		t.Fatal("early practice changed due date or lost mistake")
+	if addition.Stage != 0 || addition.NextReview != "2026-10-06" || addition.Mistakes != 1 || addition.LastResult != "forgot" {
+		t.Fatal("early practice did not update the schedule from its real result")
 	}
 }
 

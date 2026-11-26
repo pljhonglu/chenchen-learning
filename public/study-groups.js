@@ -1,4 +1,4 @@
-/* Daily study plans. Selection never brings future reviews forward to fill a group. */
+/* Due-first study plans, with repeat learning after the daily plan is complete. */
 (function (global) {
   "use strict";
   const CONFIG = Object.freeze({
@@ -29,7 +29,8 @@
       return {...config,...copy,count:math ? (copy.progress?.practice?.questions?.length || 10) : copy.items.length,index:copy.entries.length,
         practice:copy.progress?.practice, resumed:true,resumeExposure,dueCount:copy.items.filter(item=>item.phase==="review").length};
     }
-    let available = [...new Map(catalog.filter(item=>item.type===type && !state.hiddenCourses?.[item.id]).map(item=>[item.id,item])).values()];
+    const all = [...new Map(catalog.filter(item=>item.type===type && !state.hiddenCourses?.[item.id]).map(item=>[item.id,item])).values()];
+    let available = all.slice();
     const completed = new Set(Object.values(state.garden?.groups || {}).filter(group=>group.day===today).flatMap(group=>group.contentIds || []));
     const lastDay = id => items[id]?.reviewDay || "";
     const doneToday = id => lastDay(id) ? lastDay(id)===today : completed.has(id);
@@ -40,12 +41,12 @@
       if (!item) return null;
       const stored = items[item.id];
       const hasKnowledge = Object.keys(stored?.mathKnowledge || {}).length>0;
-      if (!hasKnowledge && doneToday(item.id)) return null;
+      if (mode==="review" && !hasKnowledge && doneToday(item.id)) return null;
       const due=mathDue(stored,today);
-      const unseen=global.ChenchenMath?.pool(type==="decomp" ? "decomp" : "addsub").some(question=>!stored?.mathKnowledge?.[question.knowledgeId]);
-      const introduce=mode!=="review" && !completed.has(item.id) && (unseen || !stored);
-      if (!due && !introduce) return null;
-      return {...config,type,mode:due ? "review" : "learn",items:[{...item,phase:due ? "review" : "learn"}],dueCount:due ? 1 : 0};
+      const unseen=global.ChenchenMath?.practicePool(type==="decomp" ? "decomp" : "addsub").some(question=>!stored?.mathKnowledge?.[question.knowledgeId]);
+      if (mode==="review" && !due) return null;
+      const phase=due || stored?.learned && !unseen ? "review" : "learn";
+      return {...config,type,mode:phase,items:[{...item,phase}],dueCount:due ? 1 : 0};
     }
     available = available.filter(item=>!doneToday(item.id));
     const due = available.filter(item=>known(item) && dueDate(item)<=today).sort((a,b)=>
@@ -54,6 +55,13 @@
     if (mode!=="review" && config.newCount) {
       const fresh = available.filter(item=>!known(item) && (type!=="english" || item.source==="classroom"));
       selected.push(...fresh.slice(0,Math.min(config.newCount,config.count-selected.length)).map(item=>({...item,phase:"learn"})));
+    }
+    if (!selected.length && mode!=="review") {
+      // Prefer the least recently practiced items; home still lists only due work.
+      const repeats=all.filter(known).sort((a,b)=>
+        String(items[a.id]?.lastAssessment?.at || lastDay(a.id)).localeCompare(String(items[b.id]?.lastAssessment?.at || lastDay(b.id))) ||
+        dueDate(a).localeCompare(dueDate(b)) || a.id.localeCompare(b.id));
+      selected.push(...repeats.slice(0,config.count).map(item=>({...item,phase:"review"})));
     }
     if (!selected.length) return null;
     return {...config,type,mode:selected.every(item=>item.phase==="review") ? "review" : "learn",

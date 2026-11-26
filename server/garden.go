@@ -381,9 +381,7 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 		if err != nil {
 			return false, err
 		}
-		previousItems, previousActivity := copyEntries(items), copyEntries(activity)
 		day, at := now.Format("2006-01-02"), now.Format(time.RFC3339Nano)
-		operations := make([]progressOperation, 0, 2*len(group.Entries))
 		contentIDs := make([]string, 0, len(group.Entries))
 		for index, submitted := range group.Entries {
 			entry := submitted
@@ -413,16 +411,6 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 			if string(detailRaw) != "null" {
 				_ = json.Unmarshal(detailRaw, &entry.Details)
 			}
-			entryDay := entry.Day
-			if entryDay == "" {
-				entryDay = day
-			}
-			if next := jsonString(item["nextReview"]); next > entryDay {
-				entry.Details["afterPractice"] = true
-				if group.Type == "write" && entry.Source == "automatic" {
-					entry.Result = "supported"
-				}
-			}
 			entry.SchemaVersion, entry.Type = 2, group.Type
 			if entry.Day == "" {
 				entry.Day, entry.At = day, at
@@ -438,46 +426,14 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 				item["learned"] = json.RawMessage(`true`)
 			}
 			item["updatedAt"], _ = json.Marshal(at)
-			item["lastAssessment"], _ = json.Marshal(map[string]any{"result": entry.Result, "source": entry.Source, "skill": entry.Skill, "at": entry.At})
+			if err := applyStudyAssessmentSchedule(item, entry); err != nil {
+				return false, err
+			}
 			if err := updateMathKnowledge(item, entry, group.Type); err != nil {
 				return false, err
 			}
 			items[entry.ID], _ = json.Marshal(item)
-			operations = append(operations, progressOperation{Op: "merge", Collection: "items", Key: entry.ID}, progressOperation{Op: "set", Collection: "activity", Key: activityKey})
 			contentIDs = append(contentIDs, entry.ID)
-		}
-		if err := reconcileAssessmentSchedules(previousItems, previousActivity, items, activity, operations); err != nil {
-			return false, err
-		}
-		// Reconciliation deliberately supports older same-day delivery. A new
-		// group can never reschedule an item which is early at commit time.
-		for index, id := range contentIDs {
-			raw := previousItems[id]
-			if raw == nil {
-				continue
-			}
-			var old, current map[string]json.RawMessage
-			if json.Unmarshal(raw, &old) != nil {
-				continue
-			}
-			entryDay := group.Entries[index].Day
-			if entryDay == "" {
-				entryDay = day
-			}
-			if jsonString(old["nextReview"]) <= entryDay {
-				continue
-			}
-			if json.Unmarshal(items[id], &current) != nil {
-				continue
-			}
-			for _, key := range reviewFields {
-				if value, exists := old[key]; exists {
-					current[key] = value
-				} else {
-					delete(current, key)
-				}
-			}
-			items[id], _ = json.Marshal(current)
 		}
 		// Old whole-subject tasks are replaced only after the first complete
 		// concrete group, without deleting their historical practice records.
@@ -497,15 +453,14 @@ func (s *progressStore) completeStudyGroup(ctx context.Context, group studyGroup
 			legacy["updatedAt"], _ = json.Marshal(at)
 			items[legacyID], _ = json.Marshal(legacy)
 		}
-		awarded, repeated := 0, false
+		awarded := 0
 		for _, previous := range ledger.Groups {
 			if previous.Day == day {
 				awarded += previous.WaterAwarded
-				repeated = repeated || previous.Signature == signature
 			}
 		}
 		water := 0
-		if awarded < 3 && !repeated {
+		if awarded < 3 {
 			water = 1
 		}
 		ledger.Groups[group.ID] = gardenGroup{ID: group.ID, Type: group.Type, Mode: group.Mode, Day: day, At: at, Count: count, ContentIDs: contentIDs, WaterAwarded: water, Signature: signature}

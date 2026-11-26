@@ -190,7 +190,7 @@ func TestAutomaticWritingCannotDiscardSavedPracticeFlag(t *testing.T) {
 	}
 }
 
-func TestAutomaticWritingEarlyPracticeKeepsScheduleAndSupportedResult(t *testing.T) {
+func TestAutomaticWritingEarlyReviewKeepsItsActualAssessment(t *testing.T) {
 	app := testApp(t)
 	ctx := context.Background()
 	app.store.now = func() time.Time { return gardenTestTime("2026-10-03") }
@@ -203,10 +203,10 @@ func TestAutomaticWritingEarlyPracticeKeepsScheduleAndSupportedResult(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertSchedule(t, decodeState(t, progressItems(t, stored)[id]), 3, "2026-10-10", "remember")
+	assertSchedule(t, decodeState(t, progressItems(t, stored)[id]), 4, "2026-10-10", "remember")
 	var event studyEntry
 	_ = json.Unmarshal(decodeState(t, decodeState(t, stored.Payload)["activity"])["study-group:early-writing:0"], &event)
-	if event.Result != "supported" || event.Details["afterPractice"] != true {
-		t.Fatal("early practice was stored as an independent assessment")
+	if event.Result != "independent" || event.Details["afterPractice"] != false {
+		t.Fatal("early review did not preserve its actual assessment")
 	}
 }

@@ -104,7 +104,7 @@
       const key = JSON.stringify([activity.day, activity.type, activity.id, activity.skill]);
       const contentKey = JSON.stringify([activity.type,activity.id,activity.skill]);
       const earlier = previous.get(contentKey);
-      if (activity.confirmed && !checked.has(key)) {
+      if (activity.confirmed && (!checked.has(key) || activity.key.startsWith("study-group:"))) {
         activity.countedConfirmation = true;
         checked.add(key);
         if (earlier && earlier.day < activity.day) {
@@ -146,7 +146,8 @@
   function lastResult(activities) {
     const lastDay = activities[activities.length - 1].day;
     const lastDayActivities = activities.filter(activity => activity.day === lastDay);
-    return lastDayActivities.find(activity => activity.countedConfirmation) || lastDayActivities[lastDayActivities.length - 1];
+    return lastDayActivities.filter(activity => activity.countedConfirmation && activity.key.startsWith("study-group:")).at(-1) ||
+      lastDayActivities.find(activity => activity.countedConfirmation) || lastDayActivities[lastDayActivities.length - 1];
   }
 
   function itemEvidence(activities) {

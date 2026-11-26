@@ -3,7 +3,7 @@ const assert=require("node:assert/strict"),fs=require("node:fs"),vm=require("nod
 const context={};vm.createContext(context);vm.runInContext(fs.readFileSync("public/math-model.js","utf8"),context);
 const Model=context.ChenchenMath;
 const copy=value=>JSON.parse(JSON.stringify(value));
-const rng=()=>{let seed=17;return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};};
+const rng=(seed=17)=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 const day="2026-10-05";
 function known(mode){
   const id=mode==="decomp"?"math-decomp-10":"math-addsub-10";
@@ -44,19 +44,99 @@ test("server forgot/remember fixtures prioritize due weak knowledge and exclude 
 });
 test("one due zero fact creates a one-question group without borrowing future facts",()=>{
   const state=known("addsub");
-  assert.equal(Model.plan("addsub",state,day).questions.length,0);
+  assert.equal(Model.plan("addsub",state,day).questions.length,10);
   state.items["math-addsub-10"].mathKnowledge["add-total-0"].nextReview=day;
   const p=Model.plan("addsub",state,day);
   assert.equal(p.questions.length,1);assert.equal(p.questions[0].key,"0+0");
   assert.ok(Model.restore(p,"addsub"));
 });
-test("recent question surfaces are deferred when another variant is available",()=>{
+
+test("all-learned mathematics still creates restorable repeat rounds in both modes",()=>{
+  for(const mode of ["addsub","decomp"]) {
+    const state=known(mode),id=mode==="decomp"?"math-decomp-10":"math-addsub-10";
+    for(const point of Object.values(state.items[id].mathKnowledge)) point.reviewDay=day;
+    const before=JSON.stringify(state),first=Model.plan(mode,state,day,10,rng());
+    assert.equal(first.questions.length,10);
+    assert.equal(new Set(first.questions.map(q=>q.key)).size,10);
+    assert.ok(Model.restore(first,mode));
+    state.activity.last={id,at:day+'T10:00:00Z',details:{questionKeys:first.questions.map(q=>q.key)}};
+    const next=Model.plan(mode,state,day,10,rng());
+    assert.ok(next.questions.some(q=>!state.activity.last.details.questionKeys.includes(q.key)));
+    delete state.activity.last;
+    assert.equal(JSON.stringify(state),before);
+  }
+});
+test("recent question surfaces are deferred when another substantial variant is available",()=>{
   const state=known("addsub"),points=state.items["math-addsub-10"].mathKnowledge;
   points["add-total-10"].nextReview=day;
   const first=Model.plan("addsub",state,day,10,rng());
-  state.activity.previous={id:"math-addsub-10",at:"2026-10-04T10:00:00Z",details:{questionKeys:first.questions.map(q=>q.key)}};
+  state.activity.previous={id:"math-addsub-10",at:"2026-10-04T10:00:00Z",details:{questionKeys:first.questions.slice(0,3).map(q=>q.key)}};
   const next=Model.plan("addsub",state,day,10,rng());
   assert.ok(!state.activity.previous.details.questionKeys.includes(next.questions[0].key));
+});
+
+const zero=q=>q.meta ? q.meta.op==='+' ? q.meta.a===0 || q.meta.b===0 : q.meta.b===0 : q.left===0 || q.right===0;
+test("fresh and repeat rounds balance operations and favor substantial nonzero facts across random seeds",()=>{
+  for(const mode of ['addsub','decomp'])for(const state of [{items:{}},known(mode)])for(let seed=1;seed<=100;seed++){
+    const before=JSON.stringify(state),p=Model.plan(mode,state,day,10,rng(seed));
+    assert.equal(p.questions.length,10);
+    assert.equal(p.questions.filter(zero).length,0);
+    assert.ok(Model.restore(p,mode));
+    if(mode==='addsub'){
+      assert.equal(p.questions.filter(q=>q.meta.op==='+').length,5);
+      assert.equal(p.questions.filter(q=>q.meta.op==='-').length,5);
+      assert.ok(p.questions.every(q=>q.meta.a>=2 && q.meta.b>=2 && (q.meta.op==='+' || q.meta.a!==q.meta.b)));
+      assert.ok(p.questions.every(q=>q.meta.op==='+' ? q.answer>=6 : q.meta.a>=6));
+    } else {
+      assert.equal(p.questions.filter(q=>q.mode==='compose').length,5);
+      assert.ok(p.questions.every(q=>q.left>=2 && q.right>=2 && q.n>=6));
+    }
+    assert.equal(JSON.stringify(state),before);
+  }
+});
+test("every group caps zero facts even when elementary or weak knowledge is due",()=>{
+  for(const mode of ['addsub','decomp'])for(let seed=1;seed<=100;seed++){
+    const state=known(mode),id=mode==='addsub'?'math-addsub-10':'math-decomp-10';
+    for(const point of Object.values(state.items[id].mathKnowledge))Object.assign(point,{nextReview:day,lastResult:'forgot'});
+    const p=Model.plan(mode,state,day,10,rng(seed));
+    assert.ok(p.questions.filter(zero).length<=1);
+    assert.equal(new Set(p.questions.map(q=>q.key)).size,p.questions.length);
+    assert.ok(Model.restore(p,mode));
+  }
+});
+test("due skills use nonzero variants before previously unasked trivial facts",()=>{
+  for(const mode of ['addsub','decomp']){
+    const state=known(mode),id=mode==='addsub'?'math-addsub-10':'math-decomp-10',knowledgeId=mode==='addsub'?'add-total-10':'bond-part-10';
+    state.items[id].mathKnowledge[knowledgeId].nextReview=day;
+    state.activity.previous={id,at:day+'T10:00:00Z',details:{questionKeys:Model.pool(mode).filter(q=>q.knowledgeId===knowledgeId && !zero(q)).map(q=>q.key)}};
+    const p=Model.plan(mode,state,day,1,rng());
+    assert.equal(p.questions[0].knowledgeId,knowledgeId);
+    assert.equal(zero(p.questions[0]),false);
+  }
+});
+test("operation balance does not displace older overdue skills",()=>{
+  const state=known('addsub'),points=state.items['math-addsub-10'].mathKnowledge;
+  for(let n=3;n<=10;n++)points['sub-whole-'+n].nextReview='2026-10-01';
+  for(let n=2;n<=10;n++)points['add-total-'+n].nextReview=day;
+  const p=Model.plan('addsub',state,day,10,rng());
+  assert.equal(p.questions.slice(0,8).filter(q=>q.meta.op==='-').length,8);
+  assert.equal(p.questions.slice(8).filter(q=>q.meta.op==='+').length,2);
+});
+test("arithmetic options use the three closest distinct alternatives within zero to ten",()=>{
+  const state=known('addsub');
+  for(const point of Object.values(state.items['math-addsub-10'].mathKnowledge))point.nextReview=day;
+  for(let seed=1;seed<=100;seed++)for(const q of Model.plan('addsub',state,day,10,rng(seed)).questions){
+    assert.equal(new Set(q.choices).size,4);
+    assert.ok(q.choices.includes(q.answer));
+    const distances=q.choices.filter(n=>n!==q.answer).map(n=>Math.abs(n-q.answer)).sort((a,b)=>a-b);
+    const nearest=Array.from({length:11},(_,n)=>n).filter(n=>n!==q.answer).map(n=>Math.abs(n-q.answer)).sort((a,b)=>a-b).slice(0,3);
+    assert.deepEqual(copy(distances),nearest);
+  }
+});
+test("old drafts with multiple zero facts and distant choices still restore unchanged",()=>{
+  const questions=['0+0','5+0','8-0'].map(key=>({...copy(Model.pool('addsub').find(q=>q.key===key)),choices:[0,5,8,10],reason:'review'}));
+  const old={kind:'math',version:1,mode:'addsub',questions,questionResults:[{key:'0+0',knowledgeId:'add-total-0',answer:5,correct:false}],index:1};
+  assert.deepEqual(copy(Model.restore(old,'addsub')),old);
 });
 test("draft restoration preserves first answers, question order, options and continuation position",()=>{
   for(const mode of ["addsub","decomp"]){
