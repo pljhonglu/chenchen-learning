@@ -40,6 +40,10 @@ SOUNDS = {
     "iu": "you1", "ie": "ye1", "üe": "yue1", "er": "er1",
     "an": "an1", "en": "en1", "in": "yin1", "un": "wen1", "ün": "yun1",
     "ang": "ang1", "eng": "eng1", "ing": "ying1", "ong": "dong1",
+    # Whole syllables use a complete first-tone recording.
+    "zhi": "zhi1", "chi": "chi1", "shi": "shi1", "ri": "ri1",
+    "zi": "zi1", "ci": "ci1", "si": "si1", "yi": "yi1", "wu": "wu1", "yu": "yu1",
+    "ye": "ye1", "yue": "yue1", "yuan": "yuan1", "yin": "yin1", "yun": "yun1", "ying": "ying1",
 }
 ONG_EDIT = {
     "source": "cmn-dong1.mp3",
@@ -121,7 +125,7 @@ def main():
                 "modification": modification,
             })
     manifest = {
-        "description": "Recorded pinyin sounds: 23 initial teaching sounds and 24 finals. Not TTS.",
+        "description": "Recorded pinyin sounds: 23 initials, 24 finals, and 16 whole syllables.",
         "sourceRepository": "https://github.com/hugolpz/audio-cmn",
         "sourceRevision": REVISION,
         "license": LICENSE,

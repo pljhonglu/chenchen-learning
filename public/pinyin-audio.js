@@ -8,6 +8,8 @@
     "zh", "ch", "sh", "r", "z", "c", "s", "y", "w",
     "a", "o", "e", "i", "u", "ü", "ai", "ei", "ui", "ao", "ou", "iu",
     "ie", "üe", "er", "an", "en", "in", "un", "ün", "ang", "eng", "ing", "ong",
+    "zhi", "chi", "shi", "ri", "zi", "ci", "si", "yi", "wu", "yu",
+    "ye", "yue", "yuan", "yin", "yun", "ying",
   ]);
   const CHARACTER = /^[\u3400-\u4dbf\u4e00-\u9fff\u{20000}-\u{2fa1f}]$/u;
 

@@ -1,5 +1,5 @@
 {
-  "description": "Recorded pinyin sounds: 23 initial teaching sounds and 24 finals. Not TTS.",
+  "description": "Recorded pinyin sounds: 23 initials, 24 finals, and 16 whole syllables.",
   "sourceRepository": "https://github.com/hugolpz/audio-cmn",
   "sourceRevision": "ff9ed3d0c631195bd2c06f39450f3264c7124040",
   "license": "CC-BY-SA-3.0",
@@ -1002,6 +1002,342 @@
         "description": "Removed d onset and release; kept the ong vowel and nasal tail. No pitch or speed change.",
         "validation": "Waveform and spectrogram inspected against dong1, gong1 and hong1; not a substitute for a Mandarin educator's listening review."
       }
+    },
+    {
+      "symbol": "zhi",
+      "file": "/audio/pinyin/sound-zhi.mp3",
+      "sourceSyllable": "zhi1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-zhi1.mp3",
+      "sourceSha256": "b746bae292f50590906038b916f8c5bfefe33d6d6b95ec7bf7e3133f76a424c1",
+      "sha256": "b746bae292f50590906038b916f8c5bfefe33d6d6b95ec7bf7e3133f76a424c1",
+      "duration": 1.08,
+      "bytes": 9566,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "zhi1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "chi",
+      "file": "/audio/pinyin/sound-chi.mp3",
+      "sourceSyllable": "chi1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-chi1.mp3",
+      "sourceSha256": "aeea5db8ed8383c8fdc70e063b21161950aa071591dd81c7d9445c2da355e231",
+      "sha256": "aeea5db8ed8383c8fdc70e063b21161950aa071591dd81c7d9445c2da355e231",
+      "duration": 0.984,
+      "bytes": 8798,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "chi1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "shi",
+      "file": "/audio/pinyin/sound-shi.mp3",
+      "sourceSyllable": "shi1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-shi1.mp3",
+      "sourceSha256": "ca6519a8d9b249f22ef28896be6fcbc9ed7489980bcd7b00ca840bc18a59aeee",
+      "sha256": "ca6519a8d9b249f22ef28896be6fcbc9ed7489980bcd7b00ca840bc18a59aeee",
+      "duration": 1.128,
+      "bytes": 9950,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "shi1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "ri",
+      "file": "/audio/pinyin/sound-ri.mp3",
+      "sourceSyllable": "ri1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-ri1.mp3",
+      "sourceSha256": "d2db6c56007be25d120ccb26cc0f0f3e754c3cfb3d94ec71837c775dd4fc18e0",
+      "sha256": "d2db6c56007be25d120ccb26cc0f0f3e754c3cfb3d94ec71837c775dd4fc18e0",
+      "duration": 0.984,
+      "bytes": 8796,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "ri1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "zi",
+      "file": "/audio/pinyin/sound-zi.mp3",
+      "sourceSyllable": "zi1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-zi1.mp3",
+      "sourceSha256": "69646f0108a6b7fbf660e75712fb8074584f2f165661d1d6a3bf97f602ab31f1",
+      "sha256": "69646f0108a6b7fbf660e75712fb8074584f2f165661d1d6a3bf97f602ab31f1",
+      "duration": 1.032,
+      "bytes": 9180,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "zi1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "ci",
+      "file": "/audio/pinyin/sound-ci.mp3",
+      "sourceSyllable": "ci1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-ci1.mp3",
+      "sourceSha256": "7b3738ac519c4f6de640c28fe8f774913b2de46230bde2b950f457b37c3390ea",
+      "sha256": "7b3738ac519c4f6de640c28fe8f774913b2de46230bde2b950f457b37c3390ea",
+      "duration": 1.08,
+      "bytes": 9564,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "ci1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "si",
+      "file": "/audio/pinyin/sound-si.mp3",
+      "sourceSyllable": "si1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-si1.mp3",
+      "sourceSha256": "55a9017b026d6bad7b29543a583f9a6994daf44589542d03e34ff6b627eb7caf",
+      "sha256": "55a9017b026d6bad7b29543a583f9a6994daf44589542d03e34ff6b627eb7caf",
+      "duration": 1.176,
+      "bytes": 10332,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "si1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "yi",
+      "file": "/audio/pinyin/sound-yi.mp3",
+      "sourceSyllable": "yi1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-yi1.mp3",
+      "sourceSha256": "36540ca523dcddcfd1f09e59f1386f576dfe4142cd22494e49d82b604ca045c6",
+      "sha256": "36540ca523dcddcfd1f09e59f1386f576dfe4142cd22494e49d82b604ca045c6",
+      "duration": 1.032,
+      "bytes": 9180,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "yi1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "wu",
+      "file": "/audio/pinyin/sound-wu.mp3",
+      "sourceSyllable": "wu1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-wu1.mp3",
+      "sourceSha256": "efcc05666b8af5ae4c6171b8b60198db40caea22e268be4c5205a8c256f15772",
+      "sha256": "efcc05666b8af5ae4c6171b8b60198db40caea22e268be4c5205a8c256f15772",
+      "duration": 1.032,
+      "bytes": 9180,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "wu1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "yu",
+      "file": "/audio/pinyin/sound-yu.mp3",
+      "sourceSyllable": "yu1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-yu1.mp3",
+      "sourceSha256": "885e611ae4d31125a10b81c7b9bb8127ffd9beca22b908b12a9a2a5a49e7a1d0",
+      "sha256": "885e611ae4d31125a10b81c7b9bb8127ffd9beca22b908b12a9a2a5a49e7a1d0",
+      "duration": 0.936,
+      "bytes": 8412,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "yu1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "ye",
+      "file": "/audio/pinyin/sound-ye.mp3",
+      "sourceSyllable": "ye1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-ye1.mp3",
+      "sourceSha256": "d8b68086415f4c1056d7360244ca0b72ae4e568bb7fc15c80bb60432654174f2",
+      "sha256": "d8b68086415f4c1056d7360244ca0b72ae4e568bb7fc15c80bb60432654174f2",
+      "duration": 1.08,
+      "bytes": 9564,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "ye1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "yue",
+      "file": "/audio/pinyin/sound-yue.mp3",
+      "sourceSyllable": "yue1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-yue1.mp3",
+      "sourceSha256": "3c286e8f3501f2470f1e5a34b45aef01274292ead2777d985982c8aaf3499010",
+      "sha256": "3c286e8f3501f2470f1e5a34b45aef01274292ead2777d985982c8aaf3499010",
+      "duration": 0.936,
+      "bytes": 8414,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "yue1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "yuan",
+      "file": "/audio/pinyin/sound-yuan.mp3",
+      "sourceSyllable": "yuan1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-yuan1.mp3",
+      "sourceSha256": "f5b2edb3f7f5b275aaac32d5910e1daf2e0284506d851b1a7035090c21a23c65",
+      "sha256": "f5b2edb3f7f5b275aaac32d5910e1daf2e0284506d851b1a7035090c21a23c65",
+      "duration": 1.128,
+      "bytes": 9952,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "yuan1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "yin",
+      "file": "/audio/pinyin/sound-yin.mp3",
+      "sourceSyllable": "yin1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-yin1.mp3",
+      "sourceSha256": "463215358d04f52a2b51b7b85d71433460e749a045c951453d13175d66a5e32d",
+      "sha256": "463215358d04f52a2b51b7b85d71433460e749a045c951453d13175d66a5e32d",
+      "duration": 1.032,
+      "bytes": 9182,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "yin1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "yun",
+      "file": "/audio/pinyin/sound-yun.mp3",
+      "sourceSyllable": "yun1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-yun1.mp3",
+      "sourceSha256": "13039ae5b92c39f1fca255cf2fab41a071f3852bfae0d4480f69643113a55231",
+      "sha256": "13039ae5b92c39f1fca255cf2fab41a071f3852bfae0d4480f69643113a55231",
+      "duration": 1.032,
+      "bytes": 9182,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "yun1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
+    },
+    {
+      "symbol": "ying",
+      "file": "/audio/pinyin/sound-ying.mp3",
+      "sourceSyllable": "ying1",
+      "sourceUrl": "https://raw.githubusercontent.com/hugolpz/audio-cmn/ff9ed3d0c631195bd2c06f39450f3264c7124040/64k/syllabs/cmn-ying1.mp3",
+      "sourceSha256": "ac88995f3ff2d6f527b3b1ab30c518d74e1ac27811cb690dc787cad2e16d75e6",
+      "sha256": "ac88995f3ff2d6f527b3b1ab30c518d74e1ac27811cb690dc787cad2e16d75e6",
+      "duration": 1.176,
+      "bytes": 10336,
+      "license": "CC-BY-SA-3.0",
+      "sourceId3": {
+        "SWAC_SPEAK_NAME": "Chen Wang 王琛",
+        "SWAC_COLL_AUTHORS": "Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_LICENSE": "CC-BY-SA-3.0",
+        "SWAC_COLL_COPYRIGHT": "Copyright© 2013 Wang Chen, Lopez Hugo, Vion Nicolas",
+        "SWAC_COLL_DESC": "Project to record all zh syllabs.",
+        "SWAC_TEXT": "ying1",
+        "SWAC_TECH_DATE": "2013-11-22"
+      },
+      "modification": "Filename only; MP3 bytes and ID3 metadata are unchanged."
     }
   ]
 }

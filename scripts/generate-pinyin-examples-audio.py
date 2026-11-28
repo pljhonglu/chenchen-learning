@@ -36,26 +36,28 @@ def all_clips():
     match = re.fullmatch(r"\s*window\.ChenchenPinyinData\s*=\s*(\{.*\})\s*;\s*", source, re.DOTALL)
     if not match:
         raise ValueError("Expected window.ChenchenPinyinData = {data};")
-    payload = re.sub(r"([{,]\s*)(initials|finals|id|examples|c|pinyin)\s*:", r'\1"\2":', match.group(1))
+    payload = re.sub(r"([{,]\s*)(initials|finals|syllables|id|examples|c|pinyin)\s*:", r'\1"\2":', match.group(1))
     payload = re.sub(r",\s*([}\]])", r"\1", payload)
     data = json.loads(payload)
-    if set(data) != {"initials", "finals"} or len(data["initials"]) != 23 or len(data["finals"]) != 24:
-        raise ValueError("Expected the 23 initial and 24 final collection")
+    if {kind: len(rows) for kind, rows in data.items()} != {"initials": 23, "finals": 24, "syllables": 16}:
+        raise ValueError("Expected 23 initials, 24 finals, and 16 whole syllables")
     clips = {}
-    for row in data["initials"] + data["finals"]:
-        examples = row.get("examples", [])
-        if len(examples) != 3 or len({item.get("c") for item in examples}) != 3:
-            raise ValueError(f"Expected three distinct characters for {row.get('id')}")
-        for item in examples:
-            text, pinyin = item.get("c"), item.get("pinyin")
-            if not isinstance(text, str) or len(text) != 1 or not isinstance(pinyin, str) or not pinyin.strip():
-                raise ValueError(f"Invalid character example: {item}")
-            clip = {"id": f"char-{ord(text):x}", "text": text, "pinyin": pinyin,
-                    "kind": "character", "language": "zh-CN"}
-            previous = clips.get(clip["id"])
-            if previous and previous != clip:
-                raise ValueError(f"Conflicting readings for {text}")
-            clips[clip["id"]] = clip
+    for kind, rows in data.items():
+        example_count = 1 if kind == "syllables" else 3
+        for row in rows:
+            examples = row.get("examples", [])
+            if len(examples) != example_count or len({item.get("c") for item in examples}) != example_count:
+                raise ValueError(f"Expected {example_count} distinct examples for {row.get('id')}")
+            for item in examples:
+                text, pinyin = item.get("c"), item.get("pinyin")
+                if not isinstance(text, str) or len(text) != 1 or not isinstance(pinyin, str) or not pinyin.strip():
+                    raise ValueError(f"Invalid character example: {item}")
+                clip = {"id": f"char-{ord(text):x}", "text": text, "pinyin": pinyin,
+                        "kind": "character", "language": "zh-CN"}
+                previous = clips.get(clip["id"])
+                if previous and previous != clip:
+                    raise ValueError(f"Conflicting readings for {text}")
+                clips[clip["id"]] = clip
     return list(clips.values())
 
 

@@ -1,4 +1,4 @@
-/* Offline curriculum and audio contracts for the three clickable example characters. */
+/* Offline curriculum and audio contracts for clickable example characters. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,6 +15,7 @@ const audio = JSON.parse(read('data/pinyin-examples-audio.json'));
 const writingAudio = JSON.parse(read('data/writing-vocabulary-audio.json'));
 const initials = 'b p m f d t n l g k h j q x zh ch sh r z c s y w'.split(' ');
 const finals = 'a o e i u ü ai ei ui ao ou iu ie üe er an en in un ün ang eng ing ong'.split(' ');
+const syllables = 'zhi chi shi ri zi ci si yi wu yu ye yue yuan yin yun ying'.split(' ');
 
 const tones = { a: 'āáǎà', e: 'ēéěè', i: 'īíǐì', o: 'ōóǒò', u: 'ūúǔù', ü: 'ǖǘǚǜ' };
 const stripTone = pinyin => Object.entries(tones).reduce((text, [plain, accented]) =>
@@ -36,18 +37,20 @@ function finalOf(spelling) {
 
 assert.deepEqual(Array.from(data.initials, item => item.id), initials, 'Initial collection differs from the 23 taught sounds');
 assert.deepEqual(Array.from(data.finals, item => item.id), finals, 'Final collection differs from the 24 taught sounds');
+assert.deepEqual(Array.from(data.syllables, item => item.id), syllables, 'Whole-syllable collection differs from the 16 taught sounds');
+const soundOf = { initials: initialOf, finals: finalOf, syllables: spelling => spelling };
 const expectedClips = new Map();
 for (const [kind, rows] of Object.entries(data)) {
+  const exampleCount = kind === 'syllables' ? 1 : 3;
   for (const row of rows) {
-    assert.equal(row.examples.length, 3, `${row.id}: expected three examples`);
-    assert.equal(new Set(row.examples.map(item => item.c)).size, 3, `${row.id}: repeated example character`);
+    assert.equal(row.examples.length, exampleCount, `${row.id}: expected ${exampleCount} examples`);
+    assert.equal(new Set(row.examples.map(item => item.c)).size, exampleCount, `${row.id}: repeated example character`);
     for (const example of row.examples) {
       assert.match(example.c, /^\p{Unified_Ideograph}$/u, `${row.id}: example must be a single Han character`);
       assert.match(example.pinyin, /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/u, `${example.c}: missing tone mark`);
       const spelling = stripTone(example.pinyin);
       assert.match(spelling, /^[a-zü]+$/u, `${example.c}: invalid pinyin`);
-      assert.equal(kind === 'initials' ? initialOf(spelling) : finalOf(spelling), row.id,
-        `${example.c} (${example.pinyin}) does not have ${kind === 'initials' ? 'initial' : 'final'} ${row.id}`);
+      assert.equal(soundOf[kind](spelling), row.id, `${example.c} (${example.pinyin}) does not match ${row.id} in ${kind}`);
       // i's standard vowel examples must not be replaced by zi/ci/si/zhi/chi/shi/ri.
       if (kind === 'finals' && row.id === 'i') assert.doesNotMatch(spelling, /^(?:z|c|s|zh|ch|sh|r)i$/);
       const id = `char-${example.c.codePointAt(0).toString(16)}`;
@@ -103,4 +106,4 @@ for (const [id, example] of expectedClips) {
   }
 }
 
-console.log(`PASS: 47 sounds × 3 examples, ${expectedClips.size} distinct character readings (${reused} reused, ${generated} synthesized), pinyin correspondence, local audio coverage, provenance and hashes`);
+console.log(`PASS: examples for 63 sounds, ${expectedClips.size} distinct character readings (${reused} reused, ${generated} synthesized), pinyin correspondence, local audio coverage, provenance and hashes`);

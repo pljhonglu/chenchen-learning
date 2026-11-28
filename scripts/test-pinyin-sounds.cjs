@@ -14,6 +14,9 @@ const expected = {
   ui: "wei1", ao: "ao1", ou: "ou1", iu: "you1", ie: "ye1", "üe": "yue1", er: "er1",
   an: "an1", en: "en1", in: "yin1", un: "wen1", "ün": "yun1", ang: "ang1", eng: "eng1",
   ing: "ying1", ong: "dong1",
+  zhi: "zhi1", chi: "chi1", shi: "shi1", ri: "ri1", zi: "zi1", ci: "ci1", si: "si1",
+  yi: "yi1", wu: "wu1", yu: "yu1", ye: "ye1", yue: "yue1", yuan: "yuan1",
+  yin: "yin1", yun: "yun1", ying: "ying1",
 };
 const digest = buffer => crypto.createHash("sha256").update(buffer).digest("hex");
 const synchsafe = (b, offset) => ((b[offset] & 127) << 21) | ((b[offset + 1] & 127) << 14) | ((b[offset + 2] & 127) << 7) | (b[offset + 3] & 127);
@@ -44,9 +47,9 @@ function recordingTags(buffer) {
 assert.equal(manifest.sourceRevision, "ff9ed3d0c631195bd2c06f39450f3264c7124040");
 assert.equal(manifest.license, "CC-BY-SA-3.0");
 assert.equal(manifest.licenseUrl, "https://creativecommons.org/licenses/by-sa/3.0/");
-assert.equal(manifest.items.length, 47);
+assert.equal(manifest.items.length, 63);
 assert.deepEqual(manifest.items.map(item => item.symbol).sort(), Object.keys(expected).sort());
-assert.equal(fs.readdirSync(directory).filter(name => /^sound-.*\.mp3$/.test(name)).length, 47);
+assert.equal(fs.readdirSync(directory).filter(name => /^sound-.*\.mp3$/.test(name)).length, 63);
 for (const item of manifest.items) {
   assert.equal(item.sourceSyllable, expected[item.symbol], `${item.symbol}: correct phonetic source`);
   assert.equal(item.file, `/audio/pinyin/sound-${item.symbol.replaceAll("ü", "v")}.mp3`);
@@ -81,4 +84,4 @@ for (const item of manifest.items) {
 assert.match(fs.readFileSync(path.join(directory, "SOUND-LICENSE.md"), "utf8"), /CC BY-SA 3\.0/);
 assert.match(fs.readFileSync(path.join(directory, "CC-BY-SA-3.0.txt"), "utf8"), /Attribution-ShareAlike 3\.0 Unported/);
 assert.match(fs.readFileSync(path.join(directory, "sources/audio-cmn-README.md"), "utf8"), /Chen Wang/);
-console.log("PASS 47 recorded pinyin sounds: inventory, phonetic mapping, hashes, MP3 payload, recording licenses, attribution and documented ong excerpt");
+console.log("PASS 63 recorded pinyin sounds: inventory, phonetic mapping, hashes, MP3 payload, recording licenses, attribution and documented ong excerpt");

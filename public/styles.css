@@ -1922,6 +1922,10 @@ button[hidden],*[hidden] {
   cursor:pointer;
 }
 
+.pinyin-example:only-child {
+  grid-column:2;
+}
+
 .pinyin-example ruby {
   ruby-align:center;
 }
@@ -3191,6 +3195,13 @@ button[hidden],*[hidden] {
 .pinyin-practice.is-assessing .pinyin-grid,
 .pinyin-practice.is-assessing .tabs-mini,
 .pinyin-practice.is-assessing .recall-footer { display:none; }
+@media(max-width:520px) {
+  .pinyin-practice[data-category="syllables"] .big-letter,
+  .pinyin-practice[data-category="syllables"] .assessment-pinyin {
+    font-size:clamp(44px, 18vw, 79px);
+  }
+}
+
 @media(max-width:420px) {
   .assessment-options { gap:6px; }
   .assessment-option { font-size:13px; padding:11px 4px; min-height:78px; }

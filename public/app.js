@@ -391,7 +391,7 @@
     return [
       ...POEMS.map(item=>({id:item.id,type:"poem",title:item.title})),
       ...Object.values(window.ChenchenMath.courses).map(({id,type,title})=>({id,type,title})),
-      ...[...INITIALS,...FINALS].map(symbol=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`})),
+      ...Object.values(PINYIN_DATA).flat().map(({id:symbol})=>({id:pinyinId(symbol),type:"pinyin",title:`拼音·${symbol}`})),
       ...writingCharacters().filter(item=>writable.has(item.c)).map(item=>({id:item.id,type:"write",title:`汉字·${item.c}`})),
       ...english,
     ];
@@ -624,9 +624,10 @@
       pyPracticed = new Set();
       pyExposures = new Set();
       const symbol = id.startsWith("pinyin-") ? id.slice(7).replace(/v/g,"ü") : "";
-      if (INITIALS.includes(symbol) || FINALS.includes(symbol)) {
+      const tab = Object.keys(PINYIN_DATA).find(key => PINYIN_DATA[key].some(item => item.id === symbol));
+      if (tab) {
         pySelected = symbol;
-        pyTab = INITIALS.includes(symbol) ? "initials" : "finals";
+        pyTab = tab;
       }
       renderPinyin();
     } else if (type === "write") {
@@ -1352,15 +1353,8 @@
     fb.className = "feedback math-feedback-visual";
   }
   // ---------- Pinyin ----------
-  const INITIALS = [
-    "b","p","m","f","d","t","n","l","g","k","h",
-    "j","q","x","zh","ch","sh","r","z","c","s","y","w",
-  ];
-  const FINALS = [
-    "a","o","e","i","u","ü","ai","ei","ui","ao","ou","iu",
-    "ie","üe","er","an","en","in","un","ün","ang","eng","ing","ong",
-  ];
   const PINYIN_DATA = window.ChenchenPinyinData;
+  const PINYIN_TABS = { initials: "声母", finals: "韵母", syllables: "整体认读音节" };
   let pyTab = "initials";
   let pyVoice = null;
   let pyAudioRequest = 0;
@@ -1413,12 +1407,36 @@
     stopPinyinAudio();
     const generation = practiceGeneration;
     const el = document.getElementById("pinyin-content");
-    const list = pyTab === "initials" ? INITIALS : FINALS;
-    if (!list.includes(pySelected)) pySelected = list[0];
+    const cards = PINYIN_DATA[pyTab];
+    const card = cards.find(item => item.id === pySelected) || cards[0];
+    const list = cards.map(item => item.id);
+    pySelected = card.id;
     const targetId = reviewSession?.items[reviewSession.index]?.type === "pinyin" ? reviewSession.items[reviewSession.index].id : null;
-    const target = [...INITIALS,...FINALS].find(symbol=>pinyinId(symbol)===targetId);
-    const examples = PINYIN_DATA[pyTab].find(item => item.id === pySelected).examples;
-    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml("pinyin")}<div class="card practice-card pinyin-practice"><div class="practice-heading"><div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div><span class="practice-count">${target ? "先试着自己读" : "自由点读 · 不留学习记录"}</span></div><div class="tabs-mini" ${target ? "hidden" : ""}><button data-pt="initials" class="${pyTab === "initials" ? "active" : ""}">声母</button><button data-pt="finals" class="${pyTab === "finals" ? "active" : ""}">韵母</button></div><div class="pinyin-sample" id="py-sample"><button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button><div class="pinyin-examples" aria-label="点汉字听读音">${examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div><div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div><button class="btn btn-primary" id="py-read" ${reviewSession ? "" : "hidden"}>确认本项练习</button></div><div class="pinyin-assessment" id="py-assessment" hidden><span class="assessment-pinyin">${escapeHtml(pySelected)}</span>${assessmentButtons("py-check","家长确认 · 能自己读吗？")}<button class="text-btn" id="py-check-hint">◖)) 听提示</button><button class="text-btn" id="py-check-back">回去练一练</button></div><div class="pinyin-grid" ${target ? "hidden" : ""}>${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div></div>`;
+    const target = list.find(symbol => pinyinId(symbol) === targetId);
+    const tabs = Object.entries(PINYIN_TABS).map(([key, label]) =>
+      `<button data-pt="${key}" class="${pyTab === key ? "active" : ""}" aria-pressed="${pyTab === key}">${label}</button>`
+    ).join("");
+    el.innerHTML = `${sessionBanner()}${reviewSession ? "" : groupStartHtml("pinyin")}
+      <div class="card practice-card pinyin-practice" data-category="${pyTab}">
+        <div class="practice-heading">
+          <div><p class="eyebrow">张开小嘴，读一读</p><h2>拼音小卡片 <span class="heading-flower">a</span></h2></div>
+          <span class="practice-count">${target ? "先试着自己读" : "自由点读 · 不留学习记录"}</span>
+        </div>
+        <div class="tabs-mini" role="group" aria-label="拼音分类" ${target ? "hidden" : ""}>${tabs}</div>
+        <div class="pinyin-sample" id="py-sample">
+          <button class="big-letter" id="py-listen" aria-label="听拼音 ${escapeHtml(pySelected)}"><span>${escapeHtml(pySelected)}</span><span class="pinyin-speaker" aria-hidden="true">◖))</span></button>
+          <div class="pinyin-examples" aria-label="点汉字听读音">${card.examples.map(example=>`<button class="pinyin-example" data-py-example="${escapeHtml(example.c)}" aria-label="听汉字${escapeHtml(example.c)}的读音">${writingRuby(example.c,example.pinyin)}</button>`).join("")}</div>
+          <div class="pinyin-audio-status" id="py-audio-status" role="status" aria-live="polite"></div>
+          <button class="btn btn-primary" id="py-read" ${reviewSession ? "" : "hidden"}>确认本项练习</button>
+        </div>
+        <div class="pinyin-assessment" id="py-assessment" hidden>
+          <span class="assessment-pinyin">${escapeHtml(pySelected)}</span>
+          ${assessmentButtons("py-check","家长确认 · 能自己读吗？")}
+          <button class="text-btn" id="py-check-hint">◖)) 听提示</button>
+          <button class="text-btn" id="py-check-back">回去练一练</button>
+        </div>
+        <div class="pinyin-grid" ${target ? "hidden" : ""}>${list.map(p=>`<button class="pinyin-chip ${p === pySelected ? "active" : ""} ${pyPracticed.has(p) ? "practiced" : ""}" data-p="${p}" aria-label="听拼音 ${p}" aria-pressed="${p === pySelected}">${p}${pyPracticed.has(p) ? '<span aria-label="已练习">✓</span>' : ""}</button>`).join("")}</div>
+      </div>`;
     bindStudyStart(el);
     let afterPractice = true, saving = false;
     const beginCheck = rehearsed => {
