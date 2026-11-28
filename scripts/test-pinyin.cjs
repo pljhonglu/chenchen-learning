@@ -195,15 +195,19 @@ test("opening pinyin is silent and the large pinyin button starts only its sound
   assert.equal(h.requests.length, 0);
 });
 
-test("all 47 cards play their exact sound and render three independently spoken example characters", async () => {
+test("all 63 cards play their exact sound and render independently spoken examples", async () => {
   const h = harness();
-  for (const tab of ["initials", "finals"]) {
-    h.click(h.select(`[data-pt="${tab}"]`));
+  assert.equal(h.get("pinyin-content").querySelectorAll("[data-pt]").length, 3);
+  for (const [tab, count, examples] of [["initials", 23, 3], ["finals", 24, 3], ["syllables", 16, 1]]) {
+    const tabControl = `[data-pt="${tab}"]`;
+    h.click(h.select(tabControl));
+    assert.equal(h.select(tabControl).getAttribute("aria-pressed"), "true");
+    assert.equal(h.get("pinyin-content").querySelectorAll("[data-p]").length, count);
     for (const item of h.data[tab]) {
       h.click(h.select(`[data-p="${item.id}"]`));
       assert.equal(h.audio().attempts.at(-1).src, `/audio/pinyin/sound-${item.id.replace(/ü/g, "v")}.mp3`);
       assert.equal(h.get("py-listen").getAttribute("aria-label"), `听拼音 ${item.id}`);
-      assert.equal(h.get("pinyin-content").querySelectorAll("[data-py-example]").length, 3);
+      assert.equal(h.get("pinyin-content").querySelectorAll("[data-py-example]").length, examples);
       h.audio().emit("ended"); await flush();
       for (const example of item.examples) {
         assert.ok(h.get("pinyin-content").innerHTML.includes(`<ruby>${example.c}<rt>${example.pinyin}</rt></ruby>`));
@@ -213,7 +217,7 @@ test("all 47 cards play their exact sound and render three independently spoken 
       }
     }
   }
-  assert.equal(h.allAttempts().length, 47 * 4);
+  assert.equal(h.allAttempts().length, 47 * 4 + 16 * 2);
   assert.equal(h.recordings.length, 1, "Renders and tab changes must preserve the unlocked Audio element");
   assert.deepEqual(copy(h.subject.getPracticed()), []);
   assert.equal(h.requests.length, 0, "Listening alone must not save or complete practice");
@@ -378,8 +382,8 @@ test("a failed full-group save retries the exact immutable group and cannot lose
   assert.equal(Object.keys(h.db().activity).length,10);assert.equal(Object.keys(h.db().garden.groups).length,1);
 });
 
-test("umlaut sounds in a review group open silent recall and retain stable v spelling", async () => {
-  for(const [id,symbol] of [["pinyin-v","ü"],["pinyin-vn","ün"]]) {
+test("umlaut finals and whole syllables in a review group open silent recall with stable IDs", async () => {
+  for(const [id,symbol] of [["pinyin-v","ü"],["pinyin-vn","ün"],["pinyin-yuan","yuan"]]) {
     const h=harness();h.beginGroup(symbol,"review");
     assert.equal(h.subject.getSelected(),symbol);assert.equal(h.get("py-assessment").hidden,false);
     assert.equal(h.allAttempts().length,0);

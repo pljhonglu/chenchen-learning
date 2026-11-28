@@ -82,10 +82,14 @@ test("construction does not fetch or play; a tap starts local sound synchronousl
   await result;
 });
 
-test("all 47 sounds use their own paths, including u/ü, un/ün and the shortened finals", async () => {
+test("all 63 sounds use their own paths, including whole syllables and umlaut finals", async () => {
   const h = harness(), audio = h.recordings[0];
-  const sounds = "b p m f d t n l g k h j q x zh ch sh r z c s y w a o e i u ü ai ei ui ao ou iu ie üe er an en in un ün ang eng ing ong".split(" ");
-  assert.equal(sounds.length, 47);
+  const sounds = [
+    "b p m f d t n l g k h j q x zh ch sh r z c s y w",
+    "a o e i u ü ai ei ui ao ou iu ie üe er an en in un ün ang eng ing ong",
+    "zhi chi shi ri zi ci si yi wu yu ye yue yuan yin yun ying",
+  ].flatMap(group => group.split(" "));
+  assert.equal(sounds.length, 63);
   const paths = new Set();
   for (const id of sounds) {
     const result = h.player.playSound(id);
@@ -94,7 +98,7 @@ test("all 47 sounds use their own paths, including u/ü, un/ün and the shortene
     audio.emit("ended");
     await result;
   }
-  assert.equal(paths.size, 47);
+  assert.equal(paths.size, 63);
   assert.equal(h.recordings.length, 1);
 });
 

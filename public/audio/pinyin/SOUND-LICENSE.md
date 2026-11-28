@@ -12,7 +12,7 @@
 - 固定版本：`ff9ed3d0c631195bd2c06f39450f3264c7124040`
 - 来源目录：`64k/syllabs/cmn-{音节与声调}.mp3`
 
-每个原始 MP3 的 ID3 内含以下声明；`sound-manifest.json` 为每条文件逐项保留来源、哈希、时长和这些标签，未修改的 46 条文件保留完整原始 MP3 字节。
+每个原始 MP3 的 ID3 内含以下声明。`sound-manifest.json` 为每条文件逐项记录来源、哈希、时长和这些标签，其中 62 条文件保留完整的原始 MP3 字节。
 
 ```text
 SWAC_SPEAK_NAME = Chen Wang 王琛
@@ -39,6 +39,8 @@ SWAC_COLL_DESC = Project to record all zh syllabs.
 
 这些 y / w 是零声母音节的拼写形式。`ui`、`iu`、`un` 在没有前置声母时使用展开形式 `uei`、`iou`、`uen`，相应拼写为 `wei`、`you`、`wen`。`ong` 未用 `weng` 替代。
 
+16 个整体认读音节使用各自完整的第一声录音（`zhi1`、`chi1`、`shi1`、`ri1`、`zi1`、`ci1`、`si1`、`yi1`、`wu1`、`yu1`、`ye1`、`yue1`、`yuan1`、`yin1`、`yun1`、`ying1`）。同一原始音节在不同类别中使用时，录音内容相同。
+
 ## ong 的剪辑记录
 
 原库没有孤立 `ong1`，本项目从同一作者的 `cmn-dong1.mp3` 中截取元音和鼻音韵尾，去掉 `d` 的起始爆破及释放。原文件完整保存在 `sources/cmn-dong1.mp3`。
@@ -59,4 +61,4 @@ python3 scripts/fetch-pinyin-sounds.py
 node scripts/test-pinyin-sounds.cjs
 ```
 
-脚本固定原始录音版本并核对嵌入的录音许可。`sound-manifest.json` 记录全部 47 个按钮和对应来源，例字音频在另外的清单中管理，不适用本说明。
+脚本固定原始录音版本并核对嵌入的录音许可。`sound-manifest.json` 记录全部 63 个拼音条目及对应来源，例字音频由单独的清单管理。
